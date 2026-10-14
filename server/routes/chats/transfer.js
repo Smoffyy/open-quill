@@ -1,6 +1,7 @@
 import { db, uid, now, tx } from '../../db.js';
 import { authMiddleware } from '../../auth.js';
 import { activePath } from '../../lib/tree.js';
+import { pipeChatPdf } from '../../lib/chatpdf.js';
 import { memoriesOf, sanitizeMemories, legacyMemories, newMemoryId, MEMORY_MAX_ITEMS } from '../../lib/memory.js';
 import { cleanStyles, prefsFit } from '../../lib/profile.js';
 
@@ -99,6 +100,11 @@ export default function registerTransferRoutes(app) {
       res.setHeader('Content-Type', 'application/json');
       res.setHeader('Content-Disposition', `attachment; filename="${safeName}.json"`);
       return res.send(JSON.stringify(out, null, 2));
+    }
+    if (fmt === 'pdf') {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${safeName}.pdf"`);
+      return pipeChatPdf(res, { title: c.title, summary: c.summary || '', messages: path });
     }
     const lines = [`# ${c.title || 'Conversation'}`, '', `_Exported ${new Date().toLocaleString()}_`, ''];
     if (c.summary) { lines.push('> **Summary of earlier conversation:**', '> ' + c.summary.replace(/\n/g, '\n> '), ''); }

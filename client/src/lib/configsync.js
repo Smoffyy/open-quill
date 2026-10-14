@@ -1,5 +1,6 @@
 export const SYNC_JITTER_MS = 1200;
 export const DRAFT_SETTLE_MS = 250;
+export const RETRY_MS = 3000;
 
 export function newerVersion(known, incoming) {
   const n = Number(incoming) || 0;

@@ -2983,5 +2983,6 @@
   "Keep earlier thinking (GLM)": "過去の思考を保持 (GLM)",
   "Hidden. Sends false so past thinking is kept.": "非表示。false を送って過去の思考を保持します。",
   "Custom field": "カスタムフィールド",
-  "Start empty and set everything yourself.": "空の状態から、すべて自分で設定します。"
+  "Start empty and set everything yourself.": "空の状態から、すべて自分で設定します。",
+  "PDF": "PDF"
 }

@@ -81,6 +81,7 @@ export function ChatMenu({ chat, at, projects = [], projectsReady = true, busy =
         )}>
         <button onClick={stop(exportAs('json'))}>{t('JSON')}</button>
         <button onClick={stop(exportAs('md'))}>{t('Markdown')}</button>
+        <button onClick={stop(exportAs('pdf'))}>{t('PDF')}</button>
       </SubItem>
       <button className="danger" onClick={stop(() => onDelete(chat.id))}>
         <Trash style={{ width: 20 }} /> {t('Delete chat')}

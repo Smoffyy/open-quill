@@ -2983,5 +2983,6 @@
   "Keep earlier thinking (GLM)": "Conservar el razonamiento anterior (GLM)",
   "Hidden. Sends false so past thinking is kept.": "Oculto. Envía false para que se conserve el razonamiento anterior.",
   "Custom field": "Campo personalizado",
-  "Start empty and set everything yourself.": "Empieza en blanco y configúralo todo tú."
+  "Start empty and set everything yourself.": "Empieza en blanco y configúralo todo tú.",
+  "PDF": "PDF"
 }

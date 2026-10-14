@@ -105,6 +105,12 @@ export function useCatalog({ confirm, features, history, changes }) {
   const unsaved = useCallback(() => pending.current.size > 0 || inflight.current.size > 0, []);
 
   useEffect(() => {
+    const onHello = () => { if (!unsaved()) reload(); };
+    window.addEventListener('oq-hello', onHello);
+    return () => window.removeEventListener('oq-hello', onHello);
+  }, [reload, unsaved]);
+
+  useEffect(() => {
     const local = (id) => ({ ...(inflight.current.get(id) || {}), ...(pending.current.get(id) || {}) });
     function merge(rows) {
       const clashes = [];

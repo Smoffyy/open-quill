@@ -25,6 +25,9 @@ Licenses listed for bundled dependencies were read from the installed packages a
 - [pdfjs-dist](https://github.com/mozilla/pdf.js) - Apache-2.0 - PDF text extraction for the memory bank and project files
 - [@napi-rs/canvas](https://github.com/Brooooooklyn/canvas) - MIT - the canvas implementation pdf.js loads on Node
 
+- [PDFKit](https://github.com/foliojs/pdfkit) - MIT - writes the PDF a chat exports to, with its dependencies [fontkit](https://github.com/foliojs/fontkit), [linebreak](https://github.com/foliojs/linebreak) and [png-js](https://github.com/foliojs/png.js) (MIT), [fflate](https://github.com/101arrowz/fflate) (MIT) and [@noble/ciphers](https://github.com/paulmillr/noble-ciphers) and [@noble/hashes](https://github.com/paulmillr/noble-hashes) (MIT)
+- [Noto fonts](https://notofonts.github.io) - SIL Open Font License 1.1 - Noto Sans, Noto Sans Mono, Noto Sans SC, Noto Sans KR, Noto Sans Symbols 2 and Noto Emoji, embedded in exported PDFs so every script and emoji prints; installed from [Expo Google Fonts](https://github.com/expo/google-fonts) (`@expo-google-fonts/*`, MIT packaging), each with its font license as `LICENSE_FONT`
+
   pdf.js also ships the CMap tables and standard font data that open-quill loads from disk, so PDFs using predefined CJK encodings or non-embedded fonts extract correctly without any network access. The standard fonts are the Foxit fonts from [PDFium](https://pdfium.googlesource.com/pdfium/) (BSD-style license) and [Liberation Sans](https://github.com/liberationfonts/liberation-fonts) from Red Hat (GPL v2 with the Liberation font exception); each upstream license file ships inside `pdfjs-dist/standard_fonts`.
 
 ## Client

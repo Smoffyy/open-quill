@@ -230,7 +230,7 @@ export function ImagePicker({ value, fallback, onChange, hint, state }) {
             width: 48, height: 48, borderRadius: 10, display: 'grid', placeItems: 'center',
             border: '1px solid var(--border-soft)', background: 'var(--surface-2)', overflow: 'hidden', flexShrink: 0
           }}>
-          {shown === MODEL_WEAVE ? <Weave state={state} style={{ width: 32, height: 32 }} /> : shown ? <img src={shown} alt={t('Current image')} style={{ width: 32, height: 32, objectFit: 'contain' }} /> : <span className="cp-hint">{t('none')}</span>}
+          {shown === MODEL_WEAVE ? <Weave state={state} style={{ width: 32, height: 32 }} /> : shown ? <img src={shown} alt={t('Current image')} style={{ width: 32, height: 32, objectFit: 'contain' }} /> : <span className="cp-logo-empty">{t('none')}</span>}
         </button>
         <div className="cp-acts">
           <Btn size="sm" onClick={() => ref.current?.click()}>{value ? t('Replace') : t('Upload')}</Btn>

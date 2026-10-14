@@ -2983,5 +2983,6 @@
   "Keep earlier thinking (GLM)": "Сохранять прошлые рассуждения (GLM)",
   "Hidden. Sends false so past thinking is kept.": "Скрыто. Отправляет false, чтобы прошлые рассуждения сохранялись.",
   "Custom field": "Своё поле",
-  "Start empty and set everything yourself.": "Начать с пустого и настроить всё самостоятельно."
+  "Start empty and set everything yourself.": "Начать с пустого и настроить всё самостоятельно.",
+  "PDF": "PDF"
 }

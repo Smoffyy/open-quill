@@ -2983,5 +2983,6 @@
   "Keep earlier thinking (GLM)": "保留过往思考（GLM）",
   "Hidden. Sends false so past thinking is kept.": "隐藏。发送 false 以保留过往思考。",
   "Custom field": "自定义字段",
-  "Start empty and set everything yourself.": "从空白开始，自行设置全部内容。"
+  "Start empty and set everything yourself.": "从空白开始，自行设置全部内容。",
+  "PDF": "PDF"
 }

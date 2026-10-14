@@ -2983,5 +2983,6 @@
   "Keep earlier thinking (GLM)": "Conserver la réflexion passée (GLM)",
   "Hidden. Sends false so past thinking is kept.": "Masqué. Envoie false pour conserver la réflexion passée.",
   "Custom field": "Champ personnalisé",
-  "Start empty and set everything yourself.": "Partir de zéro et tout définir vous-même."
+  "Start empty and set everything yourself.": "Partir de zéro et tout définir vous-même.",
+  "PDF": "PDF"
 }
