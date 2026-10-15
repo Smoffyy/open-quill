@@ -3,6 +3,7 @@ import { authMiddleware } from '../../auth.js';
 import * as sandbox from '../../sandbox.js';
 import { attachmentUrlsOf, purgeUnreferencedUploads } from '../../lib/uploads.js';
 import { stopTurn } from '../../lib/ws/index.js';
+import { cleanTags } from '../../lib/chattags.js';
 
 const MAX_PINS = 40;
 
@@ -36,6 +37,7 @@ export default function registerCrudRoutes(app) {
       if ('title' in req.body) patch.title = String(req.body.title ?? '').slice(0, 200) || 'New chat';
       if ('starred' in req.body) patch.starred = req.body.starred ? 1 : 0;
       if ('archived' in req.body) patch.archived = req.body.archived ? 1 : 0;
+      if ('tags' in req.body) patch.tags = cleanTags(req.body.tags);
       if (req.user.is_admin && 'genParams' in req.body) {
         const g = req.body.genParams && typeof req.body.genParams === 'object' ? req.body.genParams : {};
         const out = {};

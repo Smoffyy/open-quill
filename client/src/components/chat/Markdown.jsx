@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import { BASE_MACROS, CODE_SPLIT, KATEX_OPTIONS, ensureKatex, hasMath, isolateDisplayMath, katexPlugin, katexVersion, subscribeKatex, wrapMathEnvironments } from '../../lib/mathjs.js';
 import CodeBlock from './CodeBlock.jsx';
+import MermaidBlock from './MermaidBlock.jsx';
 import { rehypeRevealWords } from '../../lib/revealwords.js';
 import ToolCard from './ToolCard.jsx';
 import { b64decode } from '../../lib/oqr.js';
@@ -120,6 +121,7 @@ const mdComponents = {
       if (data && data.call) return <ToolCard call={data.call} result={data.result} />;
       return null;
     }
+    if (lang === 'mermaid') return <MermaidBlock code={raw} />;
     return <CodeBlock lang={m ? m[1] : ''} code={raw} />;
   },
   code({ className, children }) {

@@ -281,6 +281,7 @@ export const handlers = {
       ctx.mirror.dropRec(m.chatId);
     }
     ctx.set.errors(prev => ({ ...prev, [m.chatId]: String(m.error || ctx.text.modelError) }));
+    ctx.actions.turnFinished?.(m.chatId, true);
   },
 
   ask(m, ctx) {
@@ -299,6 +300,7 @@ export const handlers = {
     rec.truncated = !!(m.truncated || m.stopped);
     ctx.mirror.syncBusy();
     ctx.actions.loadBudget();
+    if (!m.stopped) ctx.actions.turnFinished?.(m.chatId, false);
     if (!isActive(ctx, m.chatId)) { ctx.actions.finalizeBackground(m.chatId); return; }
     ctx.set.pendingFiles(p => (Object.keys(p).length ? {} : p));
     ctx.set.canContinue(!!m.truncated);

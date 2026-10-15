@@ -191,6 +191,12 @@ body.resizing-x .side-resize-grip { opacity: 1; }
 .section-label:hover .sec-head-actions .rl-group,
 .sec-head-actions .rl-group:focus-visible { opacity: 1; }
 :root:root .sec-head-actions .rl-group:hover { background: none; color: var(--sidebar-text); }
+.rl-filter { display: flex; align-items: center; gap: 4px; max-width: 120px; margin: -4px 0; padding: 2px 6px; border-radius: 99px; font-size: 12px; line-height: 16px; color: var(--sidebar-text, var(--text)); background: color-mix(in srgb, var(--text) 10%, transparent); }
+.rl-filter svg { width: 12px; height: 12px; flex-shrink: 0; }
+.rl-filter:hover { background: color-mix(in srgb, var(--text) 16%, transparent); }
+.rl-tag-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rl-menu .rl-ic { width: 15px; height: 15px; margin-right: 8px; flex-shrink: 0; }
+.rl-menu { max-height: min(420px, 70vh); overflow: hidden auto; }
 :root:root .sec-head { flex: 0 1 auto; }
 :root:root .sec-head-chev {
   width: 12px; height: 12px; margin: 0; opacity: 0; color: inherit;

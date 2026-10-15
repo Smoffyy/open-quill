@@ -6,6 +6,7 @@ import { SetRow, SwitchRow, SegSlide, SelectRow, RangeRow } from '../ui/controls
 import { resolveReveal, revealSpeedMs } from '../../lib/reveal.js';
 import { useLayout } from '../../lib/uselayout.js';
 import { STATUS_DELAY_SECS } from '../../lib/status.js';
+import { notifySupported, notifyPermission, requestNotifyPermission } from '../../lib/notify.js';
 
 // No zero stop: "no reveal at all" is the Instant *style*, so offering it here
 // too would be the same state reachable two ways. A pref already stored as 0
@@ -42,6 +43,14 @@ export default function InterfaceTab({ prefs, setPref, cfg }) {
   const styleOpt = REVEAL_STYLE_OPTS.find(o => o.v === style) || REVEAL_STYLE_OPTS[0];
   const cursorStyle = prefs.cursorStyle === 'circle' ? 'circle' : 'block';
   const knownStop = REVEAL_STOPS.some(o => o.v === rv);
+  const [permission, setPermission] = useState(notifyPermission);
+  const toggleNotifications = () => {
+    if (prefs.notifications === true && permission === 'granted') { setPref('notifications', false); return; }
+    requestNotifyPermission().then(result => {
+      setPermission(result);
+      setPref('notifications', result === 'granted');
+    });
+  };
 
   return (
     <>
@@ -110,6 +119,15 @@ export default function InterfaceTab({ prefs, setPref, cfg }) {
         on={prefs.statusDelay !== false} onToggle={() => setPref('statusDelay', prefs.statusDelay === false)} />
       <SwitchRow label={t("Mid-stream steering")} desc={t("Correct a reply mid-stream. Restarts from the cut point and costs an extra request.")}
         on={prefs.steering} onToggle={() => setPref('steering', !prefs.steering)} />
+
+      {notifySupported() && <>
+        <div className="me-section-h">{t("Notifications")}</div>
+        <SwitchRow label={t("Notify when a reply is ready")}
+          desc={permission === 'denied'
+            ? t("Your browser is blocking notifications for this site. Allow them in the site settings to turn this on.")
+            : t("A system notification when a chat you are not looking at finishes, including scheduled tasks.")}
+          on={prefs.notifications === true && permission === 'granted'} onToggle={toggleNotifications} />
+      </>}
 
       <div className="me-section-h">{t("Navigation")}</div>
       <div className="sec-note">{t("Tools for moving around a long conversation. Turn any off for a bare view.")}</div>

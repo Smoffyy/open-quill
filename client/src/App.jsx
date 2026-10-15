@@ -80,6 +80,8 @@ import { useDocsEdit } from './lib/docsedit.js';
 import { useSocket } from './lib/socket.js';
 import BranchTree from './components/chat/BranchTree.jsx';
 import { toast } from './lib/toast.js';
+import { collectTags } from './lib/chattags.js';
+import { readUnread, writeUnread, addUnread, removeUnread, shouldNotify, notifyPermission, showNotification, titleWithUnread } from './lib/notify.js';
 import { askConfirm } from './lib/confirm.js';
 import { copyText } from './lib/clipboard.js';
 import { Down, Compact, Ghost, Search, Menu, Sliders, X, Fork, Panel, Copy, TextIcon, Expand } from './components/ui/icons.jsx';
@@ -152,6 +154,8 @@ export default function App() {
   const sbToggleStar = useCallback((...a) => sidebarFns.current.toggleStar(...a), []);
   const sbLogout = useCallback((...a) => sidebarFns.current.logout(...a), []);
   const sbMoveToProject = useCallback((...a) => sidebarFns.current.moveChatToProject(...a), []);
+  const sbToggleArchive = useCallback((...a) => sidebarFns.current.toggleArchive(...a), []);
+  const sbSetTags = useCallback((...a) => sidebarFns.current.setChatTags(...a), []);
   const navTo = useCallback((to) => {
     setMobileDrawer(false);
     setChatsOverview(to === 'chats');
@@ -210,6 +214,7 @@ export default function App() {
   const setReasoningEffort = useCallback((value) => setKwargValues(prev => ({ ...prev, effort: typeof value === 'function' ? value(prev.effort || '') : value })), []);
   const [bgVisible, setBgVisible] = useState(false);
   const [chats, setChats] = useState([]);
+  const [unread, setUnread] = useState(readUnread);
   const [chatsLoaded, setChatsLoaded] = useState(false);
   const [activeId, setActiveId] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -316,6 +321,14 @@ export default function App() {
   });
   const [planMode, setPlanMode] = useState(false);
   const modeChats = useMemo(() => chats.filter(c => (c.mode === 'code') === codeMode), [chats, codeMode]);
+  const allTags = useMemo(() => collectTags(chats), [chats]);
+  const unreadChats = useMemo(() => unread.filter(id => id !== activeId && chats.some(c => c.id === id && !c.archived)), [unread, chats, activeId]);
+  const changeUnread = (fn) => setUnread(list => {
+    const next = fn(list);
+    if (next !== list) writeUnread(next);
+    return next;
+  });
+  useEffect(() => { if (activeId) changeUnread(list => removeUnread(list, activeId)); }, [activeId]);
   useEffect(() => {
     if (!codeMode || !currentId) return;
     if (models.find(m => m.id === currentId)?.codeAllowed !== false) return;
@@ -732,8 +745,8 @@ export default function App() {
       : activeId ? ((chats.find(c => c.id === activeId)?.title) || t('Untitled chat'))
       : t('New chat')
     );
-    document.title = codeMode ? `${head} - ${appName} ${t('Code')}` : `${head} - ${appName}`;
-  }, [activeId, chats, cfg.appName, incognito, notFound, showAdmin, showPlayground, docsTarget, showProjects, projectOpenId, projects, libPage, chatsOverview, codeMode]);
+    document.title = titleWithUnread(codeMode ? `${head} - ${appName} ${t('Code')}` : `${head} - ${appName}`, unreadChats.length);
+  }, [activeId, chats, cfg.appName, incognito, notFound, showAdmin, showPlayground, docsTarget, showProjects, projectOpenId, projects, libPage, chatsOverview, codeMode, unreadChats.length]);
   function exportAllChats() { window.open('/api/chats/export-all', '_blank'); }
   async function importChatsFile(file) {
     try {
@@ -804,9 +817,20 @@ export default function App() {
       loadBudget: () => loadBudget(),
       setAsk: (chatId, q) => setAsk(chatId, q),
       contextChanged: () => setCtxTick(n => n + 1),
-      taskStarted: (m) => toast(t('Running scheduled task "{title}"', { title: m.title || t('New chat') }), { icon: 'info' })
+      taskStarted: (m) => toast(t('Running scheduled task "{title}"', { title: m.title || t('New chat') }), { icon: 'info' }),
+      turnFinished: (chatId, failed) => turnFinished(chatId, failed)
     }
   };
+
+  function turnFinished(chatId, failed) {
+    const chat = chats.find(c => c.id === chatId);
+    if (!chat) return;
+    const active = chatId === activeKey();
+    if (!active) changeUnread(list => addUnread(list, chatId));
+    const enabled = user?.prefs?.notifications === true;
+    if (!shouldNotify({ enabled, permission: notifyPermission(), hidden: document.hidden, active })) return;
+    showNotification(chat.title || t('New chat'), failed ? t('The reply stopped with an error.') : t('The reply is ready.'), chatId, () => sbOpenChat(chatId));
+  }
 
   function handleWs(m) { dispatchWs(m, wsCtx); }
 
@@ -1195,6 +1219,22 @@ export default function App() {
     api.patch('/api/chats/' + id, { starred: next }).catch(() => { setStarred(!next); warn(); });
   }
 
+  function toggleArchive(id) {
+    const next = !chats.find(c => c.id === id)?.archived;
+    const setArchived = (v) => setChats(cs => cs.map(c => c.id === id ? { ...c, archived: v } : c));
+    setArchived(next);
+    api.patch('/api/chats/' + id, { archived: next })
+      .then(() => toast(next ? t('Chat archived. Find it under All chats.') : t('Chat restored to the sidebar.')))
+      .catch(() => { setArchived(!next); warn(); });
+  }
+
+  function setChatTags(id, tags) {
+    const prev = chats.find(c => c.id === id)?.tags || [];
+    const setTags = (v) => setChats(cs => cs.map(c => c.id === id ? { ...c, tags: v } : c));
+    setTags(tags);
+    api.patch('/api/chats/' + id, { tags }).catch(() => { setTags(prev); warn(); });
+  }
+
   function moveChatToProject(chatId, projectId) {
     const prev = chats.find(c => c.id === chatId)?.projectId ?? null;
     const target = projectId || null;
@@ -1459,6 +1499,9 @@ export default function App() {
     webSearch: webSearchOn, webSearchAvailable, onToggleWebSearch: () => { if (webSearchAvailable) setWebSearch(s => !s); },
     project: currentProject, onClearProject: clearChatProject, onOpenProject: openProjects,
     onNewChat: () => newChat(), onShortcuts: () => setShowShortcuts(true),
+    incognito, onToggleIncognito: streaming || queued ? null : () => toggleIncognito(),
+    onShowSummary: hasSummary && activeId ? () => setSummaryOpen(true) : null,
+    onPromptLedger: activeId && !incognito ? () => setLedgerPrompt(true) : null,
     voiceMic: !!cfg.voiceMic, voiceCall: !!cfg.voiceCall && !incognito, sttEngine: cfg.voiceStt || 'browser',
     callActive: callOpen, onStartCall: () => setCallOpen(o => !o)
   };
@@ -1574,7 +1617,7 @@ export default function App() {
       onSendText={(txt) => send([], txt, { call: true })} />
   ) : null;
 
-  sidebarFns.current = { newChat, openChat, deleteChat, toggleStar, logout, openProjects, moveChatToProject, switchMode, newProject: () => { openProjects(null); setProjectCreate(true); } };
+  sidebarFns.current = { newChat, openChat, deleteChat, toggleStar, toggleArchive, setChatTags, logout, openProjects, moveChatToProject, switchMode, newProject: () => { openProjects(null); setProjectCreate(true); } };
 
   const streamKey = assistantIdRef.current || '_stream';
   const codeLive = !codeMode ? null
@@ -1620,14 +1663,14 @@ export default function App() {
           editing: user?.isAdmin && docsEdit.editing,
           onAddTab: docsAddTab, onAddPage: docsAddPage, onRemoveTab: docsRemoveTab, onRemovePage: docsRemovePage, onRenameTab: docsRenameTab
         } : null}
-        onNew={sbNewChat} onOpen={sbOpenChat} onDelete={sbDeleteChat} onToggleStar={sbToggleStar}
+        onNew={sbNewChat} onOpen={sbOpenChat} onDelete={sbDeleteChat} onToggleStar={sbToggleStar} onToggleArchive={sbToggleArchive} onSetTags={sbSetTags}
         collapsed={collapsed && !docsTarget} onToggle={onToggleSidebarCb}
         mobileOpen={mobileDrawer} onMobileClose={onMobileCloseCb}
         onSettings={onSettingsCb} onAdmin={onAdminCb} onPlayground={onPlaygroundCb}
         onCredits={onCreditsCb} onChangelog={onChangelogCb} onLicense={onLicenseCb} onPrivacy={onPrivacyCb} onLogout={sbLogout} version={cfg.version}
         onChatsOverview={onChatsOverviewCb}
         projects={projects} onProjects={sbProjects} onOpenProject={sbOpenProject} onNewProject={sbNewProject} onMoveToProject={sbMoveToProject}
-        busyChats={busyChats} onStopChat={stopChat} />
+        busyChats={busyChats} unreadChats={unreadChats} onStopChat={stopChat} />
 
       {collapsed && !docsTarget && (
         <Tip label={t('Open sidebar')} keys={sidebarCombo}>
@@ -1725,7 +1768,7 @@ export default function App() {
               chat={activeChat} chatId={activeId} project={activeProject} booting={booting}
               projects={projects} busy={busyChats.includes(activeId)}
               onOpenMenu={() => setMobileDrawer(true)} onOpenProject={openProjects} onRename={renameChat}
-              onStopChat={stopChat} onToggleStar={toggleStar} onMoveToProject={moveChatToProject} onDelete={deleteChat}
+              onStopChat={stopChat} onToggleStar={toggleStar} onToggleArchive={toggleArchive} onSetTags={setChatTags} allTags={allTags} onMoveToProject={moveChatToProject} onDelete={deleteChat}
               actions={
               <TopbarActions
                 items={[

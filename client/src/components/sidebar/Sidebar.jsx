@@ -4,7 +4,7 @@ import Tip from '../ui/Tip.jsx';
 import { SegSlide } from '../ui/controls.jsx';
 import { ChatMenu, menuAtButton, menuAtPointer } from './ChatMenu.jsx';
 import DocsNav from './DocsNav.jsx';
-import { Plus, Search, Panel, Gear, Shield, Flask, Logout, DotsV, Trash, Heart, ChevDown, Box, Compact, Sliders, Check, Artifact, Briefcase, ModelDocs, Info, Clock, ArrowOut, QuickTask, Sparkles, Paper, Ghost, X, Chat, CodeTag, Laptop } from '../ui/icons.jsx';
+import { Plus, Search, Panel, Gear, Shield, Flask, Logout, DotsV, Trash, Heart, ChevDown, Box, Compact, Sliders, Check, Artifact, Briefcase, ModelDocs, Info, Clock, ArrowOut, QuickTask, Sparkles, Paper, Ghost, X, Chat, CodeTag, Laptop, Tag } from '../ui/icons.jsx';
 import { t } from '../../i18n.jsx';
 import { useThemeText } from '../../lib/theme/store.jsx';
 import ThemeSlot from '../builder/ThemeSlot.jsx';
@@ -13,6 +13,7 @@ import { parseVersion } from '../../lib/appversion.js';
 import { nextFitSize, FIT_PASSES } from '../../lib/fittext.js';
 import { useDismiss } from '../../lib/dismiss.js';
 import { pathForChat, pathForCode, pathForProject } from '../../lib/route.js';
+import { collectTags, hasTag } from '../../lib/chattags.js';
 
 const SIDEBAR_CHAT_LIMIT = 40;
 const SIDEBAR_PROJECT_LIMIT = 5;
@@ -200,8 +201,9 @@ function ModeSwitch({ mode, onMode }) {
   );
 }
 
-function ChatRow({ c, active, showTrash, projects = [], projectsReady = true, onMoveToProject, onOpen, onDelete, onToggleStar, busyIds, onStopChat }) {
+function ChatRow({ c, active, showTrash, projects = [], projectsReady = true, allTags, unreadIds, onMoveToProject, onOpen, onDelete, onToggleStar, onToggleArchive, onSetTags, busyIds, onStopChat }) {
   const busy = !!(busyIds && busyIds.has(c.id));
+  const unread = !busy && !active && !!(unreadIds && unreadIds.has(c.id));
   const [menu, setMenu] = useState(null);
   const btnRef = useRef(null);
   const code = c.mode === 'code';
@@ -213,6 +215,7 @@ function ChatRow({ c, active, showTrash, projects = [], projectsReady = true, on
         onClick={(e) => { if (!plainClick(e)) return; e.preventDefault(); onOpen(c.id); }}>
         <span className="row-ic">
           {busy ? <span className="row-busy" role="img" aria-label={t('Still generating')} data-tip={t('Still generating')} />
+            : unread ? <span className="row-unread" role="img" aria-label={t('New reply')} data-tip={t('New reply')} />
             : code ? <Laptop className="row-session" aria-hidden="true" />
             : c.projectId ? <Box className="row-project" style={{ width: 15 }} role="img" aria-label={t('In a project')} />
             : <span className="row-dot" aria-hidden="true" />}
@@ -225,8 +228,8 @@ function ChatRow({ c, active, showTrash, projects = [], projectsReady = true, on
         <button className="row-ctrl" ref={btnRef} data-tip={t("Options")} aria-label={t("Options")} aria-expanded={!!menu} aria-haspopup="menu"
           onClick={(e) => { e.stopPropagation(); const at = menuAtButton(e.currentTarget); setMenu(m => m ? null : at); }}><DotsV /></button>
       )}
-      {menu && <ChatMenu chat={c} at={menu} projects={projects} projectsReady={projectsReady} busy={busy} anchorRef={btnRef}
-        onStopChat={onStopChat} onToggleStar={onToggleStar} onMoveToProject={onMoveToProject}
+      {menu && <ChatMenu chat={c} at={menu} projects={projects} projectsReady={projectsReady} busy={busy} anchorRef={btnRef} allTags={allTags}
+        onStopChat={onStopChat} onToggleStar={onToggleStar} onToggleArchive={onToggleArchive} onSetTags={onSetTags} onMoveToProject={onMoveToProject}
         onDelete={onDelete} onClose={() => setMenu(null)} />}
     </div>
   );
@@ -237,7 +240,7 @@ function Sidebar({
   collapsed, onToggle, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onPrivacy, onLogout, version, onChatsOverview,
   projects = [], projectsReady = true, onProjects, onOpenProject, onNewProject, onMoveToProject, mobileOpen = false, onMobileClose,
   onArtifacts, onScheduled, onCustomize, onModelDocs, showModelDocs = true, onVersion, dest = null,
-  docs = null, busyChats = [], onStopChat, mode = 'chat', onMode
+  docs = null, busyChats = [], onStopChat, mode = 'chat', onMode, onToggleArchive, onSetTags, unreadChats = []
 }) {
   const brandRef = useRef(null);
   const verRef = useRef(null);
@@ -258,6 +261,7 @@ function Sidebar({
   useFitText(brandRef, brandText, 0.6);
   useFitText(verRef, verText, 0.8);
   const busyIds = React.useMemo(() => new Set(busyChats), [busyChats]);
+  const unreadIds = React.useMemo(() => new Set(unreadChats), [unreadChats]);
   const combos = React.useMemo(() => {
     const k = resolveKeybinds(user?.prefs);
     const show = (id) => (k[id] ? comboKeys(k[id]).join('+') : '');
@@ -285,6 +289,8 @@ function Sidebar({
   });
   const groupRef = useRef(null);
   const pickGroup = (v) => { setGroupBy(v); setGroupMenu(false); try { localStorage.setItem('oq-group-by', v); } catch {} };
+  const [tagFilter, setTagFilter] = useState(() => { try { return localStorage.getItem('oq-tag-filter') || ''; } catch { return ''; } });
+  const pickTagFilter = (v) => { setTagFilter(v); setGroupMenu(false); try { localStorage.setItem('oq-tag-filter', v); } catch {} };
   useDismiss(groupMenu, () => setGroupMenu(false), groupRef);
   useEffect(() => {
     const down = (e) => { if (e.key === 'Shift') setShiftHeld(true); };
@@ -298,6 +304,9 @@ function Sidebar({
   const showTrash = shiftHeld && hover;
 
   chats = chats.filter(c => !c.archived);
+  const allTags = collectTags(chats);
+  const activeTag = allTags.find(x => hasTag([x], tagFilter)) || '';
+  if (activeTag) chats = chats.filter(c => hasTag(c.tags, activeTag));
   const starred = chats.filter(c => c.starred);
   const starredProjects = (projects || []).filter(p => p.starred);
   const others = chats.filter(c => !c.starred);
@@ -318,6 +327,11 @@ function Sidebar({
       list.sort((a, b) => a.key === '_none' ? 1 : b.key === '_none' ? -1 : a.label.localeCompare(b.label));
       return [{ key: 'lead', label: '', items: [] }, ...list];
     }
+    if (groupBy === 'tag') {
+      const list = allTags.map(tag => ({ key: 'tag:' + tag, label: tag, items: capped.filter(c => hasTag(c.tags, tag)) }));
+      list.push({ key: '_none', label: t('No tag'), items: capped.filter(c => !(c.tags || []).length) });
+      return [{ key: 'lead', label: '', items: [] }, ...list];
+    }
     const g = [
       { key: 'recent', label: '', items: [] },
       { key: 'd3', label: t('3+ days ago'), items: [] },
@@ -331,7 +345,7 @@ function Sidebar({
     }
     return g;
   })();
-  const rowProps = { onOpen, onDelete, onToggleStar, busyIds, onStopChat, projects, projectsReady, onMoveToProject };
+  const rowProps = { onOpen, onDelete, onToggleStar, onToggleArchive, onSetTags, allTags, unreadIds, busyIds, onStopChat, projects, projectsReady, onMoveToProject };
   const row = (c) => <ChatRow key={c.id} c={c} active={c.id === activeId} showTrash={showTrash} {...rowProps} />;
 
   return (
@@ -431,23 +445,38 @@ function Sidebar({
                 <ChevDown className="sec-head-chev" aria-hidden="true" />
               </button>
               <span className="sec-head-actions">
+              {activeTag && (
+                <button className="rl-filter" onClick={() => pickTagFilter('')} data-tip={t('Show all chats')} aria-label={t('Stop filtering by {tag}', { tag: activeTag })}>
+                  <Tag aria-hidden="true" /> <span className="rl-tag-name">{activeTag}</span> <X aria-hidden="true" />
+                </button>
+              )}
               {!code && <button className="rl-group" data-tip={t('All chats')} aria-label={t('All chats')} onClick={onChatsOverview}><ArrowOut /></button>}
               <button className="rl-group" data-tip={t('Group by')} aria-label={t('Group by')} aria-haspopup="menu" aria-expanded={groupMenu}
                 onClick={() => setGroupMenu(o => !o)}><Sliders /></button>
               {groupMenu && (
                 <div className="rl-menu" role="menu">
                   <div className="rl-menu-head">{t('Group by')}</div>
-                  {[['none', t('None')], ['date', t('Date')], ['project', t('Project')]].map(([v, label]) => (
+                  {[['none', t('None')], ['date', t('Date')], ['project', t('Project')], ['tag', t('Tag')]].map(([v, label]) => (
                     <button key={v} role="menuitemradio" aria-checked={groupBy === v} onClick={() => pickGroup(v)}>
                       <span>{label}</span>
                       {groupBy === v && <Check style={{ width: 16, marginLeft: 'auto' }} />}
                     </button>
                   ))}
+                  {allTags.length > 0 && <>
+                    <div className="rl-menu-head">{t('Show')}</div>
+                    {[['', t('All chats')], ...allTags.map(x => [x, x])].map(([v, label]) => (
+                      <button key={'f:' + v} role="menuitemradio" aria-checked={activeTag === v} onClick={() => pickTagFilter(v)}>
+                        {v && <Tag className="rl-ic" aria-hidden="true" />}
+                        <span className="rl-tag-name">{label}</span>
+                        {activeTag === v && <Check style={{ width: 16, marginLeft: 'auto' }} />}
+                      </button>
+                    ))}
+                  </>}
                 </div>
               )}
               </span>
             </div>
-            {others.length === 0 && <div className="chats-empty">{code ? t('No sessions yet') : emptyChats}</div>}
+            {others.length === 0 && <div className="chats-empty">{activeTag ? t('No chats with this tag') : code ? t('No sessions yet') : emptyChats}</div>}
             {!folded.has('recents') && recentGroups[0].items.map(row)}
             {!folded.has('recents') && recentGroups.slice(1).map(g => g.items.length > 0 && (
               <React.Fragment key={g.key}>

@@ -103,3 +103,6 @@ export const FilePlus = (p) => <I {...p}><path d={Page} /><path d="M12 11.5v6M9 
 export const QuickTask = (p) => <I {...p}><path d="M13 3 5.5 13.5H12l-1 7.5 7.5-10.5H12z" /></I>;
 export const Speaker = (p) => <I {...p}><path d={SpeakerBody} /><path d="M15.5 9a4.2 4.2 0 0 1 0 6M18.5 6.5a7.8 7.8 0 0 1 0 11" /></I>;
 export const SpeakerOff = (p) => <I {...p}><path d={SpeakerBody} /><path d="m16 9.5 5 5M21 9.5l-5 5" /></I>;
+export const ArchiveIcon = (p) => <I {...p}><rect x="3" y="4.5" width="18" height="4.5" rx="1.5" /><path d="M4.5 9v8.5A2.5 2.5 0 0 0 7 20h10a2.5 2.5 0 0 0 2.5-2.5V9M10 13h4" /></I>;
+export const Tag = (p) => <I {...p}><path d="M3.5 4.9v5.4a2 2 0 0 0 .6 1.4l8.2 8.2a2 2 0 0 0 2.8 0l5-5a2 2 0 0 0 0-2.8l-8.2-8.2a2 2 0 0 0-1.4-.6H4.9a1.4 1.4 0 0 0-1.4 1.6z" /><circle cx="8" cy="8" r="1.3" /></I>;
+export const Bell = (p) => <I {...p}><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15zM10 20.5a2.2 2.2 0 0 0 4 0" /></I>;

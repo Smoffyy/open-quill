@@ -1,16 +1,20 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Trash, Star, Chevron, Box, Stop, Download } from '../ui/icons.jsx';
+import { Trash, Star, Chevron, Box, Stop, Download, ArchiveIcon, Tag, Check } from '../ui/icons.jsx';
 import { t } from '../../i18n.jsx';
 import { Skel, SkelMenu } from '../ui/Skeleton.jsx';
 import { SubItem } from '../ui/Submenu.jsx';
 import { useDismiss } from '../../lib/dismiss.js';
 import { useSubmenus } from '../../lib/submenu.js';
+import { MAX_TAGS, MAX_TAG_LENGTH, hasTag, toggleTag } from '../../lib/chattags.js';
 
-export function ChatMenu({ chat, at, projects = [], projectsReady = true, busy = false, anchorRef, onStopChat, onToggleStar, onMoveToProject, onDelete, onClose }) {
+export function ChatMenu({ chat, at, projects = [], projectsReady = true, busy = false, anchorRef, allTags = [], onStopChat, onToggleStar, onToggleArchive, onSetTags, onMoveToProject, onDelete, onClose }) {
   const [pos, setPos] = useState({ ...at, ready: false });
   const sub = useSubmenus();
   const menuRef = useRef(null);
+  const [newTag, setNewTag] = useState('');
+  const tags = chat.tags || [];
+  const tagChoices = [...allTags, ...tags.filter(x => !hasTag(allTags, x))];
 
   useEffect(() => { setPos({ ...at, ready: false }); }, [at]);
 
@@ -72,6 +76,36 @@ export function ChatMenu({ chat, at, projects = [], projectsReady = true, busy =
           ))}
         </SubItem>
       )}
+      {onSetTags && (
+        <SubItem id="tags" sub={sub} wrapClass="cm-sub" flyoutClass="chat-menu cm-flyout cm-tags"
+          trigger={({ onClick }) => (
+            <button onClick={onClick}>
+              <Tag style={{ width: 20 }} /> {t('Tags')}
+              <Chevron style={{ width: 13, marginLeft: 'auto' }} />
+            </button>
+          )}>
+          {tagChoices.map(tag => {
+            const on = hasTag(tags, tag);
+            return (
+              <button key={tag} role="menuitemcheckbox" aria-checked={on} onClick={(e) => { e.stopPropagation(); onSetTags(chat.id, toggleTag(tags, tag)); }}>
+                <Tag style={{ width: 15 }} /> <span className="cm-tag-name">{tag}</span>
+                {on && <Check style={{ width: 15, marginLeft: 'auto' }} />}
+              </button>
+            );
+          })}
+          {tags.length < MAX_TAGS && (
+            <input className="cm-tag-input" value={newTag} maxLength={MAX_TAG_LENGTH} placeholder={t('New tag')} aria-label={t('New tag')}
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => setNewTag(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter' || !newTag.trim()) return;
+                e.preventDefault();
+                if (!hasTag(tags, newTag.trim())) onSetTags(chat.id, toggleTag(tags, newTag));
+                setNewTag('');
+              }} />
+          )}
+        </SubItem>
+      )}
       <SubItem id="export" sub={sub} wrapClass="cm-sub" flyoutClass="chat-menu cm-flyout"
         trigger={({ onClick }) => (
           <button onClick={onClick}>
@@ -83,6 +117,11 @@ export function ChatMenu({ chat, at, projects = [], projectsReady = true, busy =
         <button onClick={stop(exportAs('md'))}>{t('Markdown')}</button>
         <button onClick={stop(exportAs('pdf'))}>{t('PDF')}</button>
       </SubItem>
+      {onToggleArchive && (
+        <button onClick={stop(() => onToggleArchive(chat.id))}>
+          <ArchiveIcon style={{ width: 20 }} /> {chat.archived ? t('Unarchive chat') : t('Archive chat')}
+        </button>
+      )}
       <button className="danger" onClick={stop(() => onDelete(chat.id))}>
         <Trash style={{ width: 20 }} /> {t('Delete chat')}
       </button>

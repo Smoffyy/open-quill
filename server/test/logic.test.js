@@ -18,6 +18,7 @@ import { cutOffError } from '../lib/prompts.js';
 import { makeToolTextFilter, makeEmitter } from '../llm/emitter.js';
 import { trimInTurn } from '../lib/convo.js';
 import { scanTools } from '../lib/toolproto.js';
+import { cleanTags, parseTags, MAX_TAGS, MAX_TAG_LENGTH } from '../lib/chattags.js';
 import { isContextOverflowError } from '../lib/llamacpp.js';
 import { forceAnswer, answerNudge, reasoningTail, tailChars, FORCE_ANSWER_INSTRUCTION } from '../lib/forceanswer.js';
 import { outputReserve, shedBulk } from '../lib/ctxwindow.js';
@@ -2977,4 +2978,15 @@ test('kwargs: a number range keeps its unit and 0 means off, a list drops them',
   assert.deepEqual([range.unit, range.zeroOff], ['tokens', true]);
   const list = normalizeKwarg({ name: 'reasoning_effort', values: ['low', 'high'], unit: 'tokens', zeroOff: true });
   assert.deepEqual([list.unit, list.zeroOff], ['', false]);
+});
+
+test('cleanTags trims, dedupes case-insensitively and caps count and length', () => {
+  assert.deepEqual(cleanTags(['  work ', 'Work', 'ideas', 7, null, '', '   ']), ['work', 'ideas']);
+  assert.deepEqual(cleanTags(['a   b']), ['a b']);
+  assert.equal(cleanTags(['x'.repeat(80)])[0].length, MAX_TAG_LENGTH);
+  assert.equal(cleanTags(Array.from({ length: 20 }, (_, i) => 't' + i)).length, MAX_TAGS);
+  assert.deepEqual(cleanTags('work'), []);
+  assert.deepEqual(parseTags(null), []);
+  assert.deepEqual(parseTags('not json'), []);
+  assert.deepEqual(parseTags('["a","A","b"]'), ['a', 'b']);
 });

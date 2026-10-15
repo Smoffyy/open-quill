@@ -8,8 +8,9 @@ import { toast } from '../../lib/toast.js';
 import { useAttachments, NO_VISION } from '../../lib/attachments.js';
 import { useDictation } from '../../lib/dictation.js';
 import { captureScreenshot, screenshotSupported, isCaptureCancel } from '../../lib/screenshot.js';
-import { Plus, Mic, Wave, Up, Enter, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, NewChatIcon, Sliders, Steer, Screenshot, Plug, SkillIcon, ImageIcon, Copy, Folder, ChevDown, Calendar } from '../ui/icons.jsx';
-import StyleSubmenu, { styleNameFor } from './StyleMenu.jsx';
+import { Plus, Mic, Wave, Up, Enter, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, NewChatIcon, Sliders, Steer, Screenshot, Plug, SkillIcon, ImageIcon, Copy, Folder, ChevDown, Calendar, Ghost, Sparkles, Compact, Eye } from '../ui/icons.jsx';
+import StyleSubmenu, { styleNameFor, STYLE_PRESETS } from './StyleMenu.jsx';
+import { slashState, matchSlash } from '../../lib/slash.js';
 import { extLabel } from '../../lib/files.js';
 import { t, fmtDate } from '../../i18n.jsx';
 import { useThemeText } from '../../lib/theme/store.jsx';
@@ -61,7 +62,8 @@ export default function Composer({
   removedModel = null, skills = [], onToggleSkill = null, onManageSkills = null,
   queueCount = 0, onQueue, onSteer, canSteer = false, onManageConnectors = null, attachCombo = '',
   compareIds = [], onSetCompare, reasoningEffort, onSetEffort, kwargValues, onSetKwarg,
-  contextRing = null, thread = false, footer = null, draftId, panel = null, jump = null
+  contextRing = null, thread = false, footer = null, draftId, panel = null, jump = null,
+  incognito = false, onToggleIncognito = null, onShowSummary = null, onPromptLedger = null
 }) {
   const composerPlaceholder = useThemeText('composer.placeholder', t('How can I help you today?'));
   const layout = useLayout();
@@ -249,23 +251,48 @@ export default function Composer({
 
   useEffect(() => { setShowReason(false); }, [currentId]);
 
-  const slashActive = value.startsWith('/') && !value.includes('\n');
-  const slashQuery = slashActive ? value.slice(1).toLowerCase().trim() : '';
   const slashCmds = [];
-  if (slashActive) {
-    if (onNewChat) slashCmds.push({ id: 'new', label: t('New chat'), icon: <NewChatIcon style={{ width: 16 }} />, run: () => { onChange(''); onNewChat(); } });
-    if (webSearchAvailable && onToggleWebSearch) slashCmds.push({ id: 'web', label: t('Web search'), sub: webSearch ? t('Disable') : t('Enable'), icon: <Globe style={{ width: 16 }} />, run: () => { onChange(''); onToggleWebSearch(); } });
-    if (onShortcuts) slashCmds.push({ id: 'keys', label: t('Keyboard shortcuts'), icon: <Sliders style={{ width: 16 }} />, run: () => { onChange(''); onShortcuts(); } });
+  if (slashState(value)) {
+    const done = (fn) => () => { onChange(''); fn(); };
+    if (onNewChat) slashCmds.push({ id: 'new', word: 'new', label: t('New chat'), icon: <NewChatIcon style={{ width: 16 }} />, run: done(onNewChat) });
+    if (onToggleIncognito) slashCmds.push({ id: 'incognito', word: 'incognito', label: incognito ? t('Exit incognito') : t('Incognito chat'), icon: <Ghost style={{ width: 16 }} />, run: done(onToggleIncognito) });
+    if (webSearchAvailable && onToggleWebSearch) slashCmds.push({ id: 'web', word: 'web', label: t('Web search'), sub: webSearch ? t('Disable') : t('Enable'), icon: <Globe style={{ width: 16 }} />, run: done(onToggleWebSearch) });
+    const pickable = (models || []).filter(m => !m.unavailable || canUseUnavailable);
+    if (onSelect && pickable.length > 1) slashCmds.push({
+      id: 'model', word: 'model', label: t('Switch model'), icon: <Cube style={{ width: 16 }} />,
+      items: pickable.map(m => ({ id: 'model:' + m.id, label: m.displayName, sub: m.id === currentId ? t('Current') : '', run: done(() => onSelect(m.id)) }))
+    });
+    if (onSelectStyle) slashCmds.push({
+      id: 'style', word: 'style', label: t('Response style'), icon: <Sparkles style={{ width: 16 }} />,
+      items: [...STYLE_PRESETS.map(p => ({ id: p.id, name: t(p.name) })), ...styles].map(s => ({ id: 'style:' + s.id, label: s.name, sub: s.id === styleId ? t('Current') : '', run: done(() => onSelectStyle(s.id)) }))
+    });
+    if (onToggleSkill && skills.length > 0) slashCmds.push({
+      id: 'skill', word: 'skill', label: t('Skills'), icon: <SkillIcon style={{ width: 16 }} />,
+      items: skills.map(sk => ({ id: 'skill:' + sk.id, label: sk.name, sub: sk.enabled ? t('On') : t('Off'), run: done(() => onToggleSkill(sk)) }))
+    });
+    if (onSetProject && projects.length > 0) slashCmds.push({
+      id: 'project', word: 'project', label: t('Add to project'), icon: <Box style={{ width: 16 }} />,
+      items: [
+        ...(project && onClearProject ? [{ id: 'project:none', label: t('Remove from project'), run: done(onClearProject) }] : []),
+        ...projects.map(p => ({ id: 'project:' + p.id, label: p.name, sub: project?.id === p.id ? t('Current') : '', run: done(() => onSetProject(p)) }))
+      ]
+    });
+    if (onShowSummary) slashCmds.push({ id: 'summary', word: 'summary', label: t('Conversation memory'), icon: <Compact style={{ width: 16 }} />, run: done(onShowSummary) });
+    if (onPromptLedger) slashCmds.push({ id: 'prompt', word: 'prompt', label: t('What gets sent'), icon: <Eye style={{ width: 16 }} />, run: done(onPromptLedger) });
+    if (onShortcuts) slashCmds.push({ id: 'keys', word: 'keys', label: t('Keyboard shortcuts'), icon: <Sliders style={{ width: 16 }} />, run: done(onShortcuts) });
   }
-  const slashShown = slashCmds.filter(c => c.label.toLowerCase().includes(slashQuery));
-  const slashOpen = slashActive && slashShown.length > 0;
-  useEffect(() => { setSlashIdx(0); }, [slashQuery, slashOpen]);
+  const { parent: slashParent, items: slashShown } = matchSlash(slashCmds, value);
+  const slashOpen = slashShown.length > 0;
+  const runSlash = (c) => (c.items ? onChange('/' + c.word + ' ') : c.run());
+  useEffect(() => { setSlashIdx(0); }, [value, slashOpen]);
+  const slashListRef = useRef(null);
+  useEffect(() => { slashListRef.current?.children[slashIdx]?.scrollIntoView({ block: 'nearest' }); }, [slashIdx]);
 
   function key(e) {
     if (slashOpen) {
       if (e.key === 'ArrowDown') { e.preventDefault(); setSlashIdx(i => Math.min(slashShown.length - 1, i + 1)); return; }
       if (e.key === 'ArrowUp') { e.preventDefault(); setSlashIdx(i => Math.max(0, i - 1)); return; }
-      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); slashShown[slashIdx]?.run(); return; }
+      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); if (slashShown[slashIdx]) runSlash(slashShown[slashIdx]); return; }
       if (e.key === 'Escape') { e.preventDefault(); onChange(''); return; }
     }
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); }
@@ -409,15 +436,19 @@ export default function Composer({
       )}
       {upErr && <div className="attach-err">{upErr === NO_VISION ? t('This model cannot see images, so they were left out.') : upErr}</div>}
       {slashOpen && (
-        <div className="slash-menu">
-          <div className="slash-head">{t("Commands")}</div>
-          {slashShown.map((c, i) => (
-            <button key={c.id} className={'slash-item' + (i === slashIdx ? ' active' : '')} onMouseEnter={() => setSlashIdx(i)} onMouseDown={(e) => { e.preventDefault(); c.run(); }}>
-              <span className="slash-ico">{c.icon}</span>
-              <span className="slash-label">{c.label}</span>
-              {c.sub && <span className="slash-sub">{c.sub}</span>}
-            </button>
-          ))}
+        <div className="slash-menu" role="listbox" aria-label={slashParent ? slashParent.label : t('Commands')}>
+          <div className="slash-head">{slashParent ? slashParent.label : t("Commands")}</div>
+          <div className="slash-list" ref={slashListRef}>
+            {slashShown.map((c, i) => (
+              <button key={c.id} role="option" aria-selected={i === slashIdx} className={'slash-item' + (i === slashIdx ? ' active' : '')} onMouseEnter={() => setSlashIdx(i)} onMouseDown={(e) => { e.preventDefault(); runSlash(c); }}>
+                <span className="slash-ico">{c.icon || slashParent?.icon}</span>
+                <span className="slash-label">{c.label}</span>
+                {!slashParent && <span className="slash-word">/{c.word}</span>}
+                {c.sub && <span className="slash-sub">{c.sub}</span>}
+                {c.items && <Chevron className="slash-more" aria-hidden="true" />}
+              </button>
+            ))}
+          </div>
         </div>
       )}
       {canSteer && (

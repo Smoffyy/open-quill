@@ -11,6 +11,9 @@ import { BRAND_FAVICON_DARK, BRAND_FAVICON_LIGHT } from '../src/lib/brand.js';
 import { isCaptureCancel, screenshotName } from '../src/lib/screenshot.js';
 import { createHistory, changedKeys, pick, historyKey } from '../src/components/admin/state/history.js';
 import { stampTrail } from '../src/lib/cellfield.js';
+import { slashState, matchSlash } from '../src/lib/slash.js';
+import { hasTag, toggleTag, collectTags, MAX_TAGS } from '../src/lib/chattags.js';
+import { addUnread, removeUnread, shouldNotify, titleWithUnread } from '../src/lib/notify.js';
 
 test('a scroll inside an anchored menu does not count as a scroll away from it', () => {
   const item = { tag: 'item' };
@@ -369,4 +372,47 @@ test('a progress sweep lights every column it crossed and clamps at both edges',
   stampTrail(edge, 2, 99);
   assert.deepEqual([...edge], [1, 1, 1, 1]);
   assert.equal(edge.length, 4);
+});
+
+test('slash commands match by word or label, and drill into a command with items', () => {
+  const cmds = [
+    { id: 'new', word: 'new', label: 'New chat' },
+    { id: 'model', word: 'model', label: 'Switch model', items: [{ id: 'a', label: 'Qwen 3' }, { id: 'b', label: 'Llama 4' }] }
+  ];
+  assert.equal(slashState('hello'), null);
+  assert.equal(slashState('/new\nmore'), null);
+  assert.deepEqual(slashState('/Model Qw'), { word: 'model', rest: 'qw' });
+  assert.deepEqual(matchSlash(cmds, '/').items.map(c => c.id), ['new', 'model']);
+  assert.deepEqual(matchSlash(cmds, '/mo').items.map(c => c.id), ['model']);
+  assert.deepEqual(matchSlash(cmds, '/switch').items.map(c => c.id), ['model']);
+  const nested = matchSlash(cmds, '/model ll');
+  assert.equal(nested.parent.id, 'model');
+  assert.deepEqual(nested.items.map(c => c.id), ['b']);
+  assert.deepEqual(matchSlash(cmds, '/new chat').items, []);
+  assert.deepEqual(matchSlash(cmds, '/usr/bin').items, []);
+});
+
+test('chat tags toggle case-insensitively and collect sorted without duplicates', () => {
+  assert.equal(hasTag(['Work'], 'work'), true);
+  assert.deepEqual(toggleTag(['Work'], 'work'), []);
+  assert.deepEqual(toggleTag(['a'], '  b   c '), ['a', 'b c']);
+  assert.deepEqual(toggleTag(['a'], '   '), ['a']);
+  const full = Array.from({ length: MAX_TAGS }, (_, i) => 't' + i);
+  assert.equal(toggleTag(full, 'extra'), full);
+  assert.deepEqual(collectTags([{ tags: ['b', 'A'] }, { tags: ['a'] }, {}]), ['A', 'b']);
+});
+
+test('unread chats and notifications only fire for work the user is not watching', () => {
+  assert.deepEqual(addUnread(['a'], 'b'), ['b', 'a']);
+  const list = ['a'];
+  assert.equal(addUnread(list, 'a'), list);
+  assert.equal(removeUnread(list, 'z'), list);
+  assert.deepEqual(removeUnread(['a', 'b'], 'a'), ['b']);
+  assert.equal(shouldNotify({ enabled: true, permission: 'granted', hidden: false, active: true }), false);
+  assert.equal(shouldNotify({ enabled: true, permission: 'granted', hidden: true, active: true }), true);
+  assert.equal(shouldNotify({ enabled: true, permission: 'granted', hidden: false, active: false }), true);
+  assert.equal(shouldNotify({ enabled: true, permission: 'denied', hidden: true, active: false }), false);
+  assert.equal(shouldNotify({ enabled: false, permission: 'granted', hidden: true, active: false }), false);
+  assert.equal(titleWithUnread('Chat', 0), 'Chat');
+  assert.equal(titleWithUnread('Chat', 3), '(3) Chat');
 });
