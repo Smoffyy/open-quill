@@ -80,7 +80,7 @@ function PreviewBody({ file, kind, mode }) {
   if (kind === 'pdf' && mode !== 'text') {
     if (pdf.failed) return <Empty />;
     if (!pdf.src) return <Skel when><SkelLines count={14} /></Skel>;
-    return <iframe className="fp-frame" src={pdf.src} title={file.name} />;
+    return <iframe className="fp-frame" src={pdf.src} data-tip={file.name} aria-label={file.name} />;
   }
   return <TextBody data={data} markdown={kind === 'markdown'} />;
 }
@@ -98,7 +98,7 @@ export default function FilePreview() {
       <div className="modal-main">
         <div className="modal-head fp-head">
           <div className="fp-title">
-            <h2 className="modal-title" title={file.name}>{file.name}</h2>
+            <h2 className="modal-title" data-tip={file.name}>{file.name}</h2>
             {meta && <span className="fp-meta">{meta}</span>}
           </div>
           {kind === 'pdf' && (

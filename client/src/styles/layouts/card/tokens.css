@@ -1,0 +1,21 @@
+:root[data-layout="card"] {
+  --composer-width: 640px;
+  --composer-radius: 14px;
+  --composer-padding: 8px;
+  --composer-border-width: 0;
+  --composer-input-leading: 22px;
+  --composer-input-padding: 5px 8px;
+  --composer-input-min: 32px;
+  --composer-home-input-min: 43px;
+  --composer-input-max: 378px;
+  --composer-tools-gap: 4px;
+  --composer-dock-top: 0;
+  --control-size: 32px;
+  --control-radius: 8px;
+  --menu-radius: 12px;
+  --menu-item-radius: 8px;
+  --menu-item-padding: 6px 10px;
+  --menu-item-gap: 8px;
+  --menu-item-size: 14px;
+  --menu-item-weight: 400;
+}

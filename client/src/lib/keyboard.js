@@ -6,6 +6,16 @@ export function isTypingTarget(el) {
   return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
 }
 
+let instantTimer = null;
+
+function runInstant(fn) {
+  const root = document.documentElement;
+  root.setAttribute('data-oq-instant', '');
+  clearTimeout(instantTimer);
+  instantTimer = setTimeout(() => root.removeAttribute('data-oq-instant'), 400);
+  return fn?.();
+}
+
 export function useKeybinds(user, kbHandlers, setChordHint) {
   useEffect(() => {
     if (!user) return;
@@ -27,7 +37,7 @@ export function useKeybinds(user, kbHandlers, setChordHint) {
         clearPending();
         if (enabled(chord)) {
           e.preventDefault();
-          kbHandlers.current[chord.id]?.();
+          runInstant(kbHandlers.current[chord.id]);
           return;
         }
         if (combo === 'Escape') { e.preventDefault(); return; }
@@ -44,7 +54,7 @@ export function useKeybinds(user, kbHandlers, setChordHint) {
       if (!enabled(act)) return;
       if (!act.typing && typing) return;
       if (!act.overlay && overlay) return;
-      if (kbHandlers.current[act.id]?.() !== false) e.preventDefault();
+      if (runInstant(kbHandlers.current[act.id]) !== false) e.preventDefault();
     };
     window.addEventListener('keydown', onKey);
     return () => {

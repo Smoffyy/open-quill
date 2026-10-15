@@ -5,6 +5,7 @@ import { ensureCommon } from './lib/hljs.js';
 import { ensureKatex } from './lib/mathjs.js';
 import './styles/app.css';
 import App from './App.jsx';
+import TipLayer from './components/ui/TipLayer.jsx';
 import { getLang, loadLang, useI18n } from './i18n.jsx';
 import { applyUserFont } from './lib/prefs.js';
 
@@ -12,7 +13,12 @@ applyUserFont();
 
 function Root() {
   const { lang } = useI18n();
-  return <App key={lang} />;
+  return (
+    <>
+      <App key={lang} />
+      <TipLayer />
+    </>
+  );
 }
 
 loadLang(getLang()).then(() => {

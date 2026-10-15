@@ -1,9 +1,9 @@
 import { legacyRevealStyle } from './reveal.js';
 
-export function presetDefaults(isOpenai, theme = 'system') {
+export function presetDefaults(layout, theme = 'system') {
   return {
     revealStyle: 'modern', autoscroll: true, theme, density: 'comfortable',
-    streamCursor: isOpenai, cursorStyle: isOpenai ? 'circle' : 'block',
+    streamCursor: layout.cursor.on, cursorStyle: layout.cursor.style,
     cursorBlinkMs: 500, cursorPulseMs: 1000, revealMs: 40,
     oledShift: false,
     threadRail: false, threadFind: true, branchMap: true, threadOutline: true, msgKeys: true, readWidth: 'normal', keybinds: {}
@@ -12,13 +12,13 @@ export function presetDefaults(isOpenai, theme = 'system') {
 
 export function shownThemeFallback(appliedTheme) {
   if (appliedTheme === 'light') return 'light';
-  if (appliedTheme === 'anthropic' || appliedTheme === 'openai') return 'dark';
+  if (appliedTheme === 'dark') return 'dark';
   return 'system';
 }
 
-export function initialPrefs(stored, isOpenai) {
+export function initialPrefs(stored, layout) {
   const own = stored && typeof stored === 'object' ? stored : {};
-  const merged = { ...presetDefaults(isOpenai), ...own };
+  const merged = { ...presetDefaults(layout), ...own };
   if (own.revealStyle == null) merged.revealStyle = legacyRevealStyle(own);
   if (merged.theme == null || merged.theme === 'oled') merged.theme = merged.theme === 'oled' ? 'dark' : 'system';
   return merged;

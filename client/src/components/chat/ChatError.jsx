@@ -22,10 +22,10 @@ export default function ChatError({ message, onDismiss }) {
         <span className="chat-error-text">{message}</span>
       </div>
       <div className="chat-error-actions">
-        <button className="chat-error-copy" title={copied ? t('Copied') : t('Copy')} aria-label={copied ? t('Copied') : t('Copy')} onClick={copy}>
+        <button className="chat-error-copy" data-tip={copied ? t('Copied') : t('Copy')} aria-label={copied ? t('Copied') : t('Copy')} onClick={copy}>
           {copied ? <Check style={{ width: 15 }} /> : <Copy style={{ width: 15 }} />}
         </button>
-        <button className="chat-error-x" title={t('Dismiss')} aria-label={t('Dismiss')} onClick={onDismiss}><X style={{ width: 15 }} /></button>
+        <button className="chat-error-x" data-tip={t('Dismiss')} aria-label={t('Dismiss')} onClick={onDismiss}><X style={{ width: 15 }} /></button>
       </div>
     </div>
   );

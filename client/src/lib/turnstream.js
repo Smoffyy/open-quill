@@ -150,7 +150,7 @@ export function useTurnStream(opts = {}) {
     if (!target.current) setPhase('thinking');
   }, []);
 
-  const setSegments = useCallback((list) => setSegs(list), []);
+  const setSegments = useCallback((list) => { setSegs(list); setPhase('thinking'); }, []);
 
   // Picking a turn back up: a reload, or switching to a chat already generating.
   const restore = useCallback((rec, fallbackModelId) => {

@@ -1,6 +1,9 @@
 export const KWARG_TARGETS = ['chat_template_kwargs', 'body', 'extra_body'];
 export const KWARG_CONTROLS = ['auto', 'toggle', 'slider', 'range', 'select'];
 export const KWARG_TYPES = ['auto', 'string', 'boolean', 'number'];
+export const REPLAY_FIELDS = ['reasoning_content', 'reasoning', 'thinking'];
+const REPLAY_DEFAULTS = { __proto__: null, preserve_thinking: 'true', clear_thinking: 'false' };
+const BUDGET_KWARG = 'reasoning_budget_tokens';
 
 const MAX_KWARGS = 24;
 const MAX_VALUES = 24;
@@ -67,10 +70,33 @@ export function kwargVisible(defs, values, def) {
   return def.visible !== false && gateOpen(defs, values, def);
 }
 
+function budgetMessageOf(raw) {
+  const src = raw && typeof raw === 'object' ? raw : {};
+  return {
+    enabled: !!src.enabled,
+    name: slug(src.name ?? 'reasoning_budget_message', 80),
+    target: KWARG_TARGETS.includes(src.target) ? src.target : 'body',
+    type: KWARG_TYPES.includes(src.type) ? src.type : 'string',
+    text: text(src.text, 1000)
+  };
+}
+
+function stopsOf(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.slice(0, MAX_VALUES)
+    .filter(s => s && String(s.value ?? '').trim() !== '' && num(s.value) != null)
+    .map(s => {
+      const value = String(num(s.value));
+      return { label: text(s.label, 40).trim() || value, value, off: s.off == null ? value === '0' : !!s.off };
+    });
+}
+
 export function normalizeKwarg(raw, index = 0) {
   const src = raw && typeof raw === 'object' ? raw : {};
-  const values = (Array.isArray(src.values) ? src.values : String(src.values ?? '').split(','))
+  const stops = stopsOf(src.stops);
+  const list = (Array.isArray(src.values) ? src.values : String(src.values ?? '').split(','))
     .map(v => slug(v, 80)).filter(v => v !== '').slice(0, MAX_VALUES);
+  const values = stops.length ? stops.map(s => s.value) : list;
   const rules = (Array.isArray(src.rules) ? src.rules : []).slice(0, MAX_VALUES).map(r => ({
     when: slug(r && r.when, 80),
     value: text(r && r.value, 200),
@@ -83,6 +109,7 @@ export function normalizeKwarg(raw, index = 0) {
     description: text(src.description, 300),
     chip: text(src.chip, 40),
     values,
+    stops,
     default: slug(src.default, 200),
     control: KWARG_CONTROLS.includes(src.control) ? src.control : 'auto',
     target: KWARG_TARGETS.includes(src.target) ? src.target : 'chat_template_kwargs',
@@ -95,7 +122,12 @@ export function normalizeKwarg(raw, index = 0) {
     min: num(src.min),
     max: num(src.max),
     step: null,
-    rules
+    unit: text(src.unit, 24).trim(),
+    zeroOff: !!src.zeroOff,
+    rules,
+    replayWhen: src.replayWhen === undefined ? (REPLAY_DEFAULTS[slug(src.name, 80)] || '') : slug(src.replayWhen, 80),
+    replayAs: REPLAY_FIELDS.includes(src.replayAs) ? src.replayAs : REPLAY_FIELDS[0],
+    budgetMessage: budgetMessageOf(src.budgetMessage)
   };
   if (isRange(def)) {
     const s = num(src.step);
@@ -103,12 +135,15 @@ export function normalizeKwarg(raw, index = 0) {
     // A range is its own source of truth for what may be sent; keeping an
     // enumerated list alongside it would leave two answers to the same question.
     def.values = [];
+    def.stops = [];
     const d = clampToRange(def, def.default);
     def.default = d == null ? '' : String(d);
     return def;
   }
   def.min = null;
   def.max = null;
+  def.unit = '';
+  def.zeroOff = false;
   if (def.values.length && !def.values.includes(def.default)) def.default = '';
   return def;
 }
@@ -173,6 +208,7 @@ export function kwargDefs(model) {
 
 export function controlOf(def) {
   if (isRange(def)) return 'range';
+  if (def.stops?.length) return 'slider';
   if (def.control && def.control !== 'auto') return def.control;
   if (isBoolPair(def.values)) return 'toggle';
   if (def.values.length > 5) return 'select';
@@ -232,22 +268,38 @@ export function coerceKwargValue(value, type) {
   return s;
 }
 
+function isSent(defs, values, d) {
+  const v = values ? values[d.id] : null;
+  if (v == null || v === '' || !d.name) return false;
+  return !!d.parentId || kwargVisible(defs, values, d) || d.sendWhenHidden;
+}
+
+function placeKwarg(out, target, name, val) {
+  if (target === 'body') {
+    if (!RESERVED_BODY_KEYS.has(name)) out[name] = val;
+    return;
+  }
+  if (!out[target] || typeof out[target] !== 'object') out[target] = {};
+  out[target][name] = val;
+}
+
 export function kwargPayload(defs, values) {
   const out = {};
   for (const d of defs) {
-    const v = values ? values[d.id] : null;
-    if (v == null || v === '' || !d.name) continue;
-    if (!d.parentId && !kwargVisible(defs, values, d) && !d.sendWhenHidden) continue;
-    const val = coerceKwargValue(v, d.type);
-    if (d.target === 'body') {
-      if (RESERVED_BODY_KEYS.has(d.name)) continue;
-      out[d.name] = val;
-    } else {
-      if (!out[d.target] || typeof out[d.target] !== 'object') out[d.target] = {};
-      out[d.target][d.name] = val;
+    if (!isSent(defs, values, d)) continue;
+    placeKwarg(out, d.target, d.name, coerceKwargValue(values[d.id], d.type));
+    const message = d.budgetMessage;
+    if (d.name === BUDGET_KWARG && message?.enabled && message.name && message.text && Number(values[d.id]) > 0) {
+      placeKwarg(out, message.target, message.name, coerceKwargValue(message.text, message.type));
     }
   }
   return out;
+}
+
+export function replayFieldFor(defs, values) {
+  const def = defs.find(d => d.replayWhen && isSent(defs, values, d)
+    && (d.replayWhen === '*' || String(values[d.id]) === d.replayWhen));
+  return def ? def.replayAs : '';
 }
 
 export function primaryKwarg(defs) {
@@ -257,13 +309,14 @@ export function primaryKwarg(defs) {
 export function applyKwargs(model, requested, isAdmin = false) {
   if (!model) return model;
   const defs = kwargDefs(model);
-  if (!defs.length) return { ...model, resolved_kwargs: {}, kwarg_values: {} };
+  if (!defs.length) return { ...model, resolved_kwargs: {}, kwarg_values: {}, replay_thinking: '' };
   const values = resolveKwargValues(defs, requested, isAdmin);
   const primary = primaryKwarg(defs);
   return {
     ...model,
     resolved_kwargs: kwargPayload(defs, values),
     kwarg_values: values,
+    replay_thinking: replayFieldFor(defs, values),
     reasoning_effort_level: primary ? (values[primary.id] ?? null) : null,
     reasoning_effort_kwarg: primary ? primary.name : ''
   };
@@ -273,6 +326,13 @@ export function defaultKwargPayload(model) {
   const defs = kwargDefs(model);
   if (!defs.length) return {};
   return kwargPayload(defs, resolveKwargValues(defs, {}, true));
+}
+
+export function replayFieldOf(model) {
+  if (!model) return '';
+  if (typeof model.replay_thinking === 'string') return model.replay_thinking;
+  const defs = kwargDefs(model);
+  return defs.length ? replayFieldFor(defs, resolveKwargValues(defs, {}, true)) : '';
 }
 
 export function oneShotKwargPayload(model) {
@@ -293,8 +353,8 @@ export function stripNestedKwargs(payload) {
 export function publicKwargDefs(model) {
   return kwargDefs(model).map(d => ({
     id: d.id, name: d.name, label: d.label, description: d.description, chip: d.chip,
-    values: d.values, default: d.default, control: d.control, type: d.type, target: d.target,
+    values: d.values, stops: d.stops, default: d.default, control: d.control, type: d.type, target: d.target,
     visible: d.visible, adminOnly: d.adminOnly, sendWhenHidden: d.sendWhenHidden,
-    parentId: d.parentId, showIf: d.showIf, min: d.min, max: d.max, step: d.step, rules: d.rules
+    parentId: d.parentId, showIf: d.showIf, min: d.min, max: d.max, step: d.step, unit: d.unit, zeroOff: d.zeroOff, rules: d.rules
   }));
 }

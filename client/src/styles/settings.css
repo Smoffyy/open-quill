@@ -180,8 +180,7 @@
   .set-select-menu { right: auto; left: 0; }
 }
 
-.dz-title { font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--danger); margin-bottom: 10px; font-weight: 600; }
-.dz-confirm { background: color-mix(in srgb, var(--danger) 8%, transparent); border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent); border-radius: 12px; padding: 14px 16px; }
+.set-actions { display: flex; align-items: center; gap: 8px; }
 .dz-err { color: var(--danger); font-size: 13px; margin-bottom: 8px; }
 
 .me-section-h { font-size: 14px; font-weight: 700; margin: 24px 0 4px; padding-top: 16px; border-top: 1px solid var(--border-soft); }

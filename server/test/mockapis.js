@@ -275,10 +275,11 @@ export function validateOpenAi(body, { rejects = {} } = {}) {
   return null;
 }
 
-export function openAiChunks({ text = '', tools = [], finish, usage = { prompt_tokens: 30, completion_tokens: 12 }, cached = 0, chunk = 6, includeUsage = true } = {}) {
+export function openAiChunks({ reasoning = '', text = '', tools = [], finish, usage = { prompt_tokens: 30, completion_tokens: 12 }, cached = 0, chunk = 6, includeUsage = true } = {}) {
   const id = 'chatcmpl-' + crypto.randomBytes(5).toString('hex');
   const base = { id, object: 'chat.completion.chunk', created: 1, model: 'mock' };
   const out = [{ ...base, choices: [{ index: 0, delta: { role: 'assistant', content: '' }, finish_reason: null }] }];
+  for (let i = 0; i < reasoning.length; i += chunk) out.push({ ...base, choices: [{ index: 0, delta: { reasoning_content: reasoning.slice(i, i + chunk) }, finish_reason: null }] });
   for (let i = 0; i < text.length; i += chunk) out.push({ ...base, choices: [{ index: 0, delta: { content: text.slice(i, i + chunk) }, finish_reason: null }] });
   tools.forEach((t, idx) => {
     const args = JSON.stringify(t.input || {});
@@ -319,10 +320,15 @@ export async function mockOpenAi({ key = 'sk-test', respond, models = [], reject
       return res.end(JSON.stringify({ id: 'chatcmpl-x', object: 'chat.completion', choices: [{ index: 0, message: { role: 'assistant', content: text }, finish_reason: 'stop' }], usage: { prompt_tokens: 30, completion_tokens: 12, total_tokens: 42 } }));
     }
     res.writeHead(200, { 'Content-Type': 'text/event-stream' });
-    for (const c of chunks) {
+    const sent = out.streamError ? chunks.filter(c => !c.usage && !c.choices[0]?.finish_reason) : chunks;
+    for (const c of sent) {
       if (res.destroyed) return;
       res.write('data: ' + JSON.stringify(c) + '\n\n');
       if (out.delayMs) await new Promise(r => { setTimeout(r, out.delayMs); });
+    }
+    if (out.streamError) {
+      res.write('data: ' + JSON.stringify({ error: { code: 500, message: out.streamError, type: 'server_error' } }) + '\n\n');
+      return res.end();
     }
     res.write('data: [DONE]\n\n');
     res.end();

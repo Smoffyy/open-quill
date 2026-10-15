@@ -32,9 +32,9 @@ function Value({ v }) {
   if (v.kind === 'flag') return <span className="ch-val">{v.on ? t('On') : t('Off')}</span>;
   if (v.kind === 'list') {
     const text = v.items.join(', ');
-    return <span className="ch-val" title={text}>{text}</span>;
+    return <span className="ch-val" data-tip={text}>{text}</span>;
   }
-  return <span className="ch-val" title={v.text}>{v.text}</span>;
+  return <span className="ch-val" data-tip={v.text}>{v.text}</span>;
 }
 
 function Diff({ before, after }) {

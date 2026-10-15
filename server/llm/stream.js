@@ -3,9 +3,10 @@ import { samplingParams, ollamaOptions } from './sampling.js';
 import { makeEmitter } from './emitter.js';
 import { makeToolResolver } from '../tools/aliases.js';
 import { normalizeMessages, requestKwargs } from './wire.js';
-import { stripNestedKwargs } from '../lib/kwargs.js';
+import { stripNestedKwargs, replayFieldOf } from '../lib/kwargs.js';
 import { streamAnthropic } from './anthropic.js';
 import { memoFor, postWithRecovery, upstreamMessage } from './compat.js';
+import { queueKey, inLine } from './slots.js';
 
 async function assertOk(res) {
   if (!res.ok || !res.body) { const t = await res.text().catch(() => ''); throw new Error(upstreamMessage(res.status, t)); }
@@ -19,6 +20,14 @@ async function providerFetch(url, init) {
     try { where = new URL(url).origin; } catch {}
     throw new Error(`Could not reach the model provider at ${where} (${e?.cause?.code || e?.message || e}).`, { cause: e });
   }
+}
+
+function errorText(raw) {
+  let e = raw;
+  if (typeof e === 'string') { try { e = JSON.parse(e); } catch { return e.trim() || 'The model provider reported an error.'; } }
+  const inner = e && typeof e === 'object' && e.error !== undefined ? e.error : e;
+  if (typeof inner === 'string') return inner;
+  return String(inner?.message || e?.message || 'The model provider reported an error.');
 }
 
 async function pumpLines(res, handle, finish) {
@@ -47,18 +56,23 @@ export function refusePrefill(model) {
   memoFor(base, model.internal_name).noPrefill = true;
 }
 
-function prefillWire(spec, messages, wire) {
+export function prefillWire(spec, messages, wire) {
   const last = messages[messages.length - 1];
   if (!last || !last.prefill || !spec.prefill) return {};
   if (spec.prefill.message) Object.assign(wire[wire.length - 1], spec.prefill.message);
   return spec.prefill.body || {};
 }
 
-export async function streamCompletion({ model, messages, tools, signal, onEvent }) {
+export function streamCompletion(args) {
+  const { spec, base } = modelProvider(args.model);
+  return inLine(queueKey(args.model, spec, base), args.signal, () => streamDirect(args));
+}
+
+async function streamDirect({ model, messages, tools, signal, onEvent }) {
   const { spec, base, key } = modelProvider(model);
   if (spec.protocol === 'anthropic') return streamAnthropic({ model, spec, base, key, messages, tools, signal, onEvent });
   const hasTools = Array.isArray(tools) && tools.length > 0;
-  const wire = normalizeMessages(spec.protocol, messages);
+  const wire = normalizeMessages(spec.protocol, messages, replayFieldOf(model));
   const fill = prefillWire(spec, messages, wire);
   const pending = new Map();
   let callSeq = 0;
@@ -82,6 +96,11 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
     }
     if (textCalls.length) onEvent({ type: 'tool_calls', calls: textCalls.splice(0, textCalls.length) });
   };
+  let failure = '';
+  const pump = async (res, handle) => {
+    await pumpLines(res, handle, () => { flush(); if (!failure) finishCalls(); });
+    if (failure) throw new Error(failure);
+  };
 
   if (spec.protocol === 'ollama') {
     const res = await providerFetch(endpoint(base, '/api/chat'), {
@@ -93,6 +112,7 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
       const t = line.trim(); if (!t) return false;
       try {
         const json = JSON.parse(t);
+        if (json.error) { failure = errorText(json); return true; }
         const msg = json.message || {};
         if (msg.thinking) emitReasoning(msg.thinking);
         if (msg.content) emitContent(msg.content);
@@ -114,7 +134,7 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
       } catch {}
       return false;
     };
-    return pumpLines(res, handle, () => { flush(); finishCalls(); });
+    return pump(res, handle);
   }
 
   const res = await postWithRecovery({
@@ -124,11 +144,13 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
   });
   const handle = (line) => {
     const trimmed = line.trim();
+    if (trimmed.startsWith('error:')) { failure = errorText(trimmed.slice(6)); return true; }
     if (!trimmed.startsWith('data:')) return false;
     const data = trimmed.slice(5).trim();
     if (data === '[DONE]') return true;
     try {
       const json = JSON.parse(data);
+      if (json.error) { failure = errorText(json); return true; }
       if (json.prompt_progress) onEvent({ type: 'prompt_progress', progress: json.prompt_progress });
       if (json.timings) onEvent({ type: 'timings', timings: json.timings });
       if (json.usage) { const u = json.usage; onEvent({ type: 'usage', usage: { prompt: u.prompt_tokens || 0, completion: u.completion_tokens || 0, total: u.total_tokens || ((u.prompt_tokens || 0) + (u.completion_tokens || 0)), cacheRead: u.prompt_tokens_details?.cached_tokens || 0, cacheWrite: 0 } }); }
@@ -159,5 +181,5 @@ export async function streamCompletion({ model, messages, tools, signal, onEvent
     } catch {}
     return false;
   };
-  return pumpLines(res, handle, () => { flush(); finishCalls(); });
+  return pump(res, handle);
 }

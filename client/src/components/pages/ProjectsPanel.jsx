@@ -139,7 +139,7 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onC
           {project.description && <div className="pj-desc">{project.description}</div>}
 
           <div className="pj-composer">
-            <Composer {...composerProps} project={null} autoFocus enterSend={false}
+            <Composer {...composerProps} project={null} autoFocus
               onSend={(attachments) => onStartChat(project, composerProps.value, attachments)} />
           </div>
 

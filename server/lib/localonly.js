@@ -20,14 +20,22 @@ export function localOnlyEnabled() {
   return getSetting('local_only', '1') === '1';
 }
 
+const HARDENING = [
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'self'",
+  "object-src 'none'"
+];
+
+export function baseCsp() {
+  return HARDENING.join('; ');
+}
+
 export function localOnlyCsp(req) {
   const connect = ["'self'", ...selfOrigins(req)].join(' ');
   return [
     "default-src 'self'",
-    "base-uri 'self'",
-    "form-action 'self'",
-    "frame-ancestors 'self'",
-    "object-src 'none'",
+    ...HARDENING,
     "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
@@ -42,7 +50,7 @@ export function localOnlyCsp(req) {
 export function localOnlyMiddleware(req, res, next) {
   if (req.method !== 'GET' && req.method !== 'HEAD') return next();
   if (req.path.startsWith('/api') || req.path.startsWith('/uploads')) return next();
-  if (localOnlyEnabled()) res.setHeader('Content-Security-Policy', localOnlyCsp(req));
+  res.setHeader('Content-Security-Policy', localOnlyEnabled() ? localOnlyCsp(req) : baseCsp());
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'same-origin');
   next();

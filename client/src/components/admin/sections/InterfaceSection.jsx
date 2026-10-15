@@ -7,10 +7,9 @@ import { t, tk } from '../../../i18n.jsx';
 import { MODEL_WEAVE } from '../../../lib/brand.js';
 import { Palette, Sparkles } from '../../ui/icons.jsx';
 import { toast } from '../../../lib/toast.js';
+import { presetById } from '../../../lib/presets.js';
 
-const PRESETS = [['anthropic', tk('Anthropic')], ['openai', tk('OpenAI')]];
 const FONTS = [['literata', tk('Literata')], ['newsreader', tk('Newsreader')], ['sans', tk('Open Sans')]];
-const PRESET_FONT = { __proto__: null, openai: 'sans', anthropic: 'literata' };
 const BUILD_KEY = 'oq-build-mode';
 
 /* The admin-facing half of the interface story: pick which theme is live, look
@@ -25,7 +24,7 @@ function fmt(ts) {
 
 export default function InterfaceSection() {
   const { workspace, onClose } = useAdmin();
-  const { config, setCfg, setConfig } = workspace;
+  const { config, setCfg } = workspace;
   const [themes, setThemes] = useState({ themes: [], activeId: '', publishedActiveId: '' });
   const [busy, setBusy] = useState(false);
 
@@ -60,7 +59,7 @@ export default function InterfaceSection() {
           <Row label={t('Active theme')} note={t('The layout everyone on this workspace renders once it is published.')}>
             <b>{active?.name || t('None')}</b>
           </Row>
-          <Row label={t('Last edited')} note={active ? t('Based on the {preset} layout.', { preset: active.basePreset === 'openai' ? 'OpenAI' : 'Anthropic' }) : ''}>
+          <Row label={t('Last edited')} note={active ? t('Based on the {preset} layout.', { preset: t(presetById(active.basePreset).label) }) : ''}>
             <span className="dim">{fmt(active?.updatedAt)}</span>
           </Row>
         </Rows>
@@ -73,7 +72,7 @@ export default function InterfaceSection() {
               <div className="cp-theme-info">
                 <b>{th.name}</b>
                 <span>
-                  {th.note ? t(th.note) : t('{preset} base', { preset: th.basePreset === 'openai' ? 'OpenAI' : 'Anthropic' })}
+                  {th.note ? t(th.note) : t('{preset} base', { preset: t(presetById(th.basePreset).label) })}
                   {' · '}{t('{n} customisations', { n: th.edits })}
                   {th.builtin ? ' · ' + t('Preset') : ''}
                 </span>
@@ -127,16 +126,10 @@ export default function InterfaceSection() {
         </Field>
       </Card>
 
-      <Card title={t('Base layout')}
-        sub={t('The starting point a theme paints over. Anthropic is the native layout; OpenAI moves the model picker to the top-left, switches to a pill composer and a pitch-black palette, and pins a logo beside every reply.')}>
+      <Card title={t('Typography')}>
         <Rows>
-          <Row label={t('Preset')} note={t('Switching also sets a matching default font. Models created while a preset is active inherit its icon defaults.')}>
-            <Seg value={config.uiPreset || 'anthropic'} label={t('Base layout')}
-              onChange={(v) => setConfig(c => ({ ...c, uiPreset: v, appFont: PRESET_FONT[v] || 'literata' }))}
-              options={PRESETS.map(([value, label]) => ({ value, label: t(label) }))} />
-          </Row>
           <Row label={t('Display font')}
-            note={t('Used for headings, greetings, and assistant text. A theme can override this per element.')}>
+            note={t("Used for headings, greetings, and assistant text. Until you pick one, it follows the active theme's layout. A theme can override it per element.")}>
             <Seg value={config.appFont || 'literata'} label={t('Display font')}
               onChange={(v) => setCfg('appFont', v)}
               options={FONTS.map(([value, label]) => ({ value, label: t(label) }))} />

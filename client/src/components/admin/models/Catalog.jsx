@@ -86,7 +86,7 @@ function FolderName({ initial, taken, onDone }) {
   };
   return (
     <Input autoFocus value={value} maxLength={60} placeholder={t('Folder name')} aria-label={t('Folder name')}
-      aria-invalid={clash || undefined} title={clash ? t('A folder with that name already exists.') : undefined}
+      aria-invalid={clash || undefined} data-tip={clash ? t('A folder with that name already exists.') : undefined}
       onFocus={(e) => e.currentTarget.select()}
       onChange={(e) => setValue(e.target.value)}
       onKeyDown={(e) => {
@@ -392,11 +392,11 @@ export default function Catalog() {
           <span className="mc-row-id">{m.internal_name || t('no model id')}</span>
         </span>
         <span className="mc-row-marks">
-          {!!m.is_default && <span title={t('Default for new accounts')}><Star /><span className="sr-only">{t('Default for new accounts')}</span></span>}
-          {!m.enabled && <span title={t('Hidden from members')}><EyeOff /><span className="sr-only">{t('Hidden from members')}</span></span>}
+          {!!m.is_default && <span data-tip={t('Default for new accounts')}><Star /><span className="sr-only">{t('Default for new accounts')}</span></span>}
+          {!m.enabled && <span data-tip={t('Hidden from members')}><EyeOff /><span className="sr-only">{t('Hidden from members')}</span></span>}
           {!!m.unavailable && <span className="mc-flag bad">{t('down')}</span>}
           {m.kind === 'router' && <span className="mc-flag">{t('router')}</span>}
-          {changed.has(m.id) && <span className="mc-flag" title={t('Changed since the last release')}>{t('edited')}</span>}
+          {changed.has(m.id) && <span className="mc-flag" data-tip={t('Changed since the last release')}>{t('edited')}</span>}
           <Faces people={present.filter(p => p.section === 'models' && p.target === m.id)} small />
         </span>
       </li>

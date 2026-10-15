@@ -183,7 +183,7 @@ function Shell() {
           <div className="cp-top-acts">
             <Faces people={present} where />
             <ReviewButton />
-            <button type="button" className="cp-exit" onClick={onClose} title={t('Close')} aria-label={t('Close')}>
+            <button type="button" className="cp-exit" onClick={onClose} data-tip={t('Close')} aria-label={t('Close')}>
               <X />
             </button>
           </div>

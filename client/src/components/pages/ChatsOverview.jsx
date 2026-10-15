@@ -6,6 +6,7 @@ import { t } from '../../i18n.jsx';
 import { useSkeleton } from '../../lib/skeleton.js';
 import { useFocusTrap } from '../../lib/focus.js';
 import CloseButton from '../ui/CloseButton.jsx';
+import { Check } from '../ui/icons.jsx';
 
 function timeAgo(ts) {
   const s = Math.floor((Date.now() - ts) / 1000);
@@ -161,7 +162,7 @@ export default function ChatsOverview({ onOpen, onClose, onChatsChanged }) {
           ))}
           {chats.map((c, i) => (
             <button key={c.id} className={'co-card' + (selecting && selected.has(c.id) ? ' selected' : '')} style={{ animationDelay: (i % 18) * 22 + 'ms' }} onClick={() => clickCard(c)}>
-              {selecting && <span className={'co-check' + (selected.has(c.id) ? ' on' : '')}>{selected.has(c.id) ? '✓' : ''}</span>}
+              {selecting && <span className={'co-check' + (selected.has(c.id) ? ' on' : '')}>{selected.has(c.id) && <Check strokeWidth="2.4" />}</span>}
               <div className="co-title">{c.starred ? '★ ' : ''}{c.ended ? '🔒 ' : ''}{c.title || t('New chat')}</div>
               {c.preview && <div className="co-preview">{c.preview}</div>}
               <div className="co-fade" />

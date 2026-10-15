@@ -4,7 +4,7 @@
 
 Chats appear under **Recents**, newest first. **Star** a chat from its menu to move it into **Starred** at the top. The **Group by** button on Recents groups the list by date, by project, or not at all.
 
-Each chat's menu (the **⋯** on hover, or the title in the top bar) has **Star**, **Add to project** or **Remove from project**, **Export as Markdown**, **Export as JSON**, **Rename** and **Delete chat**. A chat that is still writing a reply can be stopped from the same menu.
+Each chat's menu (the **⋯** on hover, or the title in the top bar) has **Star**, **Add to project** or **Remove from project**, **Export as** (Markdown, JSON or PDF), **Rename** and **Delete chat**. A chat that is still writing a reply can be stopped from the same menu.
 
 ## All chats
 
@@ -38,6 +38,6 @@ Each run creates a new chat with the result. On each task you can **Run now** to
 
 ## Export and import
 
-**Settings → General → Export everything** downloads one JSON file with your chats, styles, personas, saved prompts, memory and preferences. **Import** reads such a file back: its chats are added, your profile data is merged, and nothing you already have is overwritten.
+**Settings → General → Export everything** downloads one JSON file with your chats, styles, memory and preferences. **Import** reads such a file back: its chats are added, your profile data is merged, and nothing you already have is overwritten.
 
-To save a single chat, use **Export as Markdown** or **Export as JSON** in its menu.
+To save a single chat, use **Export as** in its menu. Each format downloads a file. The **PDF** has the chat's title and export date at the top, a summary of earlier messages if the chat has one, and each message labelled as yours or the assistant's. Headings, lists, quotes, tables and links are laid out without their Markdown, code is in monospace, and text in any of the app's languages, symbols and emoji print as written.

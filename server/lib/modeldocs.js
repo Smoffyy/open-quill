@@ -1,4 +1,5 @@
 import { modelSize, sizePhrase, formatParamCount } from './modelsize.js';
+import { safeUrl } from './safeurl.js';
 
 const text = (v, cap) => String(v ?? '').slice(0, cap);
 const slug = (v, cap) => text(v, cap).trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '');
@@ -22,7 +23,7 @@ export const DOCS_DEFAULTS = {
 function sanitizeLinks(raw, cap) {
   return (Array.isArray(raw) ? raw : []).slice(0, cap).map(l => ({
     label: text(l?.label, 60).trim(),
-    url: text(l?.url, 500).trim(),
+    url: safeUrl(text(l?.url, 500)),
     ext: !!l?.ext
   })).filter(l => l.label);
 }
@@ -104,7 +105,7 @@ export function sanitizeCards(raw, cap = 12) {
   return (Array.isArray(raw) ? raw : []).slice(0, cap).map(p => ({
     title: text(p?.title, 80).trim(),
     desc: text(p?.desc, 300).trim(),
-    url: text(p?.url, 500).trim()
+    url: safeUrl(text(p?.url, 500))
   })).filter(p => p.title);
 }
 

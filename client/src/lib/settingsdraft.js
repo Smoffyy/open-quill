@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { api } from './api.js';
 import { applyPrefs, currentPreset } from './prefs.js';
+import { layoutOf } from './layout.js';
 import { initialPrefs, presetDefaults, shownThemeFallback } from './settingsdefaults.js';
 import { toast } from './toast.js';
 import { t } from '../i18n.jsx';
@@ -11,7 +12,7 @@ const DRAGGED_PREFS = new Set(['cursorBlinkMs', 'cursorPulseMs', 'revealMs']);
 export function useSettingsDraft(user, onUpdated) {
   const [name, setName] = useState(user.displayName);
   const [instructions, setInstructions] = useState(user.instructions || '');
-  const [prefs, setPrefs] = useState(() => initialPrefs(user.prefs, currentPreset() === 'openai'));
+  const [prefs, setPrefs] = useState(() => initialPrefs(user.prefs, layoutOf(currentPreset())));
 
   const nameRef = useRef(name);
   const instrRef = useRef(instructions);
@@ -66,7 +67,7 @@ export function useSettingsDraft(user, onUpdated) {
   const resetPrefs = useCallback(() => {
     lastPref.current = '';
     const applied = document.documentElement.getAttribute('data-theme');
-    setPrefs(presetDefaults(currentPreset() === 'openai', shownThemeFallback(applied)));
+    setPrefs(presetDefaults(layoutOf(currentPreset()), shownThemeFallback(applied)));
   }, []);
 
   const seen = useRef(user.prefs || {});

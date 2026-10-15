@@ -88,13 +88,10 @@
 .sg-card:focus-visible { outline: 2px solid var(--search-hit); outline-offset: 2px; }
 .sg-card-name { font-size: 14px; font-weight: 550; color: var(--text); }
 .sg-card-desc { font-size: 12px; line-height: 1.45; color: var(--text-muted); }
-.sg-swatch { width: 54px; height: 54px; border-radius: 14px; display: grid; place-items: center; flex-shrink: 0; }
-.sg-swatch.anthropic { background: #262624; border: 1px solid #3a3a37; }
-.sg-swatch.anthropic .ps-dot { width: 20px; height: 20px; border-radius: 6px; background: #d97757; }
-.sg-swatch.openai { background: #000; border: 1px solid #2b2b2b; }
-.sg-swatch.openai .ps-dot { width: 20px; height: 20px; border-radius: 50%; background: #fff; }
-.sg-swatch.blank, .sg-swatch.plain { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; }
-.sg-swatch.blank .ps-dot, .sg-swatch.plain .ps-dot { width: 20px; height: 20px; border-radius: 4px; background: var(--text-muted); }
+.sg-swatch { width: 54px; height: 54px; border-radius: 14px; display: grid; place-items: center; flex-shrink: 0; background: var(--sw-bg); border: 1px solid var(--sw-border); }
+.sg-swatch .ps-dot { width: 20px; height: 20px; border-radius: var(--sw-radius); background: var(--sw-dot); }
+.sg-swatch.plain { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; }
+.sg-swatch.plain .ps-dot { border-radius: 4px; background: var(--text-muted); }
 
 .sg-group { margin-bottom: 16px; }
 .sg-group-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; font-size: 13px; font-weight: 550; color: var(--text); }

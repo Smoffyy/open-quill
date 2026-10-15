@@ -15,7 +15,7 @@ function Section({ label, role, tokens, text, open, onToggle, color }) {
         {color && <span className="pl-swatch" style={{ background: color }} aria-hidden="true" />}
         <span className="pl-role">{role}</span>
         <span className="pl-name">{label}</span>
-        <span className="pl-tok">{tokens.toLocaleString()} {t('tok')}</span>
+        {tokens != null && <span className="pl-tok">{tokens.toLocaleString()} {t('tok')}</span>}
       </button>
       {open && <div className="pl-body">{text || t('(empty)')}</div>}
     </div>
@@ -41,7 +41,7 @@ export default function PromptLedger({ chatId, modelId, onClose }) {
     if (!data) return [];
     const parts = [
       ...data.sections.map((s, i) => ({ label: s.name, tokens: s.tokens, color: COLORS[i % COLORS.length] })),
-      { label: t('Messages'), tokens: data.messages.reduce((n, m) => n + m.tokens, 0), color: 'var(--text-faint)' },
+      { label: t('Messages'), tokens: data.messages.reduce((n, m) => n + (m.tokens || 0), 0), color: 'var(--text-faint)' },
     ].filter(p => p.tokens > 0);
     const total = parts.reduce((n, p) => n + p.tokens, 0) || 1;
     return parts.map(p => ({ ...p, pct: (p.tokens / total) * 100 }));
@@ -64,19 +64,21 @@ export default function PromptLedger({ chatId, modelId, onClose }) {
       <div className="modal-main">
         <div className="modal-head"><h2 className="modal-title">{t('What gets sent')}</h2></div>
         <div className="modal-body">
-          <div className="hint">{t('The exact prompt this conversation would send right now, in order, with what each part costs.')}</div>
+          <div className="hint">{t('The exact prompt this conversation would send right now, in order.')}</div>
           <div className="dz-err" role="alert">{err}</div>
           {!data && !err && <Skel when><SkelRows count={5} /></Skel>}
           {data && (
             <>
-              <div className="pl-bar">
-                {bar.map((p, i) => <i key={i} style={{ width: p.pct + '%', background: p.color }} title={`${p.label}: ${p.tokens}`} />)}
-              </div>
+              {bar.length > 0 && (
+                <div className="pl-bar">
+                  {bar.map((p, i) => <i key={i} style={{ width: p.pct + '%', background: p.color }} data-tip={`${p.label}: ${p.tokens}`} aria-label={`${p.label}: ${p.tokens}`} />)}
+                </div>
+              )}
               <div className="field row pl-summary">
                 <div>
                   <label>{data.modelName}</label>
                   <div className="muted-note">
-                    {t('{n} tokens total', { n: data.total.toLocaleString() })}
+                    {data.total != null ? t('{n} tokens total', { n: data.total.toLocaleString() }) : t('This provider cannot count tokens before sending.')}
                     {data.dropped > 0 && ' · ' + t('{n} message(s) not included', { n: data.dropped })}
                   </div>
                 </div>

@@ -10,7 +10,7 @@ export const PROVIDER_TYPES = {
     label: 'llama.cpp server', defaultBaseUrl: 'http://localhost:9931', local: true, protocol: 'openai', keyOptional: true,
     samplers: ['temperature', 'top_p', 'top_k', 'min_p', 'repetition_penalty', 'presence_penalty', 'frequency_penalty', 'seed', 'max_tokens', 'stop',
       'dry_multiplier', 'dry_base', 'dry_allowed_length', 'dry_penalty_last_n', 'xtc_probability', 'xtc_threshold', 'mirostat', 'mirostat_tau', 'mirostat_eta'],
-    remap: { repetition_penalty: 'repeat_penalty' }, timingsPerToken: true, promptProgress: true, stopMax: 8, prefill: {}
+    remap: { repetition_penalty: 'repeat_penalty' }, timingsPerToken: true, promptProgress: true, stopMax: 8, prefill: {}, sharedSlots: true
   },
   lmstudio: {
     label: 'LM Studio', defaultBaseUrl: 'http://localhost:1234/v1', local: true, protocol: 'openai', keyOptional: true,

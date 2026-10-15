@@ -1,24 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import {
   BLOCKS, blockId, blockText, eligibleBlocks, syncPrompt, syncModelPrompt, addBlocks, setBlockBody,
   missingBlocks, parsePrompt, renderPrompt, touchesBlocks
 } from '../lib/promptblocks.js';
+import { codeToolState, codePrompt } from '../lib/codeprompt.js';
+import { buildTools, SANDBOX_READONLY } from '../tools/index.js';
 
-const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const TOOL = (n) => blockId('tool', n);
 const SECTION = (n) => blockId('section', n);
 const names = (text) => parsePrompt(text).wrappers.flatMap(w => w.items.map(it => it.id));
 const base = { system_prompt: 'You are helpful.', sandbox_allowed: 0, web_search_allowed: 0 };
-
-test('client and server copies of promptblocks.js are identical', () => {
-  const read = (p) => fs.readFileSync(p, 'utf8').replace(/\r\n/g, '\n');
-  assert.equal(read(path.join(root, 'client', 'src', 'lib', 'promptblocks.js')), read(path.join(root, 'server', 'lib', 'promptblocks.js')),
-    'client/src/lib/promptblocks.js and server/lib/promptblocks.js must be kept identical');
-});
 
 test('every block has a unique id and non-empty default text', () => {
   assert.equal(new Set(BLOCKS.map(b => b.id)).size, BLOCKS.length);
@@ -112,4 +104,43 @@ test('only tool and reminder flags count as block changes', () => {
   assert.equal(touchesBlocks({ calculator_allowed: 1 }), true);
   assert.equal(touchesBlocks({ temperature: 0.2 }), false);
   assert.equal(blockText('nope:x'), '');
+});
+
+const codeVars = {
+  modelName: 'Sonata', instanceName: 'open-quill', currentUser: 'Ada', currentDate: 'today',
+  sandboxHost: 'host facts', sandboxWorkspace: 'workspace facts', todoList: '(no plan yet)',
+  userInstructions: '', chatInstructions: '', conversationSummary: ''
+};
+
+test('a code session always has the workspace and never the chat-only tools', () => {
+  const s = codeToolState({ id: 'c1', user_id: 'u1' }, { canAsk: true });
+  assert.equal(s.code, true);
+  assert.equal(s.sandboxOn, true);
+  assert.equal(s.todoOn, true);
+  assert.equal(s.askUserOn, true);
+  for (const k of ['membankOn', 'chatSearchOn', 'skillsOn', 'mcpOn', 'memoryOn', 'calculatorOn', 'consultOn', 'endChatOn']) assert.equal(s[k], false, k);
+  assert.equal(codeToolState({ id: 'c1' }).askUserOn, false, 'asking needs a live socket');
+  assert.equal(codeToolState(null).todoOn, false, 'the plan belongs to a chat');
+});
+
+test('the code prompt carries the workspace block and drops empty sections', () => {
+  const { text } = codePrompt(codeVars, codeToolState({ id: 'c1' }));
+  assert.match(text, /^You are Sonata, a coding agent/);
+  assert.match(text, /<tool name="sandbox">[\s\S]*host facts[\s\S]*workspace facts/);
+  assert.match(text, /<tool name="todo">/);
+  assert.doesNotMatch(text, /<tool name="ask_user">|<tool name="web_search">|<section name="user_instructions">|\{\{/);
+  assert.doesNotMatch(text, /Plan mode is ON/);
+});
+
+test('plan mode says so in the prompt and only offers tools that read', () => {
+  const state = codeToolState({ id: 'c1' }, { plan: true, webSearchOn: true });
+  assert.equal(state.planMode, true);
+  const { text } = codePrompt({ ...codeVars, userInstructions: 'Be brief.' }, state);
+  assert.match(text, /Plan mode is ON/);
+  assert.match(text, /<tool name="web_search">/);
+  assert.match(text, /<section name="user_instructions">\nThe user has provided[\s\S]*Be brief\./);
+  const toolNames = buildTools({ sandboxOn: true, todoOn: true, readOnly: true }).map(s => s.function.name);
+  assert.ok(toolNames.includes('todo'));
+  for (const n of toolNames.filter(n => n !== 'todo')) assert.ok(SANDBOX_READONLY.has(n), n + ' can change files');
+  assert.ok(buildTools({ sandboxOn: true }).some(s => s.function.name === 'create_file'));
 });

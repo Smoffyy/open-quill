@@ -1,5 +1,5 @@
 export {
-  sandboxToolSchemas, webSearchSchema, membankSchemas, chatSearchSchemas,
+  sandboxToolSchemas, webSearchSchema, membankSchemas, chatSearchSchemas, recallSchema,
   skillSchema, endConversationSchema, memorySchema, calculatorSchema, todoSchema, askUserSchema, consultModelSchema, buildTools
 } from './schemas.js';
 export { parseArgs, toCall, cutOffOf, RAW_ARGS } from './args.js';

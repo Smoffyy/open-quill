@@ -1,21 +1,16 @@
-export const KWARG_TARGETS = [
-  ['chat_template_kwargs', 'chat_template_kwargs (nested)'],
-  ['body', 'Top level of the request'],
-  ['extra_body', 'extra_body (nested)']
-];
-export const KWARG_CONTROLS = [
-  ['auto', 'Automatic'],
-  ['toggle', 'On/off toggle'],
-  ['slider', 'Steps'],
-  ['range', 'Number slider'],
-  ['select', 'Dropdown']
-];
-export const KWARG_TYPES = [
-  ['auto', 'Automatic'],
-  ['boolean', 'Boolean'],
-  ['number', 'Number'],
-  ['string', 'String']
-];
+export const REPLAY_FIELDS = ['reasoning_content', 'reasoning', 'thinking'];
+const REPLAY_DEFAULTS = { __proto__: null, preserve_thinking: 'true', clear_thinking: 'false' };
+
+export function replayWhenOf(def) {
+  if (def?.replayWhen === undefined) return REPLAY_DEFAULTS[String(def?.name || '').trim()] || '';
+  return String(def.replayWhen || '');
+}
+
+export function replayValuesOf(def) {
+  if (!def || isRange(def)) return [];
+  if (def.parentId) return [...new Set((Array.isArray(def.rules) ? def.rules : []).filter(r => r.send !== false && r.value).map(r => String(r.value)))];
+  return kwargValuesArr(def);
+}
 
 const RESERVED_BODY_KEYS = new Set(['model', 'messages', 'stream', 'stream_options', 'tools', 'tool_choice', 'chat_template_kwargs', 'extra_body']);
 
@@ -32,6 +27,28 @@ export const kwargValuesStr = (def) => kwargValuesArr(def).join(', ');
 export const isRange = (def) =>
   !!def && def.min != null && def.max != null && def.min !== '' && def.max !== '' &&
   Number.isFinite(Number(def.min)) && Number.isFinite(Number(def.max)) && Number(def.max) > Number(def.min);
+
+export const isSteps = (def) => !!def?.stops?.length;
+
+export const DEFAULT_STEPS = [
+  { label: 'Off', value: '0', off: true },
+  { label: 'Low', value: '1024', off: false },
+  { label: 'Medium', value: '2048', off: false },
+  { label: 'High', value: '4096', off: false }
+];
+
+export const stepFields = (stops) => ({ stops, values: stops.map(s => String(s.value ?? '')).filter(Boolean) });
+
+export const isOffStep = (stop) => stop.off ?? Number(stop.value) === 0;
+
+function stopOf(def, value) {
+  return (def?.stops || []).find(s => String(s.value) === String(value));
+}
+
+export function stopLabel(def, value) {
+  const stop = stopOf(def, value);
+  return stop ? (stop.label || String(stop.value)) : String(value ?? '');
+}
 
 export const rangeStep = (def) => (Number(def?.step) > 0 ? Number(def.step) : 1);
 
@@ -54,6 +71,25 @@ export function clampToRange(def, value) {
   return d ? Number(n.toFixed(d)) : Math.round(n);
 }
 
+const MAX_RANGE_STEPS = 400;
+
+export function rangeSteps(def) {
+  const min = Number(def.min), max = Number(def.max), step = rangeStep(def);
+  const count = Math.floor((max - min) / step);
+  const stride = Math.max(1, Math.ceil(count / MAX_RANGE_STEPS));
+  const out = [];
+  for (let i = 0; i <= count; i += stride) out.push(String(clampToRange(def, min + i * step)));
+  out.push(String(max));
+  return [...new Set(out)];
+}
+
+export function nearestStep(steps, value) {
+  const n = Number(value);
+  let best = 0;
+  steps.forEach((s, i) => { if (Math.abs(Number(s) - n) < Math.abs(Number(steps[best]) - n)) best = i; });
+  return best;
+}
+
 // "300" reads as a number; "low" does not. Used by the editor to decide whether a
 // range slider is even offered for what the admin has typed.
 export const allNumeric = (values) =>
@@ -61,6 +97,7 @@ export const allNumeric = (values) =>
 
 export function controlOf(def) {
   if (isRange(def)) return 'range';
+  if (isSteps(def)) return 'slider';
   const values = kwargValuesArr(def);
   if (def?.control && def.control !== 'auto') return def.control;
   if (isBoolPair(values)) return 'toggle';
@@ -77,6 +114,12 @@ export function defaultValueOf(def) {
   if (values.includes(def?.default)) return def.default;
   if (isBoolPair(values)) return values.find(v => /^false$/i.test(v));
   return values[Math.floor(values.length / 2)] ?? values[0] ?? '';
+}
+
+export function kwargAccepts(def, value) {
+  if (value == null) return false;
+  if (isRange(def)) return String(clampToRange(def, value)) === String(value);
+  return kwargValuesArr(def).includes(value);
 }
 
 export function trueValueOf(def) {
@@ -163,27 +206,153 @@ export function coerceKwargValue(value, type) {
   return s;
 }
 
+function placeKwarg(out, target, name, val) {
+  if (target === 'body') {
+    if (!RESERVED_BODY_KEYS.has(name)) out[name] = val;
+    return;
+  }
+  if (!out[target] || typeof out[target] !== 'object') out[target] = {};
+  out[target][name] = val;
+}
+
 export function kwargPayload(defs, values) {
   const out = {};
   for (const d of (Array.isArray(defs) ? defs : [])) {
     const v = values ? values[d.id] : null;
     if (v == null || v === '' || !d.name) continue;
     if (!d.parentId && !kwargVisible(defs, values, d) && d.sendWhenHidden === false) continue;
-    const val = coerceKwargValue(v, d.type);
-    const target = d.target || 'chat_template_kwargs';
-    if (target === 'body') {
-      if (RESERVED_BODY_KEYS.has(d.name)) continue;
-      out[d.name] = val;
-    } else {
-      if (!out[target] || typeof out[target] !== 'object') out[target] = {};
-      out[target][d.name] = val;
+    placeKwarg(out, d.target || 'chat_template_kwargs', d.name, coerceKwargValue(v, d.type));
+    const message = d.budgetMessage;
+    if (isBudgetKwarg(d) && message?.enabled && message.name && message.text && Number(v) > 0) {
+      placeKwarg(out, message.target, message.name, coerceKwargValue(message.text, message.type));
     }
   }
   return out;
 }
 
+function isSent(defs, values, d) {
+  const v = values ? values[d.id] : null;
+  if (v == null || v === '' || !d.name) return false;
+  return !!d.parentId || kwargVisible(defs, values, d) || d.sendWhenHidden !== false;
+}
+
+export function replayFieldFor(defs, values) {
+  const def = (Array.isArray(defs) ? defs : []).find(d => {
+    const when = replayWhenOf(d);
+    return when && isSent(defs, values, d) && (when === '*' || String(values[d.id]) === when);
+  });
+  return def ? (def.replayAs || REPLAY_FIELDS[0]) : '';
+}
+
+export function pickerChips(defs, values) {
+  const list = Array.isArray(defs) ? defs : [];
+  const gates = gateSourceIds(list, values);
+  return list.filter(d => !d.parentId && kwargVisible(list, values, d) && !gates.has(d.id))
+    .map(d => kwargChip(d, values[d.id]))
+    .filter(Boolean)
+    .slice(0, 2);
+}
+
+export const kwargPath = (def) => {
+  const target = def?.target || 'chat_template_kwargs';
+  const name = def?.name || '';
+  return target === 'body' ? name : target + '.' + name;
+};
+
+export function kwargMode(def) {
+  if (def?.parentId) return 'follow';
+  return def?.visible === false ? 'fixed' : 'choose';
+}
+
+export function kwargKind(def) {
+  if (def?.min != null && def?.max != null) return 'range';
+  if (isSteps(def)) return 'steps';
+  return isBoolPair(kwargValuesArr(def)) ? 'toggle' : 'list';
+}
+
+const EXAMPLE_OPTIONS = ['low', 'medium', 'high'];
+
+export function kindPatch(def, kind) {
+  const clear = { min: null, max: null, step: null, unit: '', zeroOff: false, stops: [], control: 'auto' };
+  if (kind === 'toggle') return { ...clear, values: ['false', 'true'], default: 'false' };
+  if (kind === 'steps') return { ...clear, ...stepFields(DEFAULT_STEPS), default: '' };
+  if (kind === 'range') {
+    const nums = kwargValuesArr(def).map(Number).filter(Number.isFinite).sort((a, b) => a - b);
+    const min = nums.length ? nums[0] : 0;
+    const max = nums.length > 1 ? nums[nums.length - 1] : min + 100;
+    const gap = nums.length > 1 ? nums[1] - nums[0] : 0;
+    return { ...clear, min, max, step: gap > 0 ? gap : 1, values: [], default: '' };
+  }
+  const kept = kwargKind(def) === 'steps' ? kwargValuesArr(def) : EXAMPLE_OPTIONS;
+  return { ...clear, values: kept, default: kept.includes(def?.default) ? def.default : '' };
+}
+
+export function fixedValuePatch(value) {
+  return { min: null, max: null, step: null, stops: [], values: value.trim() ? [value] : [], default: value };
+}
+
+export function descendantIds(defs, id) {
+  const out = new Set();
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const d of defs) {
+      if (d.parentId && (d.parentId === id || out.has(d.parentId)) && !out.has(d.id)) { out.add(d.id); grew = true; }
+    }
+  }
+  return out;
+}
+
+export function followable(defs, def) {
+  const below = descendantIds(defs, def.id);
+  return defs.filter(d => d.id !== def.id && !below.has(d.id));
+}
+
+export const parentChoices = (parent) => (!parent ? [] : isRange(parent) ? ['*'] : kwargValuesArr(parent));
+
+function offChoice(parent, value) {
+  const stop = stopOf(parent, value);
+  return stop ? isOffStep(stop) : /^(false|off|none|0)$/i.test(value);
+}
+
+export function followPatch(def, parent) {
+  const choices = parentChoices(parent);
+  const rules = Array.isArray(def.rules) ? def.rules : [];
+  if (rules.some(r => choices.includes(r.when))) return { parentId: parent.id, rules };
+  const bool = isBoolPair(kwargValuesArr(def));
+  const seeded = choices.filter(v => v !== '*').map(v => ({
+    when: v,
+    value: bool ? (offChoice(parent, v) ? falseValueOf(def) : trueValueOf(def)) : v,
+    send: true
+  }));
+  return { parentId: parent.id, rules: seeded };
+}
+
+export function modePatch(defs, def, mode) {
+  if (mode === 'choose') return { visible: true, parentId: '' };
+  if (mode === 'fixed') return { visible: false, parentId: '', sendWhenHidden: true };
+  const pool = followable(defs, def);
+  const parent = pool.find(d => !d.parentId && kwargKind(d) === 'toggle') || pool[0];
+  return parent ? followPatch(def, parent) : {};
+}
+
+export function highestValue(def) {
+  if (isRange(def)) return String(def.max);
+  const values = kwargValuesArr(def);
+  return values[values.length - 1] ?? '';
+}
+
 export function newKwargId() {
   return 'kw' + Math.random().toString(36).slice(2, 8);
+}
+
+export const BUDGET_KWARG = 'reasoning_budget_tokens';
+export const BUDGET_MESSAGE_TEXT = 'Thinking budget reached. Stop thinking and write the answer now.';
+
+export const isBudgetKwarg = (def) => def?.name === BUDGET_KWARG;
+
+export function budgetMessageOff() {
+  return { enabled: false, name: 'reasoning_budget_message', target: 'body', type: 'string', text: '' };
 }
 
 export function blankKwarg() {
@@ -192,19 +361,15 @@ export function blankKwarg() {
     values: ['false', 'true'], default: 'false', control: 'auto',
     target: 'chat_template_kwargs', type: 'auto',
     visible: true, adminOnly: false, sendWhenHidden: true, parentId: '', showIf: null,
-    min: null, max: null, step: null, rules: []
+    min: null, max: null, step: null, unit: '', zeroOff: false, stops: [], rules: [],
+    replayWhen: '', replayAs: 'reasoning_content', budgetMessage: budgetMessageOff()
   };
 }
 
 export const KWARG_PRESETS = [
   {
-    key: 'blank', label: 'Blank kwarg',
-    note: 'An empty kwarg you fill in yourself.',
-    make: () => blankKwarg()
-  },
-  {
-    key: 'enable_thinking', label: 'enable_thinking (Qwen)',
-    note: 'On/off thinking toggle with false and true.',
+    key: 'enable_thinking', title: 'Thinking switch', name: 'enable_thinking',
+    note: 'An on/off switch for models such as Qwen 3.',
     make: () => ({
       ...blankKwarg(), name: 'enable_thinking', label: 'Extended thinking',
       description: 'Let the model think before answering', chip: 'Thinking',
@@ -212,39 +377,90 @@ export const KWARG_PRESETS = [
     })
   },
   {
-    key: 'reasoning_effort', label: 'reasoning_effort (gpt-oss)',
-    note: 'A slider through low, medium, and high.',
+    key: 'reasoning_effort', title: 'Reasoning effort', name: 'reasoning_effort',
+    note: 'Low, medium and high, for models such as gpt-oss.',
     make: () => ({
       ...blankKwarg(), name: 'reasoning_effort', label: 'Reasoning effort',
       description: '', chip: '', values: ['low', 'medium', 'high'], default: 'medium'
     })
   },
   {
-    key: 'thinking_budget_tokens', label: 'thinking_budget_tokens (number slider)',
-    note: 'A draggable slider between a minimum and a maximum you set.',
+    key: 'reasoning_budget_tokens', title: 'Thinking budget slider', name: 'reasoning_budget_tokens',
+    note: 'A token slider that caps thinking, as llama.cpp reads it.',
     make: () => ({
-      ...blankKwarg(), name: 'thinking_budget_tokens', label: 'Thinking budget',
+      ...blankKwarg(), name: 'reasoning_budget_tokens', label: 'Thinking budget', chip: 'Thinking · {value} tokens',
       description: 'How many tokens the model may spend thinking',
-      values: [], default: '1024', min: 1024, max: 8192, step: 1024,
-      target: 'body', type: 'number'
+      values: [], default: '4096', min: 1024, max: 16384, step: 1024,
+      unit: 'tokens', zeroOff: true, target: 'body', type: 'number'
     })
   },
   {
-    key: 'preserve_thinking', label: 'preserve_thinking (paired)',
-    note: 'Hidden kwarg meant to follow a thinking toggle.',
+    key: 'reasoning_levels', title: 'Thinking budget levels', name: 'reasoning_budget_tokens',
+    note: 'Off, Low, Medium and High, each sending a token count.',
     make: () => ({
-      ...blankKwarg(), name: 'preserve_thinking', label: 'Preserve thinking',
-      description: '', values: ['false', 'true'], default: 'false', visible: false
+      ...blankKwarg(), name: 'reasoning_budget_tokens', label: 'Thinking', chip: '{value}',
+      description: 'How much the model may think before it answers',
+      ...stepFields(DEFAULT_STEPS), default: '2048', target: 'body', type: 'number'
     })
+  },
+  {
+    key: 'preserve_thinking', title: 'Keep earlier thinking', name: 'preserve_thinking',
+    note: 'Hidden. Follows the thinking switch and sends past thinking back.',
+    make: (defs = []) => {
+      const base = {
+        ...blankKwarg(), name: 'preserve_thinking', label: 'Preserve thinking',
+        values: ['false', 'true'], default: 'true', visible: false, replayWhen: 'true'
+      };
+      const toggle = defs.find(d => !d.parentId && kwargKind(d) === 'toggle');
+      return toggle ? { ...base, ...followPatch(base, toggle) } : base;
+    }
+  },
+  {
+    key: 'clear_thinking', title: 'Keep earlier thinking (GLM)', name: 'clear_thinking',
+    note: 'Hidden. Sends false so past thinking is kept.',
+    make: () => ({
+      ...blankKwarg(), name: 'clear_thinking', label: 'Clear thinking',
+      values: ['false', 'true'], default: 'false', visible: false, replayWhen: 'false'
+    })
+  },
+  {
+    key: 'blank', title: 'Custom field', name: '',
+    note: 'Start empty and set everything yourself.',
+    make: () => blankKwarg()
   }
 ];
+
+export function chipNumber(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value);
+  if (Math.abs(n) >= 1024 && n % 512 === 0) return n / 1024 + 'K';
+  return new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(n);
+}
+
+export function rangeLabel(def, value, offText) {
+  const n = Number(value);
+  if (def.zeroOff && n === 0) return offText;
+  const shown = Number.isFinite(n) ? new Intl.NumberFormat(undefined, { maximumFractionDigits: 6 }).format(n) : String(value);
+  return def.unit ? shown + ' ' + def.unit : shown;
+}
 
 export function kwargChip(def, value) {
   if (value == null || value === '') return '';
   const control = controlOf(def);
   if (control === 'toggle') return /^true$/i.test(String(value)) ? (def.chip || def.label || 'On') : '';
-  if (control === 'range') return def.chip ? def.chip + ' ' + value : String(value);
-  if (def.chip) return def.chip;
+  if (isSteps(def)) {
+    const stop = stopOf(def, value);
+    if (stop && isOffStep(stop)) return '';
+    const name = stopLabel(def, value);
+    return def.chip ? def.chip.split('{value}').join(name) : name;
+  }
+  if (control === 'range') {
+    if (def.zeroOff && Number(value) === 0) return '';
+    const short = chipNumber(value);
+    if (def.chip) return def.chip.split('{value}').join(short);
+    return def.unit ? short + ' ' + def.unit : short;
+  }
   const s = String(value);
-  return s.charAt(0).toUpperCase() + s.slice(1);
+  const shown = s.charAt(0).toUpperCase() + s.slice(1);
+  return def.chip ? def.chip.split('{value}').join(shown) : shown;
 }

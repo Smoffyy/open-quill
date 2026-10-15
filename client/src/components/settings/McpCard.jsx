@@ -40,19 +40,19 @@ export default function McpCard({ server: sv, busy, readOnly, onRefresh, onToggl
             {sv.enabled === false && <span className="mcp-status off">{t("Disabled")}</span>}
             {readOnly && <span className="mcp-status off">{t("Workspace")}</span>}
           </div>
-          <div className="mcp-endpoint" title={endpoint}>
+          <div className="mcp-endpoint" data-tip={endpoint}>
             <span className="mcp-transport">{sv.transport === 'http' ? 'HTTP' : 'stdio'}</span>
             <code>{endpoint || t("Not configured")}</code>
           </div>
         </div>
         {!readOnly && (
           <div className="mcp-card-actions">
-            <button className="icon-btn" title={t("Reconnect and refresh tools")} aria-label={t("Reconnect and refresh tools")} disabled={busy} onClick={onRefresh}>
+            <button className="icon-btn" data-tip={t("Reconnect and refresh tools")} aria-label={t("Reconnect and refresh tools")} disabled={busy} onClick={onRefresh}>
               <Refresh className={busy ? 'mcp-spin' : ''} style={{ width: 15 }} />
             </button>
             <Switch on={sv.enabled !== false} label={t("Enabled")} title={t("Enabled")} onToggle={onToggle} />
-            <button className="icon-btn" title={t("Edit")} aria-label={t("Edit")} onClick={onEdit}><Pencil style={{ width: 15 }} /></button>
-            <button className="icon-btn" title={t("Delete")} aria-label={t("Delete")} onClick={onDelete}><Trash style={{ width: 15 }} /></button>
+            <button className="icon-btn" data-tip={t("Edit")} aria-label={t("Edit")} onClick={onEdit}><Pencil style={{ width: 15 }} /></button>
+            <button className="icon-btn" data-tip={t("Delete")} aria-label={t("Delete")} onClick={onDelete}><Trash style={{ width: 15 }} /></button>
           </div>
         )}
       </div>
@@ -63,7 +63,7 @@ export default function McpCard({ server: sv, busy, readOnly, onRefresh, onToggl
 
       {shown.length > 0 && (
         <div className="mcp-tools">
-          {shown.map(tool => <span key={tool.name} className="mcp-tool" title={`mcp_${sv.slug}_${tool.name}${tool.description ? '\n\n' + tool.description : ''}`}>{tool.name}</span>)}
+          {shown.map(tool => <span key={tool.name} className="mcp-tool" data-tip={`mcp_${sv.slug}_${tool.name}${tool.description ? '\n\n' + tool.description : ''}`}>{tool.name}</span>)}
           {tools.length > TOOL_PREVIEW && (
             <button className="mcp-tool-more" onClick={() => setShowAll(v => !v)}>
               {showAll ? t("Show fewer") : `+${tools.length - TOOL_PREVIEW} ${t("more")}`}

@@ -217,7 +217,7 @@ function SampleChats() {
         <div key={c.id} className={'chat-row' + (c.active ? ' active' : '')} data-oq-sample="">
           <span className="row-ic"><span className="row-dot" aria-hidden="true" /></span>
           <span className="title">{c.title}</span>
-          <button type="button" className="row-ctrl" title={t('Options')} aria-label={t('Options')}
+          <button type="button" className="row-ctrl" data-tip={t('Options')} aria-label={t('Options')}
             onClick={(e) => { e.stopPropagation(); const at = menuAtButton(e.currentTarget); setMenu(m => (m && m.id === c.id ? null : { id: c.id, at })); }}>
             <DotsV />
           </button>
@@ -244,7 +244,7 @@ function SampleThread() {
         {messages.map(msg => (
           <Message key={msg.id} msg={msg} chatId="oq-stage" phase="static"
             model={msg.role === 'assistant' ? SAMPLE_MODEL : null} models={[SAMPLE_MODEL]} currentId={SAMPLE_MODEL.id}
-            onRegenerate={noop} onRegenerateWith={noop} onEdit={noop} onDelete={noop} onFork={noop} onTogglePin={noop} />
+            onRegenerate={noop} onEdit={noop} onDelete={noop} onFork={noop} onTogglePin={noop} />
         ))}
         <div className="msg assistant">
           <ToolCard call={SAMPLE_CALL} result={SAMPLE_RESULT} />
@@ -286,7 +286,12 @@ function SampleStates() {
         <span className="badge">{t('New')}</span>
         <span className="chip">{t('A chip')}</span>
       </div>
-      <div className="ctx-gauge"><span className="cg-bar"><span className="cg-fill" style={{ width: '42%' }} /></span></div>
+      <span className="cx-ring">
+        <svg viewBox="0 0 12 12">
+          <circle cx="6" cy="6" r="5" className="cx-ring-track" />
+          <circle cx="6" cy="6" r="5" className="cx-ring-fill" strokeDasharray="31.4" strokeDashoffset="18.2" />
+        </svg>
+      </span>
       <div className="engine-strip final"><span className="es-icon"><Gauge style={{ width: 13 }} /></span><span className="es-stat">{t('Sample telemetry')}</span></div>
       <span className="skeleton" style={{ width: 220 }} />
     </div>, host);
@@ -301,11 +306,11 @@ function SampleAttachment() {
   return createPortal(
     <div className="attach-row" data-oq-sample="">
       <div className="attach-chip">
-        <div className="attach-file" title="release-notes.md">
+        <div className="attach-file" data-tip="release-notes.md">
           <div className="attach-name">release-notes.md</div>
           <div className="attach-foot"><span className="attach-type">MD</span></div>
         </div>
-        <button type="button" className="attach-x" title={t('Remove')} aria-label={t('Remove')}><X /></button>
+        <button type="button" className="attach-x" data-tip={t('Remove')} aria-label={t('Remove')}><X /></button>
       </div>
     </div>, host);
 }

@@ -60,6 +60,7 @@ export default [
       'react/no-unescaped-entities': 'off',
       'react/display-name': 'off',
       'react/no-unknown-property': ['error', { ignore: ['css'] }],
+      'react/forbid-dom-props': ['error', { forbid: ['title'] }],
       'react/jsx-no-target-blank': ['error', { allowReferrer: false }],
       'react/jsx-key': 'error',
       'react/no-unstable-nested-components': ['error', { allowAsProps: true }]

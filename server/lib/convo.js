@@ -2,14 +2,13 @@ import { db, getSetting } from '../db.js';
 import { roleOf } from './roles.js';
 import { memberContext, languageName } from './memberctx.js';
 import { docsVars } from './modeldocs.js';
-import { oneShot, stripThink, summarizeConversation, modelProvider, countAnthropicTokens } from '../llm/index.js';
-import { resolveProvider } from './providers.js';
+import { summarizeConversation, summaryMessages, oneShotAnswer } from '../llm/index.js';
+import { replayFieldOf } from './kwargs.js';
 import { activePath } from './tree.js';
 import { historyText } from './history.js';
 import { isTextLike, readUploadText, readImageDataUri, imageKind, imageMime } from './uploads.js';
 import { isDocumentName } from './extract.js';
-import { modelCtx } from './models.js';
-import { llamaTokenCount, isLlamaCpp } from './llamacpp.js';
+import { contextBudget, canCount, countExact } from './ctxwindow.js';
 
 export const STYLE_PRESETS = {
   __proto__: null,
@@ -31,25 +30,43 @@ export function styleTextFor(userId, styleId) {
 export function historyRows(chat, model) {
   const fresh = db.chats.byId(chat.id) || chat;
   const upto = fresh.summary && fresh.summary_upto ? fresh.summary_upto : 0;
+  const replay = !!replayFieldOf(model);
   return activePath(chat.id).map(m => ({
     id: m.id,
     role: m.role,
     pinned: !!m.pinned,
-    excluded: !!m.excluded,
     summarized: !!(upto && m.created_at <= upto && !m.pinned),
-    msg: historyMessage(m, model)
+    msg: historyMessage(m, model, replay)
   }));
 }
 
 export function chatHistory(chat, model, skipId = null) {
-  return historyRows(chat, model).filter(r => !r.summarized && !r.excluded && r.id !== skipId).map(r => r.msg);
+  return historyRows(chat, model).filter(r => !r.summarized && r.id !== skipId).map(r => r.msg);
 }
 
 export const CUT_NOTE = '[This reply was cut off here before it was finished.]';
+const ACTIVITY_NOTE = '[What happened during this reply, in order. Times are UTC.]';
 
-function historyMessage(m, model) {
+function stamp(ms) {
+  return new Date(ms).toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+}
+
+function activityText(list) {
+  return list.map(e => {
+    const when = stamp(e.at);
+    if (e.kind === 'call') return `[${when}] Tool call: ${e.name}\nArguments: ${e.args}`;
+    if (e.kind === 'result') return `[${when}] Result of ${e.name} (${e.ok ? 'succeeded' : 'failed'}):\n${e.text}`;
+    if (e.kind === 'steer') return `[${when}] The user steered this reply part way through:\n${e.notes.map(n => '- ' + n).join('\n')}`;
+    return `[${when}] ${e.text}`;
+  }).join('\n\n');
+}
+
+function historyMessage(m, model, replay) {
   let text = historyText(m.content || '').replace(/\n{3,}/g, '\n\n');
   if (m.role === 'assistant' && m.truncated) text = (text.trim() ? text.trimEnd() + '\n\n' : '') + CUT_NOTE;
+  if (m.role === 'assistant' && Array.isArray(m.activity) && m.activity.length) {
+    text = ACTIVITY_NOTE + '\n\n' + activityText(m.activity) + (text.trim() ? '\n\nReply:\n' + text : '');
+  }
   const atts = m.attachments || [];
   const images = [];
   if (atts.length) {
@@ -69,158 +86,32 @@ function historyMessage(m, model) {
     }
     if (notes.length) text = (text ? text + '\n\n' : '') + notes.join('\n\n');
   }
-  if (!images.length) return { role: m.role, content: text };
+  const thought = replay && m.role === 'assistant' ? reasoningOf(m) : '';
+  const extra = thought ? { reasoning: thought } : {};
+  if (!images.length) return { role: m.role, content: text, ...extra };
   const parts = [];
   if (text) parts.push({ type: 'text', text });
   for (const url of images) parts.push({ type: 'image_url', image_url: { url } });
-  return { role: m.role, content: parts };
+  return { role: m.role, content: parts, ...extra };
 }
 
-export const textTokens = estTextTokens;
-
-function countCjk(s, from, to) {
-  let cjk = 0;
-  for (let i = from; i < to; i++) { const c = s.charCodeAt(i); if ((c >= 0x3000 && c <= 0x9fff) || (c >= 0xac00 && c <= 0xd7af)) cjk++; }
-  return cjk;
+function reasoningOf(m) {
+  const segs = Array.isArray(m.reasoning_segs) ? m.reasoning_segs : [];
+  return [m.reasoning, ...segs].map(s => String(s || '').trim()).filter(Boolean).join('\n\n');
 }
 
-const TOK_CACHE = new Map();
-const TOK_CACHE_MIN = 1024;
-const TOK_CACHE_MAX_CHARS = 4 << 20;
-let tokCacheChars = 0;
+const IMAGE_DETAIL_TOKENS = 1024;
+const MAX_SUMMARY_IMAGES = 24;
+const DESCRIBE_IMAGE = 'You describe an image in full detail so the description can stand in for the image later, in a text-only conversation. Cover what it shows, its layout and composition, every piece of visible text quoted exactly, all numbers, labels and colours, and anything else someone might ask about. Plain prose, no preamble.';
 
-function estTextTokens(s) {
-  if (!s) return 0;
-  if (s.length < TOK_CACHE_MIN) {
-    const c = countCjk(s, 0, s.length);
-    return Math.ceil((s.length - c) / 3.6) + c;
-  }
-  const hit = TOK_CACHE.get(s);
-  if (hit !== undefined) {
-    TOK_CACHE.delete(s);
-    TOK_CACHE.set(s, hit);
-    return hit;
-  }
-  const cjk = countCjk(s, 0, s.length);
-  const n = Math.ceil((s.length - cjk) / 3.6) + cjk;
-  if (s.length <= TOK_CACHE_MAX_CHARS) {
-    TOK_CACHE.set(s, n);
-    tokCacheChars += s.length;
-    while (tokCacheChars > TOK_CACHE_MAX_CHARS) {
-      const oldest = TOK_CACHE.keys().next().value;
-      if (oldest === undefined) break;
-      tokCacheChars -= oldest.length;
-      TOK_CACHE.delete(oldest);
-    }
-  }
-  return n;
-}
-
-export function makeTokenCounter() {
-  let plain = 0, cjk = 0;
-  return {
-    add(chunk) {
-      if (!chunk) return;
-      const c = countCjk(chunk, 0, chunk.length);
-      cjk += c;
-      plain += chunk.length - c;
-    },
-    get tokens() { return Math.ceil(plain / 3.6) + cjk; }
-  };
-}
-
-export function messageTokens(m) {
-  let total = 4;
-  if (typeof m.content === 'string') total += estTextTokens(m.content);
-  else if (Array.isArray(m.content)) for (const p of m.content) total += p.type === 'text' ? estTextTokens(p.text || '') : 850;
-  if (Array.isArray(m.tool_calls)) for (const c of m.tool_calls) total += estTextTokens((c.argsText || '') + (c.name || '')) + 8;
-  return total;
-}
-
-export function estimateTokens(messages) {
-  let total = 0;
-  for (const m of messages) total += messageTokens(m);
-  return total;
-}
-
-const CTX_TRIM_NOTE = '[Earlier part of this message was trimmed to fit the model context window.]\n\n';
-function trimMsgToTokens(m, allowedTokens) {
-  const keep = Math.max(400, Math.floor(Math.max(60, allowedTokens) * 3.4));
-  if (typeof m.content === 'string') {
-    if (m.content.length <= keep) return m;
-    return { ...m, content: CTX_TRIM_NOTE + m.content.slice(-keep) };
-  }
-  if (Array.isArray(m.content)) {
-    let joined = m.content.filter(p => p.type === 'text').map(p => p.text || '').join('\n\n');
-    if (joined.length > keep) joined = CTX_TRIM_NOTE + joined.slice(-keep);
-    return { ...m, content: joined || '[content trimmed to fit the model context window]' };
-  }
-  return m;
-}
-
-export function truncateForRollingCtx(chatId, msgs, ctx) {
-  const reserve = Math.min(Math.max(256, Math.floor(ctx * 0.15)), 1536);
-  const budget = Math.max(512, ctx - reserve);
-  const ratio = calibRatio(chatId);
-  const n = msgs.length;
-  const costs = new Array(n);
-  let est = 0;
-  let nonSysCount = 0;
-  for (let i = 0; i < n; i++) {
-    const c = messageTokens(msgs[i]);
-    costs[i] = c;
-    est += c;
-    if (msgs[i].role !== 'system') nonSysCount++;
-  }
-  const scaled = () => Math.round(est * ratio);
-  if (scaled() <= budget) return { msgs, dropped: 0, trimmed: false };
-  const drop = new Uint8Array(n);
-  let dropped = 0;
-  for (let i = 0; i < n && nonSysCount > 1 && scaled() > budget; i++) {
-    if (msgs[i].role === 'system') continue;
-    drop[i] = 1;
-    est -= costs[i];
-    nonSysCount--;
-    dropped++;
-  }
-  const out = [];
-  const cost = [];
-  for (let i = 0; i < n; i++) if (!drop[i]) { out.push(msgs[i]); cost.push(costs[i]); }
-  let trimmed = false;
-  if (scaled() > budget) {
-    const i = out.findIndex(m => m.role !== 'system');
-    if (i !== -1) {
-      const allowed = budget - Math.round((est - cost[i]) * ratio) - 8;
-      const before = out[i];
-      out[i] = trimMsgToTokens(before, allowed);
-      trimmed = out[i] !== before;
-    }
-  }
-  return { msgs: out, dropped, trimmed };
-}
-
-export async function rollingCtxFor(model) {
-  if (model.enable_summaries) return 0;
-  const prov = resolveProvider(model.provider_id);
-  if (!prov || prov.type !== 'llamacpp') return 0;
-  const ctx = await modelCtx(model);
-  return ctx > 0 ? ctx : 0;
-}
-
-// once we get near the context limit, fold older turns into chat.summary
-// one summarization pass over older persisted turns; returns true if it compacted
-async function describeImageForSummary(model, a) {
+async function describeImage(model, a) {
   if (!model || !model.has_vision) return '';
   const uri = readImageDataUri(a);
   if (!uri) return '';
-  try {
-    let d = await oneShot(model, [
-      { role: 'system', content: 'You write short factual descriptions of images so their content survives in a text-only conversation summary. Reply with 1-3 plain sentences describing what the image shows, including any visible text. No preamble, no markdown.' },
-      { role: 'user', content: [{ type: 'text', text: `Describe the attached image "${a.name || 'image'}" concisely.` }, { type: 'image_url', image_url: { url: uri } }] }
-    ]);
-    d = stripThink(model, d).trim().replace(/\s+/g, ' ');
-    return d.slice(0, 700);
-  } catch { return ''; }
+  return oneShotAnswer(model, [
+    { role: 'system', content: DESCRIBE_IMAGE },
+    { role: 'user', content: [{ type: 'text', text: `Describe the attached image "${a.name || 'image'}".` }, { type: 'image_url', image_url: { url: uri } }] }
+  ], { maxTokens: IMAGE_DETAIL_TOKENS });
 }
 
 async function enrichForSummary(model, rows) {
@@ -229,81 +120,140 @@ async function enrichForSummary(model, rows) {
     let text = m.content || '';
     const atts = Array.isArray(m.attachments) ? m.attachments : [];
     const notes = [];
+    const images = [];
     let changed = false;
     for (const a of atts) {
-      const isImage = imageKind(a) === 'vision';
-      if (!isImage) continue;
-      let d = typeof a.summary_desc === 'string' ? a.summary_desc : '';
-      if (!d) {
-        d = await describeImageForSummary(model, a);
-        if (d) { a.summary_desc = d; changed = true; }
+      if (imageKind(a) !== 'vision') continue;
+      const name = a.name || 'image';
+      let detail = typeof a.image_detail === 'string' ? a.image_detail : '';
+      if (!detail) {
+        detail = await describeImage(model, a);
+        if (detail) { a.image_detail = detail; changed = true; }
       }
-      notes.push(d ? `[Attached image "${a.name || 'image'}": ${d}]` : `[Attached image: ${a.name || 'image'}]`);
+      if (detail) images.push({ url: a.url, name, detail });
+      notes.push(detail ? `[Attached image "${name}": ${detail}]` : `[Attached image: ${name}]`);
     }
     if (changed) { try { db.messages.update(m.id, { attachments: atts }); } catch {} }
     if (notes.length) text = (text ? text + '\n\n' : '') + notes.join('\n');
-    out.push({ role: m.role, content: text });
+    out.push({ role: m.role, content: text, images });
   }
   return out;
 }
 
-export async function compactStep(ws, chat, model) {
-  const fresh = db.chats.byId(chat.id);
-  const upto = fresh.summary && fresh.summary_upto ? fresh.summary_upto : 0;
-  const recent = recentWindow(model);
-  const after = activePath(chat.id).filter(m => m.created_at > upto);
-  if (after.length <= recent + 1) return false;
-  const cut = after.length - recent;
-  const toSummarize = after.slice(0, cut).filter(m => !m.pinned);
-  if (!toSummarize.length) return false;
-  const marker = after[cut - 1].created_at;
-  try { ws.send(JSON.stringify({ type: 'compacting', chatId: chat.id })); } catch {}
-  const enriched = await enrichForSummary(model, toSummarize);
-  const summary = await summarizeConversation(model, fresh.summary, enriched);
-  if (summary) db.chats.update(chat.id, { summary, summary_upto: marker });
-  try { ws.send(JSON.stringify({ type: 'compacted', chatId: chat.id })); } catch {}
-  return !!summary;
+function keepImages(prev, added) {
+  const list = (Array.isArray(prev) ? prev : []).filter(i => !added.some(a => a.url === i.url));
+  return [...list, ...added].slice(-MAX_SUMMARY_IMAGES);
 }
+
+export function summaryText(row, recallOn = false) {
+  const summary = String(row?.summary || '').trim();
+  const images = Array.isArray(row?.summary_images) ? row.summary_images : [];
+  if (!images.length) return summary;
+  const lead = recallOn
+    ? 'These images were shared earlier and are no longer attached. To look at one again, call recall with its name.'
+    : 'These images were shared earlier and are no longer attached.';
+  const lines = images.map(i => `- "${i.name}": ${i.detail}`);
+  return (summary ? summary + '\n\n' : '') + '## Images from earlier in the conversation\n' + lead + '\n' + lines.join('\n');
+}
+
+const FOLD_AT = 0.65;
+const FOLD_TO = 0.4;
+const MAX_FOLDS = 4;
+const SHORTEN_TRIES = 6;
+const folding = new Set();
 
 export function recentWindow(model) {
   const n = parseInt(model && model.recent_window);
   return Number.isFinite(n) && n > 0 ? n : 4;
 }
 
-export const FALLBACK_CTX = 8192;
-
-export function compactThreshold(model, ctxOverride) {
-  if (!model.enable_summaries) return Infinity;
-  const over = parseInt(ctxOverride, 10);
-  const manual = parseInt(model.num_ctx, 10);
-  const ctx = (Number.isFinite(over) && over > 0) ? over : ((Number.isFinite(manual) && manual > 0) ? manual : FALLBACK_CTX);
-  const padding = Math.max(0.03, Math.min(0.6, model.summary_padding || 0.125));
-  return Math.floor(ctx * (1 - padding));
+function summaryCap(ctx) {
+  return Math.max(256, Math.min(2048, Math.floor(ctx * 0.25)));
 }
 
-// Claude has an exact counter, but it is a round trip, so it is only asked once the
-// estimate comes within reach of the threshold the caller is checking against.
-const NEAR = 0.7;
+function halve(msg) {
+  const text = String(msg.content || '');
+  const keep = Math.floor(text.length / 4);
+  return { ...msg, content: text.slice(0, keep) + '\n\n[... middle of this message left out of the summary ...]\n\n' + text.slice(-keep) };
+}
 
-export async function exactTokens(chatId, model, messages, near = 0, tools = []) {
-  const { spec, base, key } = modelProvider(model);
-  if (spec.protocol === 'anthropic') {
-    const est = calibratedTokens(chatId, messages);
-    if (near > 0 && Number.isFinite(near) && est < near * NEAR) return est;
-    try {
-      const n = await countAnthropicTokens({ model, spec, base, key, messages, tools });
-      if (n > 0) { updateCalib(chatId, n, estimateTokens(messages)); return n; }
-    } catch {}
-    return est;
+async function fitBatch(model, prior, entries, cap, room) {
+  const fits = async (k) => {
+    const msgs = entries.slice(0, k).filter(e => e.msg).map(e => e.msg);
+    if (!msgs.length) return true;
+    const n = await countExact(model, summaryMessages(prior, msgs, cap));
+    return n > 0 && n <= room;
+  };
+  if (await fits(entries.length)) return entries.length;
+  let lo = 0;
+  let hi = entries.length - 1;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (await fits(mid)) lo = mid;
+    else hi = mid - 1;
   }
-  if (isLlamaCpp(model)) {
-    const n = await llamaTokenCount(model, messages);
-    if (n > 0) {
-      updateCalib(chatId, n, estimateTokens(messages));
-      return n;
+  if (lo > 0) return lo;
+  const first = entries.findIndex(e => e.msg);
+  if (first === -1) return 0;
+  for (let i = 0; i < SHORTEN_TRIES; i++) {
+    entries[first].msg = halve(entries[first].msg);
+    if (await fits(first + 1)) return first + 1;
+  }
+  return 0;
+}
+
+export async function foldStep(ws, chat, model) {
+  const fresh = db.chats.byId(chat.id);
+  const upto = fresh.summary && fresh.summary_upto ? fresh.summary_upto : 0;
+  const after = activePath(chat.id).filter(m => m.created_at > upto);
+  const recent = recentWindow(model);
+  if (after.length <= recent + 1) return false;
+  const batch = after.slice(0, after.length - recent);
+  const { ctx } = await contextBudget(model);
+  const cap = ctx > 0 ? summaryCap(ctx) : 0;
+  const prior = fresh.summary || '';
+  const enriched = await enrichForSummary(model, batch.filter(m => !m.pinned));
+  let next = 0;
+  const entries = batch.map(row => ({ row, msg: row.pinned ? null : enriched[next++] }));
+  const exact = canCount(model) && ctx > 0;
+  let take = exact ? await fitBatch(model, prior, entries, cap, ctx - cap) : entries.length;
+  if (!take) return false;
+  if (ws) { try { ws.send(JSON.stringify({ type: 'compacting', chatId: chat.id })); } catch {} }
+  let summary = '';
+  while (take > 0) {
+    const msgs = entries.slice(0, take).filter(e => e.msg).map(e => e.msg);
+    summary = msgs.length ? await summarizeConversation(model, prior, msgs, { maxTokens: cap }) : prior;
+    if (summary || exact) break;
+    take = Math.floor(take / 2);
+  }
+  if (summary) {
+    const images = entries.slice(0, take).flatMap(e => (e.msg && e.msg.images) || []);
+    db.chats.update(chat.id, { summary, summary_upto: entries[take - 1].row.created_at, ...(images.length ? { summary_images: keepImages(fresh.summary_images, images) } : {}) });
+  }
+  if (ws) { try { ws.send(JSON.stringify({ type: 'compacted', chatId: chat.id })); } catch {} }
+  return !!summary;
+}
+
+export async function foldHistory(chat, model, used, measure = null) {
+  if (folding.has(chat.id)) return false;
+  const { ctx } = await contextBudget(model);
+  if (!(ctx > 0) || !(used > ctx * FOLD_AT)) return false;
+  folding.add(chat.id);
+  let folded = false;
+  try {
+    for (let i = 0; i < MAX_FOLDS; i++) {
+      if (!(await foldStep(null, chat, model))) break;
+      folded = true;
+      if (!measure) break;
+      const left = await measure();
+      if (!left || left <= ctx * FOLD_TO) break;
     }
+  } catch (e) {
+    console.warn('[fold]', e.message);
+  } finally {
+    folding.delete(chat.id);
   }
-  return calibratedTokens(chatId, messages);
+  return folded;
 }
 
 const TOOL_TRIM_NOTE = '[Tool output trimmed to fit the context window. Re-run the tool if you need the full result.]';
@@ -322,37 +272,6 @@ export function trimInTurn(inTurn, keepRecent = 2) {
     return { ...m, __trimmed: true, content: text.slice(0, 200) + '\n' + TOOL_TRIM_NOTE + '\n' + text.slice(-200) };
   });
   return { list, trimmed };
-}
-
-export const tokenCalib = new Map();
-const CALIB_MAX = 2000;
-
-export function updateCalib(chatId, actualPrompt, estimated) {
-  if (!chatId || !actualPrompt || !estimated || estimated < 200) return;
-  const raw = actualPrompt / estimated;
-  if (!Number.isFinite(raw)) return;
-  const ratio = Math.max(0.25, Math.min(4, raw));
-  const prev = tokenCalib.get(chatId);
-  tokenCalib.set(chatId, { ratio: prev ? prev.ratio * 0.4 + ratio * 0.6 : ratio, at: Date.now() });
-  if (tokenCalib.size > CALIB_MAX) {
-    const cutoff = Date.now() - 6 * 3600 * 1000;
-    for (const [k, v] of tokenCalib) if (v.at < cutoff) tokenCalib.delete(k);
-    for (const k of tokenCalib.keys()) {
-      if (tokenCalib.size <= CALIB_MAX * 0.75) break;
-      tokenCalib.delete(k);
-    }
-  }
-}
-
-export function calibRatio(chatId) {
-  const c = chatId && tokenCalib.get(chatId);
-  return c ? c.ratio : 1;
-}
-
-export function calibratedTokens(chatId, messages) {
-  const est = estimateTokens(messages);
-  const c = chatId && tokenCalib.get(chatId);
-  return c ? Math.round(est * c.ratio) : est;
 }
 
 export function promptVars(userId, { model = null, client = null } = {}) {

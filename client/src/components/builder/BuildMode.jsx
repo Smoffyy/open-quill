@@ -214,11 +214,11 @@ export default function BuildMode({ user }) {
       <header className="bx-top">
         <div className="bx-top-left">
           <button type="button" className={'bx-icon' + (leftOpen ? ' on' : '')} onClick={() => setLeftOpen(o => !o)}
-            title={t('Toggle panels') + ' · ' + comboLabel(KEYS.panels[0])} aria-label={t('Toggle panels')}><Panel /></button>
+            data-tip={t('Toggle panels') + ' · ' + comboLabel(KEYS.panels[0])} aria-label={t('Toggle panels')}><Panel /></button>
           <span className="bx-brand">{t('Build mode')}</span>
           {renaming === null ? (
             <span className="bx-theme-chip" role="button" tabIndex={0}
-              title={t('Theme being edited. Double-click to rename.')}
+              data-tip={t('Theme being edited. Double-click to rename.')}
               onDoubleClick={() => setRenaming(active?.name || theme?.name || '')}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setRenaming(active?.name || theme?.name || ''); } }}>
               {active?.name || theme?.name || t('Untitled')}
@@ -240,23 +240,23 @@ export default function BuildMode({ user }) {
             {TOOLS.map(x => (
               <button key={x.id} type="button" className={'bx-tool' + (tool === x.id ? ' on' : '')}
                 aria-pressed={tool === x.id} onClick={() => setTool(x.id)}
-                title={t(x.label) + ' · ' + comboLabel(x.key) + ' — ' + t(x.hint)}>
+                data-tip={t(x.label) + ' · ' + comboLabel(x.key) + ' — ' + t(x.hint)}>
                 <span aria-hidden="true">{x.glyph}</span>
                 <span className="sr-only">{t(x.label)}</span>
               </button>
             ))}
           </div>
-          <label className="bx-stage-pick" title={t(STAGE_BY_ID[stage]?.hint || 'Put a window, a menu or a sample conversation on screen so it can be styled')}>
+          <label className="bx-stage-pick" data-tip={t(STAGE_BY_ID[stage]?.hint || 'Put a window, a menu or a sample conversation on screen so it can be styled')}>
             <span className="sr-only">{t('Show')}</span>
             <select value={stage} onChange={(e) => showStage(e.target.value)}>
               {STAGES.map(x => <option key={x.id} value={x.id}>{t(x.label)}</option>)}
             </select>
           </label>
           <div className="bx-devices" role="group" aria-label={t('Preview size')}
-            title={t("Narrows the canvas and applies this theme's rules for that size. The app's own breakpoints still follow your real window.")}>
+            data-tip={t("Narrows the canvas and applies this theme's rules for that size. The app's own breakpoints still follow your real window.")}>
             {DEVICES.map(d => (
               <button key={d.id} type="button" className={'bx-dev' + (device === d.id ? ' on' : '')}
-                title={t(d.label)} aria-label={t(d.label)} aria-pressed={device === d.id}
+                data-tip={t(d.label)} aria-label={t(d.label)} aria-pressed={device === d.id}
                 onClick={() => setDevice(d.id)}>
                 <span className="bx-dev-screen" style={{ width: d.w, height: d.h }} />
               </button>
@@ -264,25 +264,25 @@ export default function BuildMode({ user }) {
           </div>
           <div className="bx-undo">
             <button type="button" className="bx-icon" disabled={!depth.undo} onClick={undo}
-              title={t('Undo') + ' · ' + comboLabel(KEYS.undo[0])} aria-label={t('Undo')}><Retry /></button>
+              data-tip={t('Undo') + ' · ' + comboLabel(KEYS.undo[0])} aria-label={t('Undo')}><Retry /></button>
             <button type="button" className="bx-icon flip" disabled={!depth.redo} onClick={redo}
-              title={t('Redo') + ' · ' + comboLabel(KEYS.redo[0])} aria-label={t('Redo')}><Retry /></button>
+              data-tip={t('Redo') + ' · ' + comboLabel(KEYS.redo[0])} aria-label={t('Redo')}><Retry /></button>
             <button type="button" className="bx-icon" disabled={!depth.baseline || !dirtySession} onClick={revert}
-              title={t('Revert everything from this session')} aria-label={t('Revert everything from this session')}>
+              data-tip={t('Revert everything from this session')} aria-label={t('Revert everything from this session')}>
               <Refresh />
             </button>
             <button type="button" className="bx-icon" disabled={!docDirty || themes.busy} onClick={backToPublished}
-              title={t('Discard every unpublished change and go back to what members are running')}
+              data-tip={t('Discard every unpublished change and go back to what members are running')}
               aria-label={t('Discard every unpublished change')}>
               <Download />
             </button>
           </div>
           <button type="button" className={'bx-toggle' + (interact ? ' on' : '')} onClick={() => setInteract(v => !v)}
-            title={t('Let clicks reach the app so you can open menus and navigate') + ' · ' + comboLabel(KEYS.interact[0])}>
+            data-tip={t('Let clicks reach the app so you can open menus and navigate') + ' · ' + comboLabel(KEYS.interact[0])}>
             {interact ? t('Interacting') : t('Selecting')}
           </button>
           <button type="button" className={'bx-toggle' + (asMember ? ' on' : '')} onClick={() => setAsMember(v => !v)}
-            title={t('See exactly what members are running right now') + ' · ' + comboLabel(KEYS.published[0])}>
+            data-tip={t('See exactly what members are running right now') + ' · ' + comboLabel(KEYS.published[0])}>
             <Eye /> {asMember ? t('Viewing published') : t('View published')}
           </button>
         </div>
@@ -294,10 +294,10 @@ export default function BuildMode({ user }) {
             {pending > 0 && <span className="sr-only">{pending === 1 ? t('1 change') : t('{n} changes', { n: pending })}</span>}
           </button>
           <button type="button" className={'bx-icon' + (keysOpen ? ' on' : '')} onClick={() => setKeysOpen(o => !o)}
-            title={t('Keyboard shortcuts')} aria-label={t('Keyboard shortcuts')} aria-expanded={keysOpen}><Keyboard /></button>
+            data-tip={t('Keyboard shortcuts')} aria-label={t('Keyboard shortcuts')} aria-expanded={keysOpen}><Keyboard /></button>
           <button type="button" className={'bx-icon' + (rightOpen ? ' on' : '')} onClick={() => setRightOpen(o => !o)}
-            title={t('Toggle inspector')} aria-label={t('Toggle inspector')}><Panel /></button>
-          <button type="button" className="bx-icon" onClick={() => { closeStage(); setBuild(false); }} title={t('Leave build mode')} aria-label={t('Leave build mode')}>
+            data-tip={t('Toggle inspector')} aria-label={t('Toggle inspector')}><Panel /></button>
+          <button type="button" className="bx-icon" onClick={() => { closeStage(); setBuild(false); }} data-tip={t('Leave build mode')} aria-label={t('Leave build mode')}>
             <X />
           </button>
         </div>
@@ -331,7 +331,7 @@ export default function BuildMode({ user }) {
           <nav className="bx-dock-tabs" role="tablist" aria-label={t('Builder panels')}>
             {TABS.map(x => (
               <button key={x.id} type="button" role="tab" aria-selected={tab === x.id}
-                className={'bx-dock-tab' + (tab === x.id ? ' on' : '')} onClick={() => setTab(x.id)} title={t(x.label)}>
+                className={'bx-dock-tab' + (tab === x.id ? ' on' : '')} onClick={() => setTab(x.id)} data-tip={t(x.label)}>
                 <x.Icon />
                 <span>{t(x.label)}</span>
               </button>

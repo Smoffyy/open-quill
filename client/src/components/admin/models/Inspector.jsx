@@ -68,7 +68,7 @@ function Title({ models, changed }) {
           <b>{m.display_name || t('Untitled')}</b>
           <span className="mc-title-sub">
             <span className="mono">{m.kind === 'router' ? t('router') : (m.internal_name || t('no model id'))}</span>
-            {changed.has(m.id) && <span className="mc-flag" title={t('Changed since the last release')}>{t('edited')}</span>}
+            {changed.has(m.id) && <span className="mc-flag" data-tip={t('Changed since the last release')}>{t('edited')}</span>}
           </span>
         </div>
       </div>
@@ -173,7 +173,7 @@ export default function Inspector({ models, onDismiss }) {
             const checked = locked || extra.includes(id);
             return (
               <MenuItem key={id} role="menuitemcheckbox" aria-checked={checked} className="mc-menu-check"
-                disabled={locked} title={locked ? t('This selection already uses these settings.') : undefined}
+                disabled={locked} data-tip={locked ? t('This selection already uses these settings.') : undefined}
                 onClick={() => toggle(id)}>
                 <span className="mc-check" aria-hidden="true">{checked && <Check />}</span>
                 <span className="mc-menu-two">

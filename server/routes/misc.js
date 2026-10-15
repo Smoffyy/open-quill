@@ -3,7 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { authMiddleware, adminOnly } from '../auth.js';
 import { logAudit } from '../lib/audit.js';
-import { appConfig } from '../lib/appconfig.js';
+import { appConfig, configChanges } from '../lib/appconfig.js';
 import { staged, liveVersion } from '../lib/releases.js';
 import { draftGet, draftSet } from '../lib/draft.js';
 import { egressLog, clearEgressLog } from '../lib/egress.js';
@@ -73,18 +73,8 @@ export default function registerMiscRoutes(app) {
     }
     if ('appIcon' in b) put('app_icon', text(b.appIcon, 1024));
     if ('appFont' in b) put('app_font', APP_FONTS.has(b.appFont) ? b.appFont : 'literata');
-    if ('uiPreset' in b) {
-      const next = b.uiPreset === 'openai' ? 'openai' : 'anthropic';
-      const prev = draftGet('ui_preset', '');
-      if (put('ui_preset', next)) {
-        if (prev !== next && !('appFont' in b)) put('app_font', next === 'openai' ? 'sans' : 'literata');
-        logAudit(req, 'branding.preset', { meta: { preset: next } });
-      }
-    }
     if (keys.length) {
-      const now = appConfig(true);
-      const values = Object.fromEntries(Object.keys(now).filter(k => JSON.stringify(now[k]) !== JSON.stringify(was[k])).map(k => [k, now[k]]));
-      staged(req, 'config', { keys, values });
+      staged(req, 'config', { keys, values: configChanges(was) });
     }
     res.json({ ok: true });
   });

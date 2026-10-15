@@ -4,6 +4,7 @@ import { copyText } from '../../lib/clipboard.js';
 import { Wrench, FileText, Trash, Folder, Download, Search, Copy, Check, Terminal, Pencil, Plus, Chevron, Brain, Calculator, ListChecks, Users, Chat } from '../ui/icons.jsx';
 import { baseName, dirOf } from '../../lib/files.js';
 import { t, tk } from '../../i18n.jsx';
+import { safeUrl } from '../../lib/safeurl.js';
 
 const VERBS = {
   bash: [tk('Running'), tk('Ran')],
@@ -29,6 +30,7 @@ const VERBS = {
   mb_search: [tk('Searching memory'), tk('Searched memory')],
   chat_search: [tk('Searching past chats'), tk('Searched past chats')],
   chat_view: [tk('Reading a past chat'), tk('Read a past chat')],
+  recall: [tk('Recalling earlier messages'), tk('Recalled earlier messages')],
   skill_view: [tk('Loading skill'), tk('Loaded skill')],
   end_conversation: [tk('Ending the conversation'), tk('Ended the conversation')],
   calculator: [tk('Calculating'), tk('Calculated')],
@@ -112,7 +114,7 @@ function targetOf(call) {
       return call.path && call.new_path
         ? { kind: 'move', from: call.path, to: call.new_path }
         : (call.path || call.new_path ? { kind: 'path', path: call.path || call.new_path } : null);
-    case 'search': case 'mb_search': case 'chat_search': return q(call.query);
+    case 'search': case 'mb_search': case 'chat_search': case 'recall': return q(call.query);
     case 'find': return q(call.pattern || call.query);
     case 'skill_view': return call.name ? { kind: 'text', text: call.name } : null;
     case 'memory': return q(call.text);
@@ -151,7 +153,7 @@ function resultNote(call, res) {
     case 'search': return res.count != null ? plural(res.count, '{n} match', '{n} matches') : null;
     case 'mb_search': return res.count != null ? plural(res.count, '{n} match', '{n} matches') : null;
     case 'mb_view': return res.total != null ? plural(res.total, '{n} line', '{n} lines') : null;
-    case 'chat_search': return res.count != null ? plural(res.count, '{n} match', '{n} matches') : null;
+    case 'chat_search': case 'recall': return res.count != null ? plural(res.count, '{n} match', '{n} matches') : null;
     case 'chat_view': return res.title ? `"${res.title}"` : null;
     case 'skill_view': return res.name ? res.name : null;
     case 'memory': return call.text ? (res.duplicate ? t('already saved') : null) : (res.text ? `"${res.text}"` : null);
@@ -189,7 +191,7 @@ function BashCard({ call, result }) {
         <Terminal style={{ width: 14 }} />
         <span className="tb-label">{result ? t('Terminal') : t('Running')}</span>
         <code className="tb-peek">{oneLine}</code>
-        {cwd && cwd !== '.' && <span className="tb-cwd" title={t('Working directory')}>{cwd}</span>}
+        {cwd && cwd !== '.' && <span className="tb-cwd" data-tip={t('Working directory')}>{cwd}</span>}
         {result && !failed && lines > 0 && <span className="tl-note">{plural(lines, '{n} line', '{n} lines')}</span>}
         {result && !failed && lines === 0 && <span className="tl-note">{t('no output')}</span>}
         {failed && <span className="tb-badge err">{result.exit != null ? t('exit {code}', { code: result.exit }) : t('error')}</span>}
@@ -200,7 +202,7 @@ function BashCard({ call, result }) {
         <div className="tb-inner">
           <div className="tb-cmdrow">
             <pre className="tb-cmd"><span className="tb-prompt">$</span> <code className="hljs" dangerouslySetInnerHTML={{ __html: html }} /></pre>
-            <button className="tb-copy" onClick={copy} title={copied ? t('Copied') : t('Copy')}>{copied ? <Check style={{ width: 13 }} /> : <Copy style={{ width: 13 }} />}</button>
+            <button className="tb-copy" onClick={copy} data-tip={copied ? t('Copied') : t('Copy')} aria-label={copied ? t('Copied') : t('Copy')}>{copied ? <Check style={{ width: 13 }} /> : <Copy style={{ width: 13 }} />}</button>
           </div>
           {result && (
             <div className="tb-out">
@@ -239,7 +241,7 @@ function ToolLine({ call, result, note, diff }) {
       role={openPath ? 'button' : undefined}
       tabIndex={openPath ? 0 : undefined}
       onKeyDown={openPath ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openArtifact(openPath); } } : undefined}
-      title={full || (target && target.text) || undefined}>
+      data-tip={full || (target && target.text) || undefined}>
       <Icon style={{ width: 20 }} className="tl-icon" />
       <span className="tl-verb">{verb}</span>
       {target ? <Target target={target} /> : pending ? <NamePending /> : null}
@@ -302,7 +304,7 @@ function WebSearchCard({ call, result }) {
               ? <div className="ws-results">{results.map((r, i) => {
                   const host = hostOf(r.url);
                   return (
-                    <a key={i} className="ws-result" href={r.url} target="_blank" rel="noopener noreferrer" title={[r.title, r.url].filter(Boolean).join('\n')}>
+                    <a key={i} className="ws-result" href={safeUrl(r.url) || undefined} target="_blank" rel="noopener noreferrer" data-tip={[r.title, r.url].filter(Boolean).join('\n')}>
                       <span className="ws-num">{i + 1}</span>
                       <span className="ws-body">
                         <span className="ws-title">{r.title || host || r.url}</span>
