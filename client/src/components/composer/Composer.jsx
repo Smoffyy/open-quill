@@ -136,6 +136,11 @@ export default function Composer({
   }, [addFiles, closePlusMenu]);
   const [showReason, setShowReason] = useState(false);
   const [slashIdx, setSlashIdx] = useState(0);
+  const [slashFor, setSlashFor] = useState(value);
+  if (slashFor !== value) {
+    setSlashFor(value);
+    setSlashIdx(0);
+  }
 
   useLayoutEffect(() => {
     if (!plusMenu) return;
@@ -149,6 +154,12 @@ export default function Composer({
 
   const grewOnce = useRef(false);
   const fitWidth = useRef(0);
+  const shapeRef = useRef(false);
+  const setShape = (on) => {
+    if (shapeRef.current === on) return;
+    shapeRef.current = on;
+    setMultiline(on);
+  };
   const fit = useCallback((animate) => {
     const el = ta.current; if (!el) return;
     const MAX = 280;
@@ -157,7 +168,7 @@ export default function Composer({
       el.style.overflowY = 'auto';
       el.style.height = MAX + 'px';
       if (host) host.classList.add('ml');
-      setMultiline(m => (m === true ? m : true));
+      setShape(true);
       grewOnce.current = true;
       return;
     }
@@ -170,7 +181,7 @@ export default function Composer({
     const raw = el.scrollHeight;
     const measured = Math.min(raw, MAX);
     el.style.overflowY = raw > MAX ? 'auto' : 'hidden';
-    setMultiline(m => (m === ml ? m : ml));
+    setShape(ml);
     if (!animate || !grewOnce.current || Math.abs(prev - measured) < 1) {
       el.style.height = measured + 'px';
       grewOnce.current = true;
@@ -284,7 +295,6 @@ export default function Composer({
   const { parent: slashParent, items: slashShown } = matchSlash(slashCmds, value);
   const slashOpen = slashShown.length > 0;
   const runSlash = (c) => (c.items ? onChange('/' + c.word + ' ') : c.run());
-  useEffect(() => { setSlashIdx(0); }, [value, slashOpen]);
   const slashListRef = useRef(null);
   useEffect(() => { slashListRef.current?.children[slashIdx]?.scrollIntoView({ block: 'nearest' }); }, [slashIdx]);
 

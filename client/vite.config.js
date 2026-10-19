@@ -21,7 +21,7 @@ const bootScript = {
 export default defineConfig({
   plugins: [react(), bootScript],
   build: {
-    chunkSizeWarningLimit: 800,
+    chunkSizeWarningLimit: 1500,
     modulePreload: {
       resolveDependencies: (_file, deps) => deps.filter(d => !d.includes('/locale-')),
     },

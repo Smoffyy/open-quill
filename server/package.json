@@ -10,7 +10,7 @@
     "test": "node --test"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.133.0",
+    "@anthropic-ai/sdk": "^0.135.0",
     "@expo-google-fonts/noto-emoji": "^0.4.8",
     "@expo-google-fonts/noto-sans": "^0.4.2",
     "@expo-google-fonts/noto-sans-kr": "^0.4.4",
