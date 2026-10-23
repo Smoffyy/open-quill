@@ -2,8 +2,7 @@ import { db, getSetting } from '../db.js';
 import { roleOf } from './roles.js';
 import { memberContext, languageName } from './memberctx.js';
 import { docsVars } from './modeldocs.js';
-import { summarizeConversation, summaryMessages, oneShotAnswer } from '../llm/index.js';
-import { replayFieldOf } from './kwargs.js';
+import { summarizeConversation, summaryMessages, oneShotAnswer, replayField } from '../llm/index.js';
 import { activePath } from './tree.js';
 import { historyText } from './history.js';
 import { isTextLike, readUploadText, readImageDataUri, imageKind, imageMime } from './uploads.js';
@@ -30,7 +29,7 @@ export function styleTextFor(userId, styleId) {
 export function historyRows(chat, model) {
   const fresh = db.chats.byId(chat.id) || chat;
   const upto = fresh.summary && fresh.summary_upto ? fresh.summary_upto : 0;
-  const replay = !!replayFieldOf(model);
+  const replay = !!replayField(model);
   return activePath(chat.id).map(m => ({
     id: m.id,
     role: m.role,

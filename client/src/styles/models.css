@@ -493,6 +493,10 @@
 .mc-kw-more-toggle small { font-size: 12px; font-weight: 400; color: var(--cp-faint); }
 .mc-kw-adv { display: flex; flex-direction: column; gap: var(--cp-4); padding-top: var(--cp-3); }
 
+.mc-kw-simple { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--cp-2); }
+.mc-kw-simple .cp-select { min-width: 140px; }
+@media (max-width: 480px) { .mc-kw-simple { justify-content: flex-start; } }
+
 .mc-kw-start { display: flex; flex-direction: column; gap: var(--cp-3); }
 .mc-kw-presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--cp-2); }
 .mc-kw-preset {

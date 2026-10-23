@@ -1,6 +1,5 @@
 import { db, uid, now, getSetting } from '../../db.js';
-import { buildMessages, streamCompletion, generateTitle, resolveTitleModel, stripThink, canPrefill, refusePrefill, modelProvider } from '../../llm/index.js';
-import { replayFieldOf } from '../kwargs.js';
+import { buildMessages, streamCompletion, generateTitle, resolveTitleModel, stripThink, canPrefill, refusePrefill, modelProvider, replayField } from '../../llm/index.js';
 import { toCall, cutOffOf, livePreview, resolveToolName, SANDBOX_READONLY } from '../../tools/index.js';
 import { MAX_SILENT_RETRIES, SILENT_INSTRUCTION } from '../continuation.js';
 import { resumeTurn, createStitcher, isPrefillRefusal, fileStep, fileRest, joinFile, STOPPED_FILE, STOPPED_CALL } from '../resume.js';
@@ -55,7 +54,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   }
   const flags = toolState(chat, model, { sandboxOn, webSearchOn, canAsk: !!state?.interactive, plan });
   const promptOpts = { styleText, callMode, client };
-  const keepThinking = !!replayFieldOf(model);
+  const keepThinking = !!replayField(model);
   await ensureChatSidecars(chat.id);
   const history = chatHistory(chat, model, resume ? resume.id : null);
   const chatRow = db.chats.byId(chat.id) || chat;
@@ -818,7 +817,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       const said = settle(stripThink(model, stepText));
       inTurn = [
         ...inTurn,
-        { role: 'assistant', content: said, tool_calls: toolCalls.map(c => ({ id: c.id, name: c.name, argsText: c.argsText })), ...(toolBlocks?.length ? { blocks: toolBlocks } : {}), ...(keepThinking && stepReasoning.trim() ? { reasoning: stepReasoning.trim() } : {}) },
+        { role: 'assistant', content: said, tool_calls: toolCalls.map(c => ({ id: c.id, name: c.name, argsText: c.argsText, ...(c.extra ? { extra: c.extra } : {}) })), ...(toolBlocks?.length ? { blocks: toolBlocks } : {}), ...(keepThinking && stepReasoning.trim() ? { reasoning: stepReasoning.trim() } : {}) },
         ...toolMsgs
       ];
       if (loopGuard.note({ calls: toolCalls, ok: stepOk, failed: stepFailed, failKinds: stepFailKinds })) {

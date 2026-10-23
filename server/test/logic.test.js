@@ -813,7 +813,8 @@ test('stop sequences: split, trimmed, deduped and capped per provider', () => {
 test('samplingParams: stop is sent as a list, capped by the provider', () => {
   const six = 'a\nb\nc\nd\ne\nf';
   assert.deepEqual(samplingParams({ stop: six }, PROVIDER_TYPES.llamacpp).stop, ['a', 'b', 'c', 'd', 'e', 'f']);
-  assert.deepEqual(samplingParams({ stop: six }, PROVIDER_TYPES.openai).stop, ['a', 'b', 'c', 'd']);
+  assert.deepEqual(samplingParams({ stop: six }, PROVIDER_TYPES.gemini).stop, ['a', 'b', 'c', 'd']);
+  assert.equal('stop' in samplingParams({ stop: six }, PROVIDER_TYPES.openai), false, 'the Responses API has no stop sequences');
   assert.equal('stop' in samplingParams({ stop: '' }, PROVIDER_TYPES.llamacpp), false);
   assert.equal('stop' in samplingParams({ stop: '   \n  ' }, PROVIDER_TYPES.llamacpp), false);
   assert.equal('stop' in samplingParams({ stop: 'x' }, PROVIDER_TYPES.moonshot), true);

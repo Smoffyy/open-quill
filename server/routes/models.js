@@ -1,6 +1,7 @@
 import { db, uid, tx, getSetting, setSetting } from '../db.js';
 import { authMiddleware, adminOnly } from '../auth.js';
-import { getProviders, resolveProvider, providerSpec } from '../lib/providers.js';
+import { getProviders, resolveProvider, providerSpec, isLocalType } from '../lib/providers.js';
+import { cloudPreset, rememberListing, listingFor } from '../lib/cloudmodels.js';
 import { matchPreset, presetList, setCustomPresets, getCustomPresets } from '../lib/pricing.js';
 import { logAudit } from '../lib/audit.js';
 import { staged } from '../lib/releases.js';
@@ -141,6 +142,55 @@ function syncModels(req, plan, holders) {
   staged(req, 'models', { keys, rows: [...ids].map(id => db.models.byId(id)).filter(Boolean) });
 }
 
+async function fetchListing(prov) {
+  const { spec, base, key } = providerSpec(prov);
+  const headers = key ? { Authorization: `Bearer ${key}` } : {};
+  let ids;
+  let entries = null;
+  if (spec.protocol === 'anthropic') {
+    if (!key) return { status: 400, error: 'Add an API key to this connection first.' };
+    ids = (await listAnthropicModels({ base, key })).map(m => m.id);
+  } else if (spec.protocol === 'ollama') {
+    const r = await timedFetch(base.replace(/\/v1$/, '') + '/api/tags', { headers });
+    if (!r.ok) return { status: 502, error: `Backend returned ${r.status}.` };
+    const j = await r.json().catch(() => ({}));
+    ids = (Array.isArray(j?.models) ? j.models : []).map(x => x?.name || x?.model).filter(Boolean);
+  } else {
+    const r = await timedFetch(base + '/models', { headers });
+    if (!r.ok) return { status: 502, error: `Backend returned ${r.status}.` };
+    const j = await r.json().catch(() => ({}));
+    const raw = Array.isArray(j?.data) ? j.data : (Array.isArray(j?.models) ? j.models : []);
+    ids = raw.map(x => (typeof x === 'string' ? x : (x?.id || x?.name))).filter(Boolean);
+    entries = raw.filter(x => x && typeof x === 'object');
+  }
+  if (spec.modelPrefix) ids = ids.map(id => (String(id).startsWith(spec.modelPrefix) ? String(id).slice(spec.modelPrefix.length) : id));
+  if (entries) rememberListing(prov.id, entries);
+  return { ids: [...new Set(ids)] };
+}
+
+function capsSummary(preset) {
+  const effort = preset.kwargs.find(k => k.id === 'effort');
+  return {
+    reasoning: !!(preset.reasoning || preset.kwargs.length),
+    vision: !!preset.vision,
+    ctx: preset.ctx || 0,
+    efforts: effort ? effort.values : [],
+    thinking: preset.kwargs.some(k => k.id === 'thinking')
+  };
+}
+
+function presetFields(b, providerId) {
+  const prov = resolveProvider(providerId);
+  if (!prov || isLocalType(prov.type) || !b.internal_name) return {};
+  const preset = cloudPreset(prov.type, b.internal_name, listingFor(prov.id));
+  if (!preset) return {};
+  const out = {};
+  if (!('has_reasoning' in b)) out.has_reasoning = preset.reasoning ? 1 : 0;
+  if (!('has_vision' in b)) out.has_vision = preset.vision ? 1 : 0;
+  if (!('kwargs' in b)) out.kwargs = sanitizeKwargs(preset.kwargs);
+  return out;
+}
+
 function applyPatch(cur, patch) {
   if (patch.is_default === 1) for (const other of db.models.all()) if (other.id !== cur.id && other.is_default) db.models.update(other.id, { is_default: 0 });
   db.models.update(cur.id, patch);
@@ -164,31 +214,28 @@ export default function registerModelRoutes(app) {
   app.get('/api/admin/discover-models', authMiddleware, adminOnly, async (req, res) => {
     try {
       const prov = req.query.provider ? resolveProvider(req.query.provider) : getProviders()[0];
-      const { spec, base, key } = providerSpec(prov);
-      const headers = key ? { Authorization: `Bearer ${key}` } : {};
-      let ids = [];
-      if (spec.protocol === 'anthropic') {
-        if (!key) return res.status(400).json({ error: 'Add an API key to this connection first.' });
-        ids = (await listAnthropicModels({ base, key })).map(m => m.id);
-      } else if (spec.protocol === 'ollama') {
-        const r = await timedFetch(base.replace(/\/v1$/, '') + '/api/tags', { headers });
-        if (!r.ok) return res.status(502).json({ error: `Backend returned ${r.status}.` });
-        const j = await r.json().catch(() => ({}));
-        ids = (Array.isArray(j?.models) ? j.models : []).map(x => x?.name || x?.model).filter(Boolean);
-      } else {
-        const r = await timedFetch(base + '/models', { headers });
-        if (!r.ok) return res.status(502).json({ error: `Backend returned ${r.status}.` });
-        const j = await r.json().catch(() => ({}));
-        const raw = Array.isArray(j?.data) ? j.data : (Array.isArray(j?.models) ? j.models : []);
-        ids = raw.map(x => (typeof x === 'string' ? x : (x?.id || x?.name))).filter(Boolean);
-      }
-      if (spec.modelPrefix) ids = ids.map(id => (String(id).startsWith(spec.modelPrefix) ? String(id).slice(spec.modelPrefix.length) : id));
-      ids = [...new Set(ids)];
+      const found = await fetchListing(prov);
+      if (found.error) return res.status(found.status).json({ error: found.error });
+      const listing = listingFor(prov.id);
       const existing = new Set(db.models.all().map(m => (m.internal_name || '').toLowerCase()));
-      res.json({ models: ids.map(id => ({ id, added: existing.has(String(id).toLowerCase()) })) });
+      res.json({
+        models: found.ids.map(id => {
+          const caps = isLocalType(prov.type) ? null : cloudPreset(prov.type, id, listing);
+          return { id, added: existing.has(String(id).toLowerCase()), ...(caps ? { caps: capsSummary(caps) } : {}) };
+        })
+      });
     } catch {
       res.status(502).json({ error: 'Could not reach the backend. Check the Connection settings.' });
     }
+  });
+
+  app.get('/api/admin/models/recommended', authMiddleware, adminOnly, async (req, res) => {
+    const prov = resolveProvider(String(req.query.provider_id || ''));
+    const id = String(req.query.internal_name || '').trim();
+    if (!prov || !id || isLocalType(prov.type)) return res.json({ preset: null });
+    if (prov.type === 'openrouter' && !listingFor(prov.id)) await fetchListing(prov).catch(() => null);
+    const preset = cloudPreset(prov.type, id, listingFor(prov.id));
+    res.json({ preset: preset ? { ...preset, kwargs: sanitizeKwargs(preset.kwargs), summary: capsSummary(preset) } : null });
   });
 
   app.post('/api/admin/models', authMiddleware, adminOnly, (req, res) => {
@@ -196,12 +243,13 @@ export default function registerModelRoutes(app) {
     const b = req.body;
     const preset = matchPreset(b.internal_name || '');
     const look = presetById(draftGet('ui_preset', '')).model;
+    const providerId = b.provider_id || (getProviders()[0]?.id || null);
     const m = db.models.insert({
       id: uid(), display_name: b.display_name || 'New model', description: b.description || '',
       kind: b.kind === 'router' ? 'router' : 'model', router_rules: sanitizeRouterRules(b.router_rules), router_default: String(b.router_default || ''),
       internal_name: b.internal_name || 'local-model', system_prompt: b.system_prompt || '',
       call_prompt: b.call_prompt || '',
-      provider_id: b.provider_id || (getProviders()[0]?.id || null), max_tokens: parseInt(b.max_tokens) || null,
+      provider_id: providerId, max_tokens: parseInt(b.max_tokens) || null,
       has_reasoning: b.has_reasoning ? 1 : 0, reasoning_token: b.reasoning_token || '', non_reasoning_token: b.non_reasoning_token || '',
       kwargs: sanitizeKwargs(b.kwargs),
       effort_enabled: b.effort_enabled ? 1 : 0, effort_levels: Array.isArray(b.effort_levels) && b.effort_levels.length ? b.effort_levels : ['low', 'medium', 'high'], effort_default: b.effort_default || 'medium', effort_kwarg: b.effort_kwarg || 'reasoning_effort', effort_admin_only: b.effort_admin_only ? 1 : 0, hide_thinking: b.hide_thinking ? 1 : 0,
@@ -224,6 +272,7 @@ export default function registerModelRoutes(app) {
       icon_position: b.icon_position || look.icon_position,
       temperature: null, top_p: null, presence_penalty: null, frequency_penalty: null, repetition_penalty: null, min_p: null, top_k: null, seed: null,
       cost_in: preset ? preset.in : null, cost_out: preset ? preset.out : null,
+      ...presetFields(b, providerId),
       sort_order: max + 1, enabled: 1
     });
     const withBlocks = addBlocks(m.system_prompt || '', eligibleBlocks(m, draftFeatures()));

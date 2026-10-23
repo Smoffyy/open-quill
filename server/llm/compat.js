@@ -5,8 +5,10 @@ export const OPENAI_DROPPABLE = [
   'temperature', 'top_p', 'top_k', 'min_p', 'presence_penalty', 'frequency_penalty', 'repetition_penalty', 'repeat_penalty',
   'seed', 'stop', 'random_seed', 'stream_options', 'timings_per_token', 'return_progress', 'reasoning_effort',
   'dry_multiplier', 'dry_base', 'dry_allowed_length', 'dry_penalty_last_n', 'xtc_probability', 'xtc_threshold',
-  'mirostat', 'mirostat_tau', 'mirostat_eta'
+  'mirostat', 'mirostat_tau', 'mirostat_eta', 'verbosity'
 ];
+
+const PARAM_DROPPABLE = ['reasoning', 'text', 'include', 'thinking'];
 
 const RENAME = { __proto__: null, max_tokens: 'max_completion_tokens', max_completion_tokens: 'max_tokens' };
 
@@ -16,7 +18,7 @@ export function memoFor(base, id) {
   const key = String(base || '') + '|' + String(id || '');
   let m = memo.get(key);
   if (!m) {
-    m = { drop: new Set(), rename: new Map(), maxTokens: 0, noThinking: false, noPrefill: false };
+    m = { drop: new Set(), rename: new Map(), maxTokens: 0, noThinking: false, noPrefill: false, noSummary: false };
     memo.set(key, m);
     if (memo.size > MEMO_MAX) memo.delete(memo.keys().next().value);
   }
@@ -50,7 +52,7 @@ export function errorDetail(text) {
 export function rejectedOpenAiParam(text, body) {
   const { message, param } = errorDetail(text);
   const key = param.split('.')[0];
-  if (key && key in body && (RENAME[key] || OPENAI_DROPPABLE.includes(key))) return key;
+  if (key && key in body && (RENAME[key] || OPENAI_DROPPABLE.includes(key) || PARAM_DROPPABLE.includes(key))) return key;
   for (const k of [...Object.keys(RENAME), ...OPENAI_DROPPABLE]) {
     if (k in body && new RegExp("['\"`]" + k + "['\"`]|\\b" + k + '\\b').test(message)) return k;
   }
@@ -89,13 +91,13 @@ export function upstreamMessage(status, text) {
   return `Upstream error ${status}: ${lead ? lead + '. ' : ''}${message}`.trim();
 }
 
-export async function postWithRecovery({ url, headers, body, signal, mem, send }) {
+export async function postWithRecovery({ url, headers, body, signal, mem, send, fix = null }) {
   let current = applyOpenAiMemo(body, mem);
   for (let tries = 0; ; tries++) {
     const res = await send(url, { method: 'POST', headers, signal, body: JSON.stringify(current) });
     if (res.ok && res.body) return res;
     const text = await res.text().catch(() => '');
-    const next = tries < RETRIES ? fixOpenAiBody(res.status, text, current, mem) : null;
+    const next = tries < RETRIES ? ((fix && fix(res.status, text, current, mem)) || fixOpenAiBody(res.status, text, current, mem)) : null;
     if (!next) throw new Error(upstreamMessage(res.status, text));
     current = next;
   }

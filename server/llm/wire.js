@@ -14,9 +14,12 @@ export function wireToolCalls(protocol, calls) {
       arguments: protocol === 'ollama'
         ? (c.args ?? safeParse(c.argsText ?? c.function?.arguments) ?? {})
         : (typeof c.argsText === 'string' ? c.argsText : JSON.stringify(c.args ?? safeParse(c.function?.arguments) ?? {}))
-    }
+    },
+    ...(protocol !== 'ollama' && c.extra ? { extra_content: c.extra } : {})
   }));
 }
+
+const reasoningDetails = (m) => (Array.isArray(m.blocks) && m.blocks.some(b => String(b?.type || '').startsWith('reasoning.')) ? { reasoning_details: m.blocks } : {});
 
 function wireReasoning(protocol, m, field) {
   if (!field || m.role !== 'assistant' || !m.reasoning) return {};
@@ -27,7 +30,7 @@ export function normalizeMessages(protocol, messages, replayAs = '') {
   return messages.map(m => {
     if (m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length) {
       const calls = wireToolCalls(protocol, m.tool_calls);
-      return { role: 'assistant', content: (m.content && String(m.content).trim()) ? m.content : null, tool_calls: calls, ...wireReasoning(protocol, m, replayAs) };
+      return { role: 'assistant', content: (m.content && String(m.content).trim()) ? m.content : null, tool_calls: calls, ...wireReasoning(protocol, m, replayAs), ...(protocol === 'ollama' ? {} : reasoningDetails(m)) };
     }
     if (m.role === 'tool') {
       if (protocol === 'ollama') return { role: 'tool', tool_name: m.name || '', content: String(m.content ?? '') };

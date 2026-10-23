@@ -145,15 +145,43 @@ export function approxTokens(text) {
   return Math.round(String(text || '').length / APPROX_CHARS_PER_TOKEN);
 }
 
-export function tabsFor(models) {
+export function isCloudModel(m, providers, providerTypes) {
+  if (!m || m.kind === 'router') return false;
+  const conn = (providers || []).find(p => p.id === m.provider_id) || (providers || [])[0];
+  const type = conn ? providerTypes?.[conn.type] : null;
+  return !!type && !type.local;
+}
+
+const controlSig = (list) => JSON.stringify((Array.isArray(list) ? list : []).map(k => [k.id, k.name, (k.values || []).join(','), k.parentId || '']));
+
+export function presetPatch(preset) {
+  return { has_reasoning: preset.reasoning ? 1 : 0, has_vision: preset.vision ? 1 : 0, kwargs: preset.kwargs || [], effort_enabled: 0 };
+}
+
+export function presetApplied(m, preset) {
+  if (!m || !preset) return false;
+  return !!m.has_vision === !!preset.vision && !!m.has_reasoning === !!preset.reasoning && controlSig(m.kwargs) === controlSig(preset.kwargs);
+}
+
+export function reasoningSummary(summary) {
+  if (!summary) return '';
+  if (summary.efforts?.length > 1) return summary.efforts[0] + ' → ' + summary.efforts[summary.efforts.length - 1];
+  if (summary.thinking) return 'switch';
+  return summary.reasoning ? 'builtin' : '';
+}
+
+const hasValue = (m, keys) => keys.some(k => m[k] != null && m[k] !== '');
+
+export function tabsFor(models, { simple = false } = {}) {
   const any = (fn) => models.some(fn);
   const answers = any(m => m.kind !== 'router');
   const shown = ['general'];
   const optional = [];
   if (answers) shown.push('prompts', 'tools');
-  if (answers) optional.push('reasoning', 'controls');
-  if (answers && any(reasons)) shown.push('reasoning');
-  if (answers) shown.push('context', 'sampling');
+  if (answers) optional.push('reasoning', 'controls', ...(simple ? ['context', 'sampling'] : []));
+  if (answers && !simple && any(reasons)) shown.push('reasoning');
+  if (answers && (!simple || any(m => Number(m.num_ctx) > 0))) shown.push('context');
+  if (answers && (!simple || any(m => hasValue(m, TAB_FIELDS.sampling)))) shown.push('sampling');
   if (answers && any(m => (Array.isArray(m.kwargs) && m.kwargs.length) || m.effort_enabled)) shown.push('controls');
   shown.push('appearance');
   if (any(m => m.kind === 'router')) shown.push('routing');

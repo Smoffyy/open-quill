@@ -5,7 +5,7 @@ import { Faces } from '../changes/Review.jsx';
 import { X, Cube, ChevDown, Check } from '../../ui/icons.jsx';
 import { ModelMark } from '../../ui/Weave.jsx';
 import { t, tk } from '../../../i18n.jsx';
-import { tabsFor, tabChanges } from '../../../lib/modelcatalog.js';
+import { tabsFor, tabChanges, isCloudModel } from '../../../lib/modelcatalog.js';
 import { EditorProvider } from './bind.jsx';
 import General from './tabs/General.jsx';
 import Prompts from './tabs/Prompts.jsx';
@@ -38,7 +38,9 @@ const TABS = [
 const OPTIONAL_NOTE = {
   __proto__: null,
   reasoning: tk('Thought display, think tags and prompt tokens'),
-  controls: tk('Extra request fields and picker controls')
+  controls: tk('Extra request fields and picker controls'),
+  context: tk('Window size and how much history is kept'),
+  sampling: tk('Temperature, top P and the output cap')
 };
 
 function readAdded() {
@@ -116,7 +118,9 @@ export default function Inspector({ models, onDismiss }) {
 
   const ids = models.map(m => m.id);
   const key = ids.join(',');
-  const { shown, optional } = tabsFor(models);
+  const answering = models.filter(m => m.kind !== 'router');
+  const simple = answering.length > 0 && answering.every(m => isCloudModel(m, catalog.providers, catalog.providerTypes));
+  const { shown, optional } = tabsFor(models, { simple });
   const extra = optional.filter(id => models.some(m => added[m.id]?.includes(id)));
   const counts = tabChanges(models, draft.live);
   const inUse = (id) => shown.includes(id) || counts[id] > 0;
@@ -161,7 +165,7 @@ export default function Inspector({ models, onDismiss }) {
         </div>
       </header>
       <div id={panelId} role="tabpanel" className="mc-inspector-body">
-        <EditorProvider models={models} edit={edit}>
+        <EditorProvider models={models} edit={edit} simple={simple}>
           <View key={key} />
         </EditorProvider>
       </div>

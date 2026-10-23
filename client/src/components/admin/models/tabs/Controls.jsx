@@ -573,6 +573,70 @@ function Presets({ onPick }) {
   );
 }
 
+const DETAILED_KEY = 'oq-controls-detailed';
+
+function readDetailed() {
+  try { return localStorage.getItem(DETAILED_KEY) === '1'; } catch { return false; }
+}
+
+const AUDIENCE = [
+  { value: 'all', label: tk('Everyone') },
+  { value: 'admins', label: tk('Admins') },
+  { value: 'fixed', label: tk('Nobody') }
+];
+
+const audienceOf = (def) => (!def.visible ? 'fixed' : def.adminOnly ? 'admins' : 'all');
+const AUDIENCE_PATCH = {
+  __proto__: null,
+  all: { visible: true, adminOnly: false },
+  admins: { visible: true, adminOnly: true },
+  fixed: { visible: false }
+};
+
+const valueLabel = (v) => {
+  const s = String(v);
+  return s.charAt(0).toUpperCase() + s.slice(1);
+};
+
+function SimpleRow({ def, patch }) {
+  const toggle = kwargKind(def) === 'toggle';
+  const values = kwargValuesArr(def);
+  const current = defaultValueOf(def);
+  return (
+    <Row label={titleOf(def)} note={def.description || null} wide>
+      <div className="mc-kw-simple">
+        {toggle ? (
+          <Switch on={current === trueValueOf(def)} label={t('On by default')}
+            onToggle={() => patch({ default: current === trueValueOf(def) ? falseValueOf(def) : trueValueOf(def) })} />
+        ) : (
+          <Select label={t('Default')} value={current} onChange={(v) => patch({ default: v })}
+            options={values.map(v => ({ value: v, label: valueLabel(v) }))} />
+        )}
+        <Seg label={t('Who can change it')} value={audienceOf(def)} onChange={(v) => patch(AUDIENCE_PATCH[v])}
+          options={AUDIENCE.map(o => ({ value: o.value, label: t(o.label) }))} />
+      </div>
+    </Row>
+  );
+}
+
+function SimpleControls({ defs, put, onDetailed }) {
+  const top = defs.filter(d => !d.parentId && !isRange(d));
+  const complex = defs.some(d => !d.parentId && isRange(d));
+  return (
+    <Card title={<CardMark label={t('Request controls')} k="kwargs" />}
+      sub={t('The settings members can change for this model in the picker. They were set up from what the provider supports; pick the default and who may change each one.')}
+      actions={<Btn size="sm" kind="quiet" onClick={onDetailed}>{t('Detailed editor')}</Btn>}>
+      {top.length === 0
+        ? <p className="cp-note-line">{complex ? t('This model uses controls only the detailed editor can show.') : t('This model has no settings for members to change.')}</p>
+        : (
+          <Rows>
+            {top.map(def => <SimpleRow key={def.id} def={def} patch={(p) => put(defs.map(d => (d.id === def.id ? { ...d, ...p } : d)))} />)}
+          </Rows>
+        )}
+    </Card>
+  );
+}
+
 function TryIt({ defs, name }) {
   const [picked, setPicked] = useState({});
   const [asAdmin, setAsAdmin] = useState(false);
@@ -617,12 +681,18 @@ function TryIt({ defs, name }) {
 }
 
 export default function Controls() {
-  const { single, edit } = useEditor();
+  const { single, edit, simple } = useEditor();
   const { value, mixed } = useField('kwargs');
   const change = useChange('kwargs');
   const [open, setOpen] = useState(null);
   const [menu, setMenu] = useState(null);
+  const [detailed, setDetailed] = useState(readDetailed);
   const defs = Array.isArray(value) ? value : [];
+
+  function showDetailed(on) {
+    setDetailed(on);
+    try { localStorage.setItem(DETAILED_KEY, on ? '1' : '0'); } catch {}
+  }
 
   const put = (list) => edit({ kwargs: list });
   const patch = (id, p) => put(defs.map(d => (d.id === id ? { ...d, ...p } : d)));
@@ -657,19 +727,28 @@ export default function Controls() {
 
   const legacy = single && !!single.effort_enabled && !defs.length;
 
+  if (simple && !detailed && !mixed && !legacy) {
+    return <SimpleControls defs={defs} put={put} onDetailed={() => showDetailed(true)} />;
+  }
+
   return (
     <>
       <Card title={<CardMark label={t('Request controls')} k="kwargs" />} className={change.changed ? 'mc-changed' : undefined}
         sub={t('Extra fields sent with every request to this model, and the controls members get for them in the model picker.')}
-        actions={!mixed && defs.length > 0 && (
-          <Btn size="sm" aria-haspopup="menu" aria-expanded={!!menu}
-            onClick={(e) => {
-              if (menu) { setMenu(null); return; }
-              const r = e.currentTarget.getBoundingClientRect();
-              setMenu({ at: clampToViewport(r.right - MENU_W, r.bottom + 4, MENU_W, MENU_H), el: e.currentTarget });
-            }}>
-            <Plus /> {t('Add control')}
-          </Btn>
+        actions={(simple || (!mixed && defs.length > 0)) && (
+          <>
+            {simple && <Btn size="sm" kind="quiet" onClick={() => showDetailed(false)}>{t('Simple view')}</Btn>}
+            {!mixed && defs.length > 0 && (
+              <Btn size="sm" aria-haspopup="menu" aria-expanded={!!menu}
+                onClick={(e) => {
+                  if (menu) { setMenu(null); return; }
+                  const r = e.currentTarget.getBoundingClientRect();
+                  setMenu({ at: clampToViewport(r.right - MENU_W, r.bottom + 4, MENU_W, MENU_H), el: e.currentTarget });
+                }}>
+                <Plus /> {t('Add control')}
+              </Btn>
+            )}
+          </>
         )}>
         {mixed ? (
           <Note>{t('The selected models send different request controls. Pick one set from Mixed to give all of them the same controls.')}</Note>

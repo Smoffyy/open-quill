@@ -7,6 +7,33 @@ import { stripNestedKwargs, replayFieldOf } from '../lib/kwargs.js';
 import { streamAnthropic } from './anthropic.js';
 import { memoFor, postWithRecovery, upstreamMessage } from './compat.js';
 import { queueKey, inLine } from './slots.js';
+import { buildResponsesBody, fixResponsesBody, responsesHandler } from './responses.js';
+
+export function replayField(model) {
+  return replayFieldOf(model) || modelProvider(model).spec.replay || '';
+}
+
+export function chunkText(parts, type) {
+  if (typeof parts === 'string') return parts;
+  if (!Array.isArray(parts)) return '';
+  return parts.map(p => {
+    if (!p || p.type !== type) return '';
+    const v = p[type];
+    return typeof v === 'string' ? v : chunkText(v, 'text');
+  }).join('');
+}
+
+function mergeDetails(into, list) {
+  for (const d of list) {
+    if (!d || typeof d.type !== 'string') continue;
+    const at = Number.isInteger(d.index) ? into.find(x => x.index === d.index && x.type === d.type) : null;
+    if (!at) { into.push({ ...d }); continue; }
+    for (const k of ['text', 'summary', 'data']) if (typeof d[k] === 'string') at[k] = (at[k] || '') + d[k];
+    for (const [k, v] of Object.entries(d)) if (!['text', 'summary', 'data'].includes(k) && v != null) at[k] = v;
+  }
+}
+
+const detailText = (list) => list.map(d => (d.type === 'reasoning.text' ? d.text : d.type === 'reasoning.summary' ? d.summary : '') || '').join('');
 
 async function assertOk(res) {
   if (!res.ok || !res.body) { const t = await res.text().catch(() => ''); throw new Error(upstreamMessage(res.status, t)); }
@@ -72,9 +99,8 @@ async function streamDirect({ model, messages, tools, signal, onEvent }) {
   const { spec, base, key } = modelProvider(model);
   if (spec.protocol === 'anthropic') return streamAnthropic({ model, spec, base, key, messages, tools, signal, onEvent });
   const hasTools = Array.isArray(tools) && tools.length > 0;
-  const wire = normalizeMessages(spec.protocol, messages, replayFieldOf(model));
-  const fill = prefillWire(spec, messages, wire);
   const pending = new Map();
+  const details = [];
   let callSeq = 0;
   const nonce = Math.random().toString(36).slice(2, 8);
   const toolNames = new Set(hasTools ? tools.map(t => t && t.function && t.function.name).filter(Boolean) : []);
@@ -92,7 +118,7 @@ async function streamDirect({ model, messages, tools, signal, onEvent }) {
     if (pending.size) {
       const calls = [...pending.entries()].sort((a, b) => a[0] - b[0]).map(([, c]) => c).filter(c => c.name);
       pending.clear();
-      if (calls.length) { textCalls.length = 0; onEvent({ type: 'tool_calls', calls }); return; }
+      if (calls.length) { textCalls.length = 0; onEvent({ type: 'tool_calls', calls, ...(details.length ? { blocks: details } : {}) }); return; }
     }
     if (textCalls.length) onEvent({ type: 'tool_calls', calls: textCalls.splice(0, textCalls.length) });
   };
@@ -101,6 +127,34 @@ async function streamDirect({ model, messages, tools, signal, onEvent }) {
     await pumpLines(res, handle, () => { flush(); if (!failure) finishCalls(); });
     if (failure) throw new Error(failure);
   };
+
+  if (spec.protocol === 'responses') {
+    const mem = memoFor(base, model.internal_name);
+    const res = await postWithRecovery({
+      url: endpoint(base, '/responses'), headers: authHeaders(key), signal, send: providerFetch, mem, fix: fixResponsesBody,
+      body: buildResponsesBody(model, spec, { messages, tools, kwargs: requestKwargs(model), mem })
+    });
+    const rh = responsesHandler({ emitContent, emitReasoning, onEvent, nonce });
+    const handle = (line) => {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('data:')) return false;
+      const data = trimmed.slice(5).trim();
+      if (data === '[DONE]') return true;
+      try { return rh.handle(JSON.parse(data)); } catch { return false; }
+    };
+    await pumpLines(res, handle, () => {
+      flush();
+      if (rh.state.failure) return;
+      const calls = rh.calls();
+      if (calls.length) { textCalls.length = 0; onEvent({ type: 'tool_calls', calls, blocks: rh.blocks() }); }
+      else if (textCalls.length) onEvent({ type: 'tool_calls', calls: textCalls.splice(0, textCalls.length) });
+    });
+    if (rh.state.failure) throw new Error(rh.state.failure);
+    return;
+  }
+
+  const wire = normalizeMessages(spec.protocol, messages, replayField(model));
+  const fill = prefillWire(spec, messages, wire);
 
   if (spec.protocol === 'ollama') {
     const res = await providerFetch(endpoint(base, '/api/chat'), {
@@ -161,15 +215,28 @@ async function streamDirect({ model, messages, tools, signal, onEvent }) {
       const fin = json.choices?.[0]?.finish_reason;
       if (fin) onEvent({ type: 'finish', reason: String(fin) });
       const delta = json.choices?.[0]?.delta || {};
+      const said = typeof delta.reasoning === 'string' && delta.reasoning;
       if (delta.reasoning_content) emitReasoning(delta.reasoning_content);
-      if (typeof delta.reasoning === 'string' && delta.reasoning) emitReasoning(delta.reasoning);
-      if (delta.content) emitContent(delta.content);
+      if (said) emitReasoning(said);
+      if (Array.isArray(delta.reasoning_details)) {
+        mergeDetails(details, delta.reasoning_details);
+        const shown = !said && !delta.reasoning_content && detailText(delta.reasoning_details);
+        if (shown) emitReasoning(shown);
+      }
+      if (typeof delta.content === 'string') { if (delta.content) emitContent(delta.content); }
+      else if (Array.isArray(delta.content)) {
+        const thought = chunkText(delta.content, 'thinking');
+        const text = chunkText(delta.content, 'text');
+        if (thought) emitReasoning(thought);
+        if (text) emitContent(text);
+      }
       if (Array.isArray(delta.tool_calls)) {
         for (const tc of delta.tool_calls) {
           const idx = Number.isInteger(tc.index) ? tc.index : callSeq;
           let cur = pending.get(idx);
           if (!cur) { cur = { id: `call_${nonce}_${idx}`, name: '', argsText: '' }; pending.set(idx, cur); callSeq = Math.max(callSeq, idx + 1); }
           if (tc.id) cur.id = tc.id;
+          if (tc.extra_content && typeof tc.extra_content === 'object') cur.extra = tc.extra_content;
           const nm = tc.function?.name;
           if (nm) { if (!cur.name) cur.name = nm; else if (cur.name !== nm) cur.name += nm; }
           const a = tc.function?.arguments;

@@ -5,7 +5,8 @@ import { oneShotAnthropic } from './anthropic.js';
 import { memoFor, postWithRecovery } from './compat.js';
 import { queueKey, inLine } from './slots.js';
 import { normalizeMessages } from './wire.js';
-import { prefillWire } from './stream.js';
+import { prefillWire, chunkText } from './stream.js';
+import { buildResponsesBody, fixResponsesBody, responsesText, usageOf as responsesUsage } from './responses.js';
 
 const ONESHOT_TIMEOUT = 120000;
 
@@ -40,6 +41,19 @@ async function oneShotDirect(model, messages, signal, maxTokens) {
     const json = await res.json();
     return { text: json.message?.content?.trim() || '', usage: usageOf(json.prompt_eval_count, json.eval_count) };
   }
+  if (spec.protocol === 'responses') {
+    const mem = memoFor(base, model.internal_name);
+    let res;
+    try {
+      res = await postWithRecovery({
+        url: endpoint(base, '/responses'), headers: authHeaders(key), mem, fix: fixResponsesBody,
+        send: (url, init) => post(url, init, signal),
+        body: buildResponsesBody(model, spec, { messages, kwargs: oneShotKwargPayload(model), mem, stream: false, maxTokens })
+      });
+    } catch { return { text: '', usage: null }; }
+    const json = await res.json().catch(() => ({}));
+    return { text: responsesText(json), usage: json.usage ? responsesUsage(json.usage) : null };
+  }
   const wire = normalizeMessages(spec.protocol, messages);
   const fill = prefillWire(spec, messages, wire);
   let res;
@@ -51,7 +65,7 @@ async function oneShotDirect(model, messages, signal, maxTokens) {
     });
   } catch { return { text: '', usage: null }; }
   const json = await res.json().catch(() => ({}));
-  return { text: json.choices?.[0]?.message?.content?.trim() || '', usage: json.usage ? { ...usageOf(json.usage.prompt_tokens, json.usage.completion_tokens), cacheRead: json.usage.prompt_tokens_details?.cached_tokens || 0, cacheWrite: 0 } : null };
+  return { text: chunkText(json.choices?.[0]?.message?.content, 'text').trim(), usage: json.usage ? { ...usageOf(json.usage.prompt_tokens, json.usage.completion_tokens), cacheRead: json.usage.prompt_tokens_details?.cached_tokens || 0, cacheWrite: 0 } : null };
 }
 
 export async function oneShot(model, messages) {

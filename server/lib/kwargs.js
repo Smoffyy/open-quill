@@ -7,7 +7,8 @@ const BUDGET_KWARG = 'reasoning_budget_tokens';
 
 const MAX_KWARGS = 24;
 const MAX_VALUES = 24;
-const RESERVED_BODY_KEYS = new Set(['model', 'messages', 'stream', 'stream_options', 'tools', 'tool_choice', 'chat_template_kwargs', 'extra_body']);
+const RESERVED_BODY_KEYS = new Set(['model', 'messages', 'input', 'stream', 'stream_options', 'tools', 'tool_choice', 'chat_template_kwargs', 'extra_body']);
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 const text = (v, max) => String(v == null ? '' : v).slice(0, max);
 const slug = (v, max) => text(v, max).trim();
@@ -275,12 +276,19 @@ function isSent(defs, values, d) {
 }
 
 function placeKwarg(out, target, name, val) {
-  if (target === 'body') {
-    if (!RESERVED_BODY_KEYS.has(name)) out[name] = val;
-    return;
+  const path = String(name).split('.').filter(Boolean);
+  if (!path.length || path.some(k => UNSAFE_KEYS.has(k))) return;
+  if (target === 'body' && RESERVED_BODY_KEYS.has(path[0])) return;
+  let at = out;
+  if (target !== 'body') {
+    if (!out[target] || typeof out[target] !== 'object') out[target] = {};
+    at = out[target];
   }
-  if (!out[target] || typeof out[target] !== 'object') out[target] = {};
-  out[target][name] = val;
+  for (const key of path.slice(0, -1)) {
+    if (!at[key] || typeof at[key] !== 'object') at[key] = {};
+    at = at[key];
+  }
+  at[path[path.length - 1]] = val;
 }
 
 export function kwargPayload(defs, values) {

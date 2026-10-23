@@ -4,7 +4,7 @@ import { groupChanges, valueOf, lineDiff, isMine, othersIn, areaOf } from '../sr
 import {
   flagOn, folderOf, folderPatch, folderNames, layout, displayOrder, planMove, nudge,
   rangeIds, matches, STATUS, shared, variants, applyText, reasons, tabsFor, revertPatch, publishedOrder, norm,
-  tabChanges, folderChanged, orderChanged, LEVELS, usesTools
+  tabChanges, folderChanged, orderChanged, LEVELS, usesTools, isCloudModel, presetApplied, presetPatch, reasoningSummary
 } from '../src/lib/modelcatalog.js';
 import {
   docsConfig, docsTree, docsSearch, parseDocsPath, docsPath, fmtTokens, fmtPrice, priceRange,
@@ -171,6 +171,36 @@ test('tabs follow what the selection actually uses', () => {
   assert.ok(reasons({ reasoning_collapsible: 0 }));
   assert.ok(!reasons({ kwargs: [{ name: 'top_k' }] }));
   assert.deepEqual(tabsFor([{ id: 'r', kind: 'router' }]), { shown: ['general', 'appearance', 'routing'], optional: [] });
+});
+
+test('a cloud model gets the short editor, and anything already set keeps its tab', () => {
+  const providers = [{ id: 'p1', type: 'openai' }, { id: 'p2', type: 'llamacpp' }];
+  const types = { openai: { local: false }, llamacpp: { local: true } };
+  assert.equal(isCloudModel({ provider_id: 'p1' }, providers, types), true);
+  assert.equal(isCloudModel({ provider_id: 'p2' }, providers, types), false);
+  assert.equal(isCloudModel({ provider_id: 'gone' }, providers, types), true, 'a missing connection falls back to the first one, as the server does');
+  assert.equal(isCloudModel({ kind: 'router' }, providers, types), false);
+  const cloud = { id: 'c', kwargs: [{ id: 'effort', name: 'reasoning_effort' }] };
+  const simple = tabsFor([cloud], { simple: true });
+  assert.deepEqual(simple.shown, ['general', 'prompts', 'tools', 'controls', 'appearance'], 'no think tags, prompt tokens or samplers up front');
+  assert.deepEqual(simple.optional, ['reasoning', 'controls', 'context', 'sampling']);
+  assert.ok(tabsFor([{ ...cloud, temperature: 0 }], { simple: true }).shown.includes('sampling'), 'a temperature of 0 is a setting');
+  assert.ok(tabsFor([{ ...cloud, num_ctx: 64000 }], { simple: true }).shown.includes('context'));
+  assert.ok(tabsFor([cloud]).shown.includes('reasoning'), 'local models keep the full editor');
+});
+
+test('a recommended setup is recognised once applied, and summarised for the lists', () => {
+  const preset = { vision: true, reasoning: false, kwargs: [{ id: 'effort', name: 'reasoning_effort', values: ['low', 'high'] }] };
+  const m = { has_vision: 0, kwargs: [] };
+  assert.equal(presetApplied(m, preset), false);
+  const applied = { ...m, ...presetPatch(preset) };
+  assert.deepEqual([applied.has_vision, applied.has_reasoning, applied.effort_enabled], [1, 0, 0]);
+  assert.equal(presetApplied(applied, preset), true);
+  assert.equal(presetApplied({ ...applied, kwargs: [{ ...preset.kwargs[0], default: 'high', label: 'Mine' }] }, preset), true, 'a changed default or label still counts as the same setup');
+  assert.equal(reasoningSummary({ efforts: ['low', 'medium', 'max'] }), 'low → max');
+  assert.equal(reasoningSummary({ efforts: [], thinking: true }), 'switch');
+  assert.equal(reasoningSummary({ efforts: [], reasoning: true }), 'builtin');
+  assert.equal(reasoningSummary({ efforts: [] }), '');
 });
 
 test('reverting restores the published value and order, folder pair and inverted flags included', () => {

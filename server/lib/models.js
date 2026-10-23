@@ -2,6 +2,7 @@ import { db, getSetting, setSetting } from '../db.js';
 import { badgesOf } from './badges.js';
 import { resolveProvider, providerSpec } from './providers.js';
 import { publicKwargDefs } from './kwargs.js';
+import { catalogCtx, listingFor } from './cloudmodels.js';
 import { llamaContext } from './llamacpp.js';
 import { anthropicModelInfo } from '../llm/index.js';
 
@@ -251,7 +252,12 @@ export async function modelCtx(model) {
   const llama = await llamaContext(model);
   if (llama > 0) { rememberCtx(model, llama); return llama; }
   const prov = resolveProvider(model.provider_id);
-  if (!prov || !CTX_AUTO_TYPES.has(prov.type)) return 0;
+  if (!prov) return 0;
+  if (!CTX_AUTO_TYPES.has(prov.type)) {
+    const known = catalogCtx(prov.type, model.internal_name, listingFor(prov.id));
+    rememberCtx(model, known);
+    return known;
+  }
   const cacheKey = prov.id + ':' + (model.internal_name || '');
   const ttl = CTX_LOADED_TYPES.has(prov.type) ? CTX_LOADED_MS : CTX_CACHE_MS;
   const hit = ctxDetectCache.get(cacheKey);

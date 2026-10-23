@@ -12,7 +12,8 @@ export function replayValuesOf(def) {
   return kwargValuesArr(def);
 }
 
-const RESERVED_BODY_KEYS = new Set(['model', 'messages', 'stream', 'stream_options', 'tools', 'tool_choice', 'chat_template_kwargs', 'extra_body']);
+const RESERVED_BODY_KEYS = new Set(['model', 'messages', 'input', 'stream', 'stream_options', 'tools', 'tool_choice', 'chat_template_kwargs', 'extra_body']);
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 export const isBoolPair = (values) =>
   Array.isArray(values) && values.length === 2 &&
@@ -207,12 +208,19 @@ export function coerceKwargValue(value, type) {
 }
 
 function placeKwarg(out, target, name, val) {
-  if (target === 'body') {
-    if (!RESERVED_BODY_KEYS.has(name)) out[name] = val;
-    return;
+  const path = String(name).split('.').filter(Boolean);
+  if (!path.length || path.some(k => UNSAFE_KEYS.has(k))) return;
+  if (target === 'body' && RESERVED_BODY_KEYS.has(path[0])) return;
+  let at = out;
+  if (target !== 'body') {
+    if (!out[target] || typeof out[target] !== 'object') out[target] = {};
+    at = out[target];
   }
-  if (!out[target] || typeof out[target] !== 'object') out[target] = {};
-  out[target][name] = val;
+  for (const key of path.slice(0, -1)) {
+    if (!at[key] || typeof at[key] !== 'object') at[key] = {};
+    at = at[key];
+  }
+  at[path[path.length - 1]] = val;
 }
 
 export function kwargPayload(defs, values) {

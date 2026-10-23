@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { mockAnthropic, mockOpenAi, anthropicTurn } from './mockapis.js';
+import { mockAnthropic, mockOpenAi, mockResponses, anthropicTurn } from './mockapis.js';
 
 const SERVER_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const DB_DIR = path.join(SERVER_ROOT, 'data', 'databases', 'oqprovtest');
@@ -34,6 +34,12 @@ async function anthropic(opts) {
 
 async function openai(opts) {
   const m = await mockOpenAi(opts);
+  mocks.push(m);
+  return m;
+}
+
+async function responses(opts) {
+  const m = await mockResponses(opts);
   mocks.push(m);
   return m;
 }
@@ -268,16 +274,101 @@ test('one-shot calls, model listing and context detection work against Anthropic
   assert.deepEqual(await anthropicModelInfo({ base: mock.url, key: 'sk-ant-test' }, 'claude-mock-2'), { context: 1000000, maxOutput: 128000 });
 });
 
-test('OpenAI streams text, parallel tool calls and usage', async () => {
+const stepMessage = (r) => ({
+  role: 'assistant', content: r.text,
+  tool_calls: r.calls.calls.map(c => ({ id: c.id, name: c.name, argsText: c.argsText, ...(c.extra ? { extra: c.extra } : {}) })),
+  ...(r.calls.blocks?.length ? { blocks: r.calls.blocks } : {}),
+  ...(r.reasoning ? { reasoning: r.reasoning } : {})
+});
+
+test('OpenAI streams reasoning summaries, text, parallel tool calls and cached usage on the Responses API', async () => {
+  const mock = await responses({
+    efforts: { 'gpt-5.5': ['none', 'low', 'medium', 'high', 'xhigh'] },
+    respond: (body) => (body.input.some(it => it.type === 'function_call_output')
+      ? { text: 'Both done.', usage: { input_tokens: 900, output_tokens: 20 }, cached: 600 }
+      : { reasoning: 'Two sums, one call each.', summaryParts: 2, text: 'Checking.', tools: [{ id: 'call_x', name: 'calculator', input: { expression: '1+1' } }, { id: 'call_y', name: 'calculator', input: { expression: '2+2' } }] })
+  });
+  const model = { provider_id: useProvider('openai', mock.url, 'sk-test'), internal_name: 'gpt-5.5', max_tokens: 500, resolved_kwargs: { reasoning_effort: 'high' } };
+  const image = { type: 'image_url', image_url: { url: 'data:image/png;base64,AAAA' } };
+  const r = await run(model, [{ role: 'system', content: 'Sys' }, { role: 'user', content: [{ type: 'text', text: 'go' }, image] }], { tools: [CALC_TOOL] });
+  const body = mock.requests[0].body;
+  assert.equal(mock.requests[0].rejected, undefined, mock.requests[0].rejected);
+  assert.equal(body.max_output_tokens, 500);
+  assert.deepEqual(body.reasoning, { effort: 'high', summary: 'auto' });
+  assert.equal(body.store, false);
+  assert.deepEqual(body.input[1].content, [{ type: 'input_text', text: 'go' }, { type: 'input_image', image_url: 'data:image/png;base64,AAAA' }]);
+  assert.deepEqual(body.tools[0], { type: 'function', name: 'calculator', description: 'Evaluate maths', parameters: CALC_TOOL.function.parameters, strict: false });
+  assert.equal(r.reasoning, 'Two sums, on\n\ne call each.', 'summary parts are kept apart');
+  assert.equal(r.text, 'Checking.');
+  assert.equal(r.finish, 'tool_calls');
+  assert.deepEqual(r.calls.calls.map(c => [c.id, JSON.parse(c.argsText).expression]), [['call_x', '1+1'], ['call_y', '2+2']]);
+  assert.deepEqual(r.calls.blocks.map(b => b.type), ['reasoning', 'function_call', 'function_call']);
+  const next = await run(model, [
+    { role: 'user', content: 'go' },
+    stepMessage(r),
+    { role: 'tool', tool_call_id: 'call_x', content: '2' },
+    { role: 'tool', tool_call_id: 'call_y', content: '4' }
+  ], { tools: [CALC_TOOL] });
+  assert.equal(mock.requests[1].rejected, undefined, mock.requests[1].rejected);
+  assert.deepEqual(mock.requests[1].body.input.map(it => it.type || it.role), ['user', 'assistant', 'reasoning', 'function_call', 'function_call', 'function_call_output', 'function_call_output']);
+  assert.equal(next.text, 'Both done.');
+  assert.deepEqual(next.usage, { prompt: 900, completion: 20, total: 920, cacheRead: 600, cacheWrite: 0 });
+});
+
+test('a Responses history with a lost call or result is repaired instead of refused', async () => {
+  const { toResponsesInput } = await import('../llm/responses.js');
+  const items = toResponsesInput([
+    { role: 'user', content: 'go' },
+    { role: 'assistant', content: '', tool_calls: [{ id: 'call_a', name: 'calculator', argsText: '{}' }] },
+    { role: 'tool', tool_call_id: 'call_gone', content: 'orphan' },
+    { role: 'user', content: '' }
+  ]);
+  assert.deepEqual(items.map(it => it.type || it.role), ['user', 'function_call', 'function_call_output', 'user']);
+  assert.equal(items[2].call_id, 'call_a');
+  assert.equal(items[3].content, 'Tool result: orphan');
+});
+
+test('Responses refusals are recovered: an effort the model rejects, an unverified summary, stale reasoning', async () => {
+  const mock = await responses({
+    efforts: { 'gpt-6-astra': ['low', 'medium', 'high', 'xhigh', 'max'] },
+    rejects: { 'gpt-6-sol': { 'reasoning.summary': 'Your organization must be verified to generate reasoning summaries.' } },
+    respond: () => ({ text: 'fine' })
+  });
+  const provider_id = useProvider('openai', mock.url, 'sk-test');
+  const astra = await run({ provider_id, internal_name: 'gpt-6-astra', resolved_kwargs: { reasoning_effort: 'none' } }, [{ role: 'user', content: 'x' }]);
+  assert.equal(astra.text, 'fine');
+  assert.equal(mock.requests.at(-1).body.reasoning, undefined, 'an effort the model refuses is dropped so the turn still answers');
+  const sol = { provider_id, internal_name: 'gpt-6-sol', resolved_kwargs: { reasoning_effort: 'high' } };
+  assert.equal((await run(sol, [{ role: 'user', content: 'x' }])).text, 'fine');
+  assert.deepEqual(mock.requests.at(-1).body.reasoning, { effort: 'high' }, 'the effort survives, only the summary goes');
+  const before = mock.requests.length;
+  await run(sol, [{ role: 'user', content: 'x' }]);
+  assert.equal(mock.requests.length, before + 1, 'and that is remembered');
+  const stale = await run({ provider_id, internal_name: 'gpt-5.5' }, [
+    { role: 'user', content: 'go' },
+    { role: 'assistant', content: '', tool_calls: [{ id: 'call_s', name: 'calculator', argsText: '{}' }], blocks: [{ type: 'reasoning', id: 'rs_unknown', summary: [], encrypted_content: 'enc_old' }, { type: 'function_call', call_id: 'call_s' }] },
+    { role: 'tool', tool_call_id: 'call_s', content: '1' }
+  ], { tools: [CALC_TOOL] });
+  assert.equal(stale.text, 'fine', 'reasoning the provider can no longer verify is left out');
+});
+
+test('a Responses reply that runs out of room is truncated, and a failed one fails the step', async () => {
+  const mock = await responses({ respond: (body) => (body.model === 'cut' ? { text: 'half', incomplete: 'max_output_tokens' } : { text: 'x', streamError: 'The server had an error while processing your request.' }) });
+  const provider_id = useProvider('openai', mock.url, 'sk-test');
+  const cut = await run({ provider_id, internal_name: 'cut' }, [{ role: 'user', content: 'x' }]);
+  assert.equal(cut.finish, 'length');
+  await assert.rejects(run({ provider_id, internal_name: 'boom' }, [{ role: 'user', content: 'x' }]), /had an error while processing/);
+});
+
+test('OpenAI-compatible chat streams text, parallel tool calls and usage', async () => {
   const mock = await openai({
     respond: () => ({ text: 'Checking.', tools: [{ id: 'call_x', name: 'calculator', input: { expression: '1+1' } }, { id: 'call_y', name: 'calculator', input: { expression: '2+2' } }] })
   });
-  const model = { provider_id: useProvider('openai', mock.url, 'sk-test'), internal_name: 'gpt-mock', max_tokens: 500 };
+  const model = { provider_id: useProvider('xai', mock.url, 'sk-test'), internal_name: 'grok-4.7', max_tokens: 500 };
   const r = await run(model, [{ role: 'system', content: 'Sys' }, { role: 'user', content: 'go' }], { tools: [CALC_TOOL] });
   const body = mock.requests[0].body;
   assert.equal(mock.requests[0].rejected, undefined, mock.requests[0].rejected);
-  assert.equal(body.max_completion_tokens, 500, 'OpenAI gets max_completion_tokens');
-  assert.equal(body.max_tokens, undefined);
+  assert.equal(body.max_tokens, 500);
   assert.equal(body.stream_options.include_usage, true);
   assert.equal(r.text, 'Checking.');
   assert.deepEqual(r.calls.calls.map(c => [c.id, JSON.parse(c.argsText).expression]), [['call_x', '1+1'], ['call_y', '2+2']]);
@@ -292,7 +383,7 @@ test('OpenAI streams text, parallel tool calls and usage', async () => {
   assert.equal(next.finish, 'tool_calls');
 });
 
-test('OpenAI reasoning models get the parameters they accept', async () => {
+test('OpenAI-compatible reasoning models get the parameters they accept', async () => {
   const rejects = {
     'o-mock': {
       max_tokens: "Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.",
@@ -301,7 +392,7 @@ test('OpenAI reasoning models get the parameters they accept', async () => {
     'compat-mock': { max_completion_tokens: "Unrecognized request argument supplied: max_completion_tokens" }
   };
   const mock = await openai({ rejects, respond: () => ({ text: 'fine' }) });
-  const provider_id = useProvider('openai', mock.url, 'sk-test');
+  const provider_id = useProvider('xai', mock.url, 'sk-test');
   const r = await run({ provider_id, internal_name: 'o-mock', temperature: 0.7, max_tokens: 300 }, [{ role: 'user', content: 'x' }]);
   assert.equal(r.text, 'fine');
   assert.equal(mock.requests.at(-1).body.temperature, undefined);
@@ -311,7 +402,7 @@ test('OpenAI reasoning models get the parameters they accept', async () => {
 });
 
 test('OpenAI failures read as what to fix', async () => {
-  const mock = await openai({ key: 'right', respond: () => ({ status: 429, message: 'You exceeded your current quota, please check your plan and billing details.' }) });
+  const mock = await responses({ key: 'right', respond: () => ({ status: 429, message: 'You exceeded your current quota, please check your plan and billing details.' }) });
   await assert.rejects(run({ provider_id: useProvider('openai', mock.url, 'wrong'), internal_name: 'gpt-mock' }, [{ role: 'user', content: 'x' }]), /Upstream error 401: The provider rejected the API key\. Check the key on this connection\. Incorrect API key/);
   await assert.rejects(run({ provider_id: useProvider('openai', mock.url, 'right'), internal_name: 'gpt-mock' }, [{ role: 'user', content: 'x' }]), /Upstream error 429: .*exceeded your current quota/);
   assert.equal(upstreamMessage(500, 'plain text failure'), 'Upstream error 500: The provider had an internal error. plain text failure');
@@ -319,10 +410,49 @@ test('OpenAI failures read as what to fix', async () => {
 });
 
 test('OpenAI one-shot calls recover the same way', async () => {
-  const mock = await openai({ rejects: { 'o-mock': { reasoning_effort: "Unsupported parameter: 'reasoning_effort' is not supported with this model." } }, respond: () => ({ text: 'Title' }) });
+  const mock = await responses({ rejects: { 'o-mock': { reasoning: "Unsupported parameter: 'reasoning.effort' is not supported with this model." } }, respond: () => ({ text: 'Title' }) });
   const provider_id = useProvider('openai', mock.url, 'sk-test');
-  const r = await oneShotFull({ provider_id, internal_name: 'o-mock', resolved_kwargs: { reasoning_effort: 'low' }, kwargs: [{ id: 'e', name: 'reasoning_effort', target: 'body', values: ['low', 'high'] }] }, [{ role: 'user', content: 'x' }]);
+  const r = await oneShotFull({ provider_id, internal_name: 'o-mock', kwargs: [{ id: 'e', name: 'reasoning_effort', target: 'body', values: ['low', 'high'] }] }, [{ role: 'user', content: 'x' }]);
   assert.equal(r.text, 'Title');
+  assert.equal(mock.requests[0].body.reasoning.effort, 'low', 'a one-shot call asks for the lightest effort');
+  assert.equal(mock.requests[0].body.stream, false);
+  assert.deepEqual(r.usage, { prompt: 30, completion: 12, total: 42, cacheRead: 0, cacheWrite: 0 });
+});
+
+test('Mistral thinking chunks stream as reasoning, and a one-shot reply keeps only the answer', async () => {
+  const mock = await openai({ dialect: 'mistral', respond: () => ({ reasoning: 'Weigh it up.', text: 'Answer.' }) });
+  const model = { provider_id: useProvider('mistral', mock.url, 'sk-test'), internal_name: 'mistral-medium-3-5', resolved_kwargs: { reasoning_effort: 'high' } };
+  const r = await run(model, [{ role: 'user', content: 'x' }]);
+  assert.equal(r.reasoning, 'Weigh it up.');
+  assert.equal(r.text, 'Answer.');
+  assert.equal(mock.requests[0].body.reasoning_effort, 'high');
+  assert.equal((await oneShotFull(model, [{ role: 'user', content: 'x' }])).text, 'Answer.');
+});
+
+test('OpenRouter gets its reasoning details back across a tool step', async () => {
+  const mock = await openai({
+    dialect: 'openrouter', details: true,
+    respond: (body) => (body.messages.some(m => m.role === 'tool') ? { text: 'Done.' } : { reasoning: 'Call the tool.', tools: [{ id: 'call_o', name: 'calculator', input: { expression: '3*3' } }] })
+  });
+  const model = { provider_id: useProvider('openrouter', mock.url, 'sk-test'), internal_name: 'anthropic/claude-opus-5-5', resolved_kwargs: { reasoning: { effort: 'high' } } };
+  const r = await run(model, [{ role: 'user', content: 'go' }], { tools: [CALC_TOOL] });
+  assert.equal(r.reasoning, 'Call the tool.', 'shown once, not once per field');
+  assert.deepEqual(mock.requests[0].body.reasoning, { effort: 'high' });
+  assert.equal(r.calls.blocks.length, 1);
+  const next = await run(model, [{ role: 'user', content: 'go' }, stepMessage(r), { role: 'tool', tool_call_id: 'call_o', content: '9' }], { tools: [CALC_TOOL] });
+  assert.equal(mock.requests[1].rejected, undefined, mock.requests[1].rejected);
+  assert.equal(next.text, 'Done.');
+});
+
+test('Gemini thought signatures ride on the tool calls they came with', async () => {
+  const mock = await openai({ signatures: true, respond: (body) => (body.messages.some(m => m.role === 'tool') ? { text: 'Done.' } : { tools: [{ id: 'call_g', name: 'calculator', input: {} }] }) });
+  const model = { provider_id: useProvider('gemini', mock.url, 'sk-test'), internal_name: 'gemini-3.1-pro-preview' };
+  const r = await run(model, [{ role: 'user', content: 'go' }], { tools: [CALC_TOOL] });
+  assert.match(r.calls.calls[0].extra.google.thought_signature, /^sig_/);
+  await run(model, [{ role: 'user', content: 'go' }, stepMessage(r), { role: 'tool', tool_call_id: 'call_g', content: '1' }], { tools: [CALC_TOOL] });
+  assert.equal(mock.requests[1].rejected, undefined, mock.requests[1].rejected);
+  const stripped = { ...stepMessage(r), tool_calls: r.calls.calls.map(c => ({ id: c.id, name: c.name, argsText: c.argsText })) };
+  await assert.rejects(run(model, [{ role: 'user', content: 'go' }, stripped, { role: 'tool', tool_call_id: 'call_g', content: '1' }], { tools: [CALC_TOOL] }), /thought_signature/, 'the mock really enforces it');
 });
 
 const BIG_SYSTEM = 'You are a careful assistant. '.repeat(400);
@@ -364,7 +494,7 @@ test('a proxy that refuses cache markers still gets the request, without them', 
 });
 
 test('OpenAI cached tokens are counted and priced', async () => {
-  const mock = await openai({ respond: () => ({ text: 'ok', usage: { prompt_tokens: 1000, completion_tokens: 10 }, cached: 800 }) });
+  const mock = await responses({ respond: () => ({ text: 'ok', usage: { input_tokens: 1000, output_tokens: 10 }, cached: 800 }) });
   const r = await run({ provider_id: useProvider('openai', mock.url, 'sk-test'), internal_name: 'gpt-5.4' }, [{ role: 'user', content: 'x' }]);
   assert.equal(r.usage.cacheRead, 800);
   const cost = usageCost({ internal_name: 'gpt-5.4', cost_in: 2.5, cost_out: 15 }, r.usage);
@@ -483,7 +613,7 @@ test('a rolling summary folds the oldest turns with the chatting model, and reca
   const { db } = await import('../db.js');
   let asked = null;
   const mock = await openai({ key: 'k', respond: (body) => { asked = body; return { text: '## Goals\nPlan a trip to Lisbon.' }; } });
-  const model = { id: 'm-fold', provider_id: useProvider('openai', mock.url, 'k'), internal_name: 'gpt-mock', recent_window: 2, num_ctx: 8192 };
+  const model = { id: 'm-fold', provider_id: useProvider('xai', mock.url, 'k'), internal_name: 'gpt-mock', recent_window: 2, num_ctx: 8192 };
   const chatId = 'fold-chat';
   db.chats.insert({ id: chatId, user_id: null, title: 'Trip', created_at: 1, updated_at: 1 });
   let parent = null;
@@ -524,7 +654,7 @@ test('a folded image is described in full once, kept beside the summary, and rec
     const sawImage = body.messages.some(m => Array.isArray(m.content) && m.content.some(p => p.type === 'image_url'));
     return { text: sawImage ? 'A bar chart titled "Q3 sales" with four bars: 10, 20, 30, 40.' : '## Goals\nReview the sales chart.' };
   } });
-  const model = { id: 'm-vision', provider_id: useProvider('openai', mock.url, 'k'), internal_name: 'gpt-vision', has_vision: 1, recent_window: 2, num_ctx: 8192 };
+  const model = { id: 'm-vision', provider_id: useProvider('xai', mock.url, 'k'), internal_name: 'gpt-vision', has_vision: 1, recent_window: 2, num_ctx: 8192 };
   const chatId = 'fold-image-chat';
   db.chats.insert({ id: chatId, user_id: null, title: 'Sales', created_at: 1, updated_at: 1 });
   const rows = [

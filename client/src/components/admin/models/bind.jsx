@@ -26,19 +26,20 @@ const OP_LABEL = {
   swap: tk('Find and replace')
 };
 
-export function EditorProvider({ models, edit, children }) {
+export function EditorProvider({ models, edit, simple = false, children }) {
   const value = useMemo(() => {
     const ids = models.map(m => m.id);
     return {
       models,
       ids,
+      simple,
       single: models.length === 1 ? models[0] : null,
       many: models.length > 1,
       edit: (change) => edit(ids, change),
       editEach: (fn) => edit(ids, fn),
       editOne: (id, change) => edit([id], change)
     };
-  }, [models, edit]);
+  }, [models, edit, simple]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
