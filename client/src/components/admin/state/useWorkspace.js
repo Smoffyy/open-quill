@@ -32,7 +32,7 @@ export function promptFeaturesOf(settings) {
 
 export const CONFIG_DEFAULTS = {
   appName: '', disclaimer: '', greetings: [''], appIcon: '', quickPrompts: [],
-  appFont: 'literata', uiPreset: 'anthropic', modelDocs: true, modelDocsConfig: null,
+  appFont: 'literata', modelDocs: true, modelDocsConfig: null,
   allowSignups: true, localOnly: true, egressLocalOnly: true, egressAllowWebSearch: true, egressAllowlist: []
 };
 
@@ -49,7 +49,6 @@ function configFrom(c) {
     appIcon: c.appIcon || '',
     quickPrompts: Array.isArray(c.quickPrompts) ? c.quickPrompts : [],
     appFont: appFontId(c.appFont),
-    uiPreset: c.uiPreset === 'openai' ? 'openai' : 'anthropic',
     modelDocs: c.modelDocs !== false,
     modelDocsConfig: c.modelDocsConfig || null,
     allowSignups: c.allowSignups !== false,
@@ -181,6 +180,12 @@ export function useWorkspace({ history } = {}) {
   }, [load]);
 
   const unsaved = useCallback(() => inflight.current > 0 || Object.values(timers.current).some(Boolean), []);
+
+  useEffect(() => {
+    const onHello = () => { if (!unsaved()) load(); };
+    window.addEventListener('oq-hello', onHello);
+    return () => window.removeEventListener('oq-hello', onHello);
+  }, [load, unsaved]);
 
   const set = useCallback((key, value) => setSettings(s => (s[key] === value ? s : { ...s, [key]: value })), []);
   const setCfg = useCallback((key, value) => setConfig(c => (c[key] === value ? c : { ...c, [key]: value })), []);

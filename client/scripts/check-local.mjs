@@ -13,10 +13,19 @@ const ALLOWED_HOSTS = new Set([
   'reactjs.org',
 ]);
 
+const MENTION_ONLY_HOSTS = new Set([
+  'chevrotain.io',
+  'en.wikipedia.org',
+  'langium.org',
+  'rolldown.rs',
+  'www.eclipse.org',
+]);
+
 const URL_RE = /https?:\/\/([a-zA-Z0-9._-]+)(?::\d+)?/g;
 const FETCHING_ATTR_RE = /(?:src|href)\s*=\s*["']((?:https?:)?\/\/[^"']+)["']/gi;
 const CSS_URL_RE = /url\(\s*['"]?((?:https?:)?\/\/[^'")]+)/gi;
 const IMPORT_RE = /\bimport\s*\(\s*["']((?:https?:)?\/\/[^"']+)["']\s*\)/gi;
+const FETCH_CALL_RE = /\bfetch\s*\(\s*["'`]((?:https?:)?\/\/[^"'`]+)["'`]/gi;
 
 function walk(dir) {
   const out = [];
@@ -41,7 +50,7 @@ for (const file of walk(DIST)) {
   const rel = path.relative(DIST, file);
   const text = fs.readFileSync(file, 'utf8');
 
-  for (const re of [FETCHING_ATTR_RE, CSS_URL_RE, IMPORT_RE]) {
+  for (const re of [FETCHING_ATTR_RE, CSS_URL_RE, IMPORT_RE, FETCH_CALL_RE]) {
     re.lastIndex = 0;
     let m;
     while ((m = re.exec(text))) {
@@ -55,7 +64,7 @@ for (const file of walk(DIST)) {
   let m;
   while ((m = URL_RE.exec(text))) {
     const host = m[1];
-    if (ALLOWED_HOSTS.has(host)) continue;
+    if (ALLOWED_HOSTS.has(host) || MENTION_ONLY_HOSTS.has(host)) continue;
     if (!seenHosts.has(host)) seenHosts.set(host, new Set());
     seenHosts.get(host).add(rel);
   }

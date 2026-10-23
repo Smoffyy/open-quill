@@ -33,7 +33,6 @@ These are the defaults. Every one except **Clear focus** can be changed under **
 | `B` | Branch map |
 | `J` / `K` | Next / previous message |
 | `Alt+↓` | Jump to latest |
-| `Alt+L` | Context ledger |
 | `Alt+P` | What gets sent |
 | `Alt+A` | Artifacts panel |
 | `Alt+O` | Contents |

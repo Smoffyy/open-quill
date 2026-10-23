@@ -1,0 +1,52 @@
+[data-layout="pill"] .topbar { justify-content: flex-start; gap: 8px; height: auto; padding: 14px 20px; position: relative; }
+[data-layout="pill"] .topbar-actions { margin-left: auto; }
+[data-layout="pill"] .chat-name-wrap { min-width: 0; }
+@media (min-width: 721px) {
+  [data-layout="pill"] .chat-name-wrap,
+  [data-layout="pill"] .chat-rename {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    max-width: 42%; z-index: 5;
+  }
+  [data-layout="pill"] .chat-name-wrap { display: flex; align-items: center; }
+  [data-layout="pill"] .chat-name-wrap .chat-name { max-width: 100%; }
+  [data-layout="pill"] .chat-name-wrap .chat-name .ct-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  [data-layout="pill"] .chat-name-wrap .chat-name svg { flex-shrink: 0; }
+  [data-layout="pill"] .app.sb-collapsed .home-topbar { left: 56px; }
+  [data-layout="pill"] .app.sb-collapsed .incognito-bar { padding-left: 56px; }
+}
+[data-layout="pill"] .chat-name { font-family: var(--font-sans); font-size: 13.5px; color: var(--text-muted); }
+[data-layout="pill"] .topbar .chat-name { height: auto; padding: 5px 9px; border-radius: 9px; font-size: 15px; line-height: normal; color: var(--text-muted); }
+[data-layout="pill"] .topbar .ct-name { padding-right: 5px; }
+[data-layout="pill"] .topbar .ct-caret { align-self: stretch; width: 26px; padding: 0; }
+[data-layout="pill"] .chat-rename { height: 30px; font-size: 15px; }
+[data-layout="pill"] .chat-rename input { border-radius: 9px; }
+[data-layout="pill"] .topbar-model .model-trigger {
+  font-size: 18px; font-weight: 600; color: var(--text); font-family: var(--font-sans);
+  padding: 6px 10px; border-radius: 10px; gap: 4px; background: transparent; border: none;
+}
+[data-layout="pill"] .topbar-model .model-trigger:hover { background: var(--surface-hover); }
+[data-layout="pill"] .home-topbar { position: absolute; top: 14px; left: 20px; z-index: 20; }
+[data-layout="pill"] .topbar-model .model-menu, [data-layout="pill"] .home-topbar .model-menu {
+  bottom: auto; top: 42px; left: 0; right: auto; transform-origin: top left;
+}
+[data-layout="pill"] .incognito-bar { padding: 10px 18px 10px 14px; }
+[data-layout="pill"] .incog-left { gap: 12px; }
+
+@media (max-width: 768px) {
+  [data-layout="pill"] .home-topbar { left: 44px; top: 4px; }
+  [data-layout="pill"] .topbar .mobile-menu-btn { order: -1; }
+  [data-layout="pill"] .topbar-model { flex: 0 1 auto; min-width: 0; margin-right: 0; overflow: hidden; }
+  [data-layout="pill"] .topbar .topbar-model { max-width: none; }
+  [data-layout="pill"] .topbar .topbar-actions { flex-shrink: 0; }
+  [data-layout="pill"] .topbar { padding-left: 8px; padding-right: 8px; gap: 6px; }
+  [data-layout="pill"] .home-topbar .topbar-model { max-width: calc(100vw - 112px); }
+  [data-layout="pill"] .topbar-model .model-select { min-width: 0; max-width: 100%; }
+  [data-layout="pill"] .topbar-model .model-trigger { min-width: 0; max-width: 100%; }
+  [data-layout="pill"] .topbar-model .mt-label { min-width: 0; }
+  [data-layout="pill"] .topbar-model .model-trigger { white-space: nowrap; min-width: 0; overflow: hidden; }
+  [data-layout="pill"] .topbar-model .model-trigger > span:first-child { overflow: hidden; text-overflow: ellipsis; }
+  [data-layout="pill"] .topbar-model .model-trigger .ext { display: none; }
+  [data-layout="pill"] .topbar-actions { flex-shrink: 0; margin-left: auto; }
+  [data-layout="pill"] .topbar .chat-name-wrap { display: none; }
+  [data-layout="pill"] .topbar { height: auto; padding: 10px 12px; padding-top: calc(10px + env(safe-area-inset-top)); }
+}

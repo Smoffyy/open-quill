@@ -36,16 +36,13 @@ The top bar shows the chat title. Click it for the chat menu: rename, star, add 
 
 | Item | Does |
 | --- | --- |
-| **Conversation memory** | Shows the summary that replaced older messages, once a long chat has been compacted |
-| **Personas** | Apply a saved persona to this chat |
+| **Conversation memory** | Shows the rolling summary that replaced older messages in a long chat |
 | **Copy all** | Copies the whole conversation |
-| **Inspect context** | A breakdown of everything sent to the model on the next turn |
 | **Chat controls (admin)** | Per-chat system prompt and sampling overrides, admins only |
 | **Find in conversation** | Search inside this chat (`Ctrl+F`) |
 | **Branch map** | Every branch of the conversation as a tree (`B`) |
 | **Contents** | The headings in the assistant's replies, for jumping around (`Alt+O`) |
 | **Focus mode** | Hides everything but the conversation (`Alt+F`) |
-| **Context ledger** | Shows how many tokens each message costs (`Alt+L`) |
 
 Some items only appear once they apply, for example Contents needs a reply with headings.
 

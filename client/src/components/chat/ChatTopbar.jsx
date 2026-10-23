@@ -5,7 +5,7 @@ import { ChevDown, Menu } from '../ui/icons.jsx';
 
 export default function ChatTopbar({
   lead, actions, chat, chatId, project, booting = false, projects, busy = false,
-  onOpenMenu, onOpenProject, onRename, onStopChat, onToggleStar, onMoveToProject, onDelete
+  allTags, onOpenMenu, onOpenProject, onRename, onStopChat, onToggleStar, onToggleArchive, onSetTags, onMoveToProject, onDelete
 }) {
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState('');
@@ -30,16 +30,18 @@ export default function ChatTopbar({
   return (
     <div className="topbar">
       {lead}
-      <button className="mobile-menu-btn" onClick={onOpenMenu} title={t('Menu')} aria-label={t('Menu')}><Menu style={{ width: 20 }} /></button>
+      <button className="mobile-menu-btn" onClick={onOpenMenu} data-tip={t('Menu')} aria-label={t('Menu')}><Menu style={{ width: 20 }} /></button>
       {renaming ? (
-        <input className="chat-rename" autoFocus value={draft} aria-label={t('Rename chat')}
-          onFocus={(e) => e.target.select()}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={() => finish(true)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') finish(true);
-            else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
-          }} />
+        <span className="chat-rename" data-value={draft + ' '}>
+          <input autoFocus size={1} value={draft} aria-label={t('Rename chat')}
+            onFocus={(e) => e.target.select()}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => finish(true)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') finish(true);
+              else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+            }} />
+        </span>
       ) : (
         <div className="chat-name-wrap">
           {project && (
@@ -48,19 +50,19 @@ export default function ChatTopbar({
               <span className="ct-sep" aria-hidden="true">/</span>
             </>
           )}
-          <button className="chat-name ct-name" disabled={!chatId} title={t('Rename chat')} onClick={startRename}>
+          <button className="chat-name ct-name" disabled={!chatId} data-tip={t('Rename chat')} onClick={startRename}>
             <span className="ct-title">{chat?.title || (booting ? '' : t('New chat'))}</span>
           </button>
           <button className="chat-name ct-caret" ref={caretRef} disabled={!chatId}
-            title={t('Chat options')} aria-label={t('Chat options')} aria-haspopup="menu" aria-expanded={!!menu}
+            data-tip={t('Chat options')} aria-label={t('Chat options')} aria-haspopup="menu" aria-expanded={!!menu}
             onClick={(e) => { const at = menuAtButton(e.currentTarget); setMenu(m => (m ? null : at)); }}>
             <ChevDown />
           </button>
           {menu && chatId && (
             <ChatMenu
-              chat={{ id: chatId, title: chat?.title || t('New chat'), starred: !!chat?.starred, projectId: chat?.projectId || null }}
-              at={menu} projects={projects} busy={busy} anchorRef={caretRef}
-              onStopChat={onStopChat} onToggleStar={onToggleStar} onMoveToProject={onMoveToProject} onDelete={onDelete}
+              chat={{ id: chatId, title: chat?.title || t('New chat'), starred: !!chat?.starred, archived: !!chat?.archived, tags: chat?.tags || [], projectId: chat?.projectId || null }}
+              at={menu} projects={projects} busy={busy} anchorRef={caretRef} allTags={allTags}
+              onStopChat={onStopChat} onToggleStar={onToggleStar} onToggleArchive={onToggleArchive} onSetTags={onSetTags} onMoveToProject={onMoveToProject} onDelete={onDelete}
               onClose={() => setMenu(null)} />
           )}
         </div>

@@ -9,7 +9,7 @@ Open **Settings** from the profile menu at the bottom left, or with `Ctrl+,`. Th
 - **What should we call you?** Your display name, used in greetings.
 - **Language**: the interface language on this device. Replies are not translated.
 - **Instructions for the Assistant**: added to every chat you have, up to 8000 characters.
-- **Export everything** downloads your chats, styles, personas, prompts and memory as one JSON file. **Import** reads one back, adding its chats and merging the rest.
+- **Export everything** downloads your chats, styles and memory as one JSON file. **Import** reads one back, adding its chats and merging the rest.
 - **Danger zone**: **Delete all chats** (your account stays), **Reset all settings** to the current theme's defaults, and **Delete account**, which removes the account and everything in it. The owner account cannot be deleted.
 
 ### Interface
@@ -39,7 +39,7 @@ Open **Settings** from the profile menu at the bottom left, or with `Ctrl+,`. Th
 
 - **Auto-scroll**: follow the reply as it is written unless you scroll up.
 - **Web search on by default**: new chats start with web search on, where the model allows it. Shown only when web search is set up.
-- **Engine telemetry**, **Context gauge**, **Speed on each reply**, **Progress line** and **Context ledger on open**: see [Models & Reasoning](models.md#readouts).
+- **Engine telemetry**, **Speed on each reply** and **Progress line**: see [Models & Reasoning](models.md#readouts).
 - **Mid-stream steering**: lets you correct a reply while it is being written. See [Chatting](chatting.md#sending-and-streaming).
 
 ### Keybinds

@@ -6,6 +6,8 @@ import { api } from '../../../lib/api.js';
 import { t } from '../../../i18n.jsx';
 import { modelIconFor, useLogos } from '../../../lib/logos.js';
 import { Skel, SkelRows } from '../../ui/Skeleton.jsx';
+import { reasoningSummary } from '../../../lib/modelcatalog.js';
+import { fmtTokens } from '../../../lib/modeldocs.js';
 
 function KeyField({ p, optional, onSave }) {
   const hint = (v) => (v.length >= 12 ? '\u2026' + v.slice(-4) : '');
@@ -31,6 +33,18 @@ function Engine({ e }) {
       <KV items={rows} />
       {e.slotsHidden && <div className="cp-hint">{t('This server was started with slot reporting off, so occupancy cannot be read.')}</div>}
     </>
+  );
+}
+
+function Caps({ caps }) {
+  if (!caps) return <span className="cp-hint">{t('set up by hand')}</span>;
+  const kind = reasoningSummary(caps);
+  return (
+    <span className="cp-badges">
+      {kind && <Badge>{kind === 'switch' ? t('Thinking switch') : kind === 'builtin' ? t('Reasoning') : t('Effort {range}', { range: kind })}</Badge>}
+      {caps.vision && <Badge>{t('Images')}</Badge>}
+      {caps.ctx > 0 && <Badge>{fmtTokens(caps.ctx)}</Badge>}
+    </span>
   );
 }
 
@@ -98,6 +112,7 @@ function Discover({ providerId, onClose, onAdded }) {
   }
 
   const remaining = state.list.filter(x => !x.added).length;
+  const withCaps = state.list.some(x => x.caps);
 
   return (
     <Dialog title={t('Models this backend reports')} onClose={onClose}
@@ -121,10 +136,11 @@ function Discover({ providerId, onClose, onAdded }) {
         <Empty icon={Cube} title={t('Nothing reported')}>{t('The backend answered but listed no models.')}</Empty>
       )}
       {state.list.length > 0 && (
-        <Table scroll head={[{ label: t('Model id'), mono: true }, { label: '', fit: true }]}>
+        <Table scroll head={[{ label: t('Model id'), mono: true }, ...(withCaps ? [{ label: t('Supports') }] : []), { label: '', fit: true }]}>
           {state.list.map(x => (
             <tr key={x.id}>
               <td className="mono"><span className="cp-logo-row"><Logo name={x.id} />{x.id}</span></td>
+              {withCaps && <td><Caps caps={x.caps} /></td>}
               <td className="acts">
                 {x.added
                   ? <Badge tone="good">{t('added')}</Badge>

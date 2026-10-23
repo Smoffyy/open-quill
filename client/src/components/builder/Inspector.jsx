@@ -180,7 +180,7 @@ export default function Inspector({ selection, onSelect }) {
         </div>
         <div className="bx-insp-acts">
           {edits > 0 && (
-            <button type="button" className="bx-icon" title={t('Reset this element')} aria-label={t('Reset this element')}
+            <button type="button" className="bx-icon" data-tip={t('Reset this element')} aria-label={t('Reset this element')}
               onClick={() => apply(d => resetElement(d, id))}><Refresh /></button>
           )}
         </div>
@@ -204,7 +204,7 @@ export default function Inspector({ selection, onSelect }) {
       {tab === 'responsive' && (
         <div className="bx-subtabs">
           {BREAKPOINTS.map(b => (
-            <button key={b.id} type="button" title={b.hint} className={'bx-subtab' + (bp === b.id ? ' on' : '')}
+            <button key={b.id} type="button" data-tip={b.hint} className={'bx-subtab' + (bp === b.id ? ' on' : '')}
               onClick={() => setBp(bp === b.id ? '' : b.id)}>{b.label}</button>
           ))}
         </div>
@@ -495,7 +495,7 @@ export function PlaceholderChips({ onPick }) {
     <div className="bx-placeholders">
       <span className="bx-ph-label">{t('Insert')}</span>
       {PLACEHOLDERS.map(p => (
-        <button key={p.token} type="button" className="bx-ph" title={t(p.label)} onClick={() => onPick(p.token)}>
+        <button key={p.token} type="button" className="bx-ph" data-tip={t(p.label)} onClick={() => onPick(p.token)}>
           {p.token}
         </button>
       ))}
@@ -556,9 +556,9 @@ function NodeInspector({ slot, node, onSelect }) {
           <span>{t('Added element')}</span>
         </div>
         <div className="bx-insp-acts">
-          <button type="button" className="bx-icon" title={t('Duplicate')} aria-label={t('Duplicate')}
+          <button type="button" className="bx-icon" data-tip={t('Duplicate')} aria-label={t('Duplicate')}
             onClick={() => apply(d => duplicateNode(d, slot, node.id))}><Copy /></button>
-          <button type="button" className="bx-icon danger" title={t('Delete')} aria-label={t('Delete')}
+          <button type="button" className="bx-icon danger" data-tip={t('Delete')} aria-label={t('Delete')}
             onClick={() => { apply(d => removeNode(d, slot, node.id)); onSelect(null); }}><Trash /></button>
         </div>
       </header>

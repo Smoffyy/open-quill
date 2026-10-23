@@ -1,0 +1,10 @@
+.diagram-block { margin: 0 0 12px; }
+.assistant-body > .diagram-block:last-child { margin-bottom: 0; }
+.diagram-block .code-wrap { margin: 0; }
+.diagram-bar { display: flex; align-items: center; gap: 10px; min-height: 28px; margin-bottom: 6px; font-family: var(--font-sans); font-size: 12px; line-height: 17px; color: var(--text-faint); }
+.diagram-label { font-weight: 500; color: var(--text-muted); }
+.diagram-note { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.diagram-view { margin-left: auto; flex-shrink: 0; }
+.diagram-svg { padding: 16px; border: 0.8px solid var(--border-soft); border-radius: 14px; overflow: auto hidden; text-align: center; }
+.diagram-svg svg { max-width: 100%; height: auto; }
+.diagram-svg p { margin: 0; padding: 0; }

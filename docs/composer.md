@@ -14,7 +14,7 @@ In the OpenAI layout the model picker sits at the top left of the chat instead.
 
 ## Attachments
 
-Drop files onto the window, paste them, or use **+ → Add files or photos** (`Ctrl+U`). Any file type can be attached; text, code and PDFs are read by the model, and images are sent only to models an admin has given **Image input**. A model that cannot read images says so instead of sending them. Each attachment shows as a removable chip above the field.
+Drop files onto the window, paste them, or use **+ → Add files or photos** (`Ctrl+U`). Any file type can be attached; text, code and PDFs are read by the model, and images are sent only to models an admin has given **Image input**, always at their full original quality. Formats a model cannot read (BMP, AVIF, ICO, and TIFF in browsers that open it) are converted to a lossless PNG of the same size when you attach them; HEIC photos are not, so share a JPEG copy instead. On a model without image input, images you add are left out and the composer says so. Each attachment shows as a removable chip above the field.
 
 **+ → Take a screenshot** captures a screen, window or browser tab through your browser's screen picker and attaches the image.
 
@@ -35,16 +35,14 @@ Type `/` at the start of the field for a list of commands: **New chat**, turn **
 | **Add files or photos** | Attach files, see above |
 | **Take a screenshot** | Attach a capture of your screen |
 | **Add to project** | Move this chat into one of your projects, or out of one |
-| **Saved prompts** | Insert a saved prompt, or save what you have typed as a new one |
 | **Response style** | Normal, Concise, Explanatory, Formal or one of your own |
-| **Improve prompt** | Has the model rewrite your draft before you send it. Use it again to get your original back |
 | **Compare models** | Pick up to two more models to answer your next message, each reply becoming a version of one response |
 | **Skills** | Turn your skills on or off for this chat, or browse and manage them |
-| **Add connector** | Opens your MCP servers in Settings |
+| **MCP** | Opens your MCP servers in Settings |
 | **Sandbox tools** | Gives the assistant a workspace with files and a shell. See [Artifacts & Sandbox](artifacts-sandbox.md) |
 | **Web search** | Lets the assistant search the web, shown only when an admin has set it up |
 
-Items only appear when they apply. Sandbox tools and web search depend on the model, and both are off in incognito chats. Styles and prompts are covered in [Personas, Styles & Prompts](personas-styles-prompts.md).
+Items only appear when they apply. Sandbox tools and web search depend on the model, and both are off in incognito chats. Styles and instructions are covered in [Styles & Instructions](styles-and-instructions.md).
 
 ## Plans and questions
 

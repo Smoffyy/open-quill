@@ -385,7 +385,7 @@ export default function CallPanel({ chatId, model, voice, active = true, onSendT
   return (
     <div className={'call-dock' + (shown ? ' shown' : '')}>
       <div className={'call-orb-wrap ' + mode}
-        onClick={interrupt} title={mode === 'speaking' ? t('Tap to interrupt') : ''} role="img"
+        onClick={interrupt} data-tip={mode === 'speaking' ? t('Tap to interrupt') : ''} role="img"
         aria-label={statusText || t('Voice call')}>
         <canvas ref={orbRef} className="call-orb" aria-hidden="true" />
       </div>

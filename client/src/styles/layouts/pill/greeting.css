@@ -1,0 +1,21 @@
+[data-layout="pill"] .greeting { font-size: 28px; line-height: normal; font-weight: 600; font-family: var(--font-sans); gap: 10px; margin-bottom: 26px; }
+[data-layout="pill"] .greeting .greeting-icon { display: none; }
+[data-layout="pill"] .greeting .incog-title { font-size: 24px; font-weight: 600; }
+[data-layout="pill"] .greeting svg { width: 26px; height: 26px; }
+[data-layout="pill"] .center-wrap { justify-content: center; padding-top: 24px; padding-bottom: 24px; }
+
+[data-layout="pill"] .quick-prompts { position: relative; z-index: 1; flex-direction: column; align-items: flex-start; width: 100%; max-width: 768px; margin: 18px auto 0; gap: 2px; }
+[data-layout="pill"] .quick-prompt {
+  background: transparent; border: none; justify-content: flex-start; padding: 10px 12px; border-radius: 12px;
+  font-size: 15px; font-family: var(--font-sans); color: var(--text); opacity: .62; transition: opacity var(--fx-t, .12s) ease; width: fit-content;
+}
+[data-layout="pill"] .quick-prompt:hover, [data-layout="pill"] .quick-prompt:focus-visible { background: transparent; opacity: 1; }
+
+[data-layout="pill"] .quick-prompts.qp-ghost { visibility: hidden; pointer-events: none; }
+
+[data-layout="pill"] .incognito-note { font-family: var(--font-sans); font-size: 13px; color: var(--text-muted); text-align: center; max-width: 560px; margin: 10px auto 0; }
+
+@media (max-width: 768px) {
+  [data-layout="pill"] .center-wrap { padding: 16px; justify-content: center; }
+  [data-layout="pill"] .greeting { font-size: 22px; line-height: 1.22; margin-bottom: 18px; }
+}

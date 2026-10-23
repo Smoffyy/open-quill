@@ -78,7 +78,7 @@ export default function VersionTab({ cfg, onChangelog }) {
   return (
     <div className="vh">
       <div className="vh-top">
-        {line && <VersionBadge label={line} icon={cfg?.appIcon} />}
+        {line && <VersionBadge label={String(line).replace(/(\.0+)+$/, '')} icon={cfg?.appIcon} />}
         <div className="vh-id">
           <div className="vh-name">{appName}</div>
           <div className="vh-meta">

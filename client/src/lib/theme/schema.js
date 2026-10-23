@@ -1,4 +1,5 @@
 import { tk } from '../../i18n.jsx';
+import { presetId } from '../presets.js';
 
 export const THEME_SCHEMA = 1;
 
@@ -238,7 +239,6 @@ export const ELEMENTS = [
   { id: 'threadRailTick', label: tk('Thread rail marker'), cat: 'thread', sel: '.trail-tick', parent: 'threadRail', caps: BOX },
   { id: 'threadFind', label: tk('Find in conversation'), cat: 'thread', sel: '.thread-find', parent: 'main', caps: ALL },
   { id: 'outlinePanel', label: tk('Contents panel'), cat: 'thread', sel: '.outline-panel', parent: 'main', caps: ALL },
-  { id: 'ledgerBar', label: tk('Context ledger'), cat: 'thread', sel: '.ledger-head', parent: 'thread', caps: ALL },
   { id: 'proseP', label: tk('Paragraph'), cat: 'thread', sel: '.assistant-body p', parent: 'assistantBody', caps: TEXTY },
   { id: 'proseH1', label: tk('Heading 1'), cat: 'thread', sel: '.assistant-body h1', parent: 'assistantBody', caps: TEXTY },
   { id: 'proseH2', label: tk('Heading 2 and below'), cat: 'thread', sel: '.assistant-body h2, .assistant-body h3, .assistant-body h4', parent: 'assistantBody', caps: TEXTY },
@@ -264,14 +264,14 @@ export const ELEMENTS = [
   /* menus and overlays */
   { id: 'menu', label: tk('Menu'), cat: 'chrome', sel: '.popover, .plus-menu, .chat-menu, .more-menu, .model-menu, .rl-menu, .retry-menu, .art-menu, .pj-menu, .sk-menu, .qp-iconmenu, .spc-mention-menu', caps: ALL },
   { id: 'menuItem', label: tk('Menu item'), cat: 'chrome', sel: '.popover button, .pm-item, .chat-menu button, .model-opt, .art-menu-item', parent: 'menu', caps: CTRL },
-  { id: 'menuLabel', label: tk('Menu section label'), cat: 'chrome', sel: '.pm-label, .art-menu-label, .retry-menu-label, .style-menu-label', parent: 'menu', caps: TEXTY },
-  { id: 'menuHead', label: tk('Menu header'), cat: 'chrome', sel: '.persona-head, .rl-menu-head', parent: 'menu', caps: ALL },
+  { id: 'menuLabel', label: tk('Menu section label'), cat: 'chrome', sel: '.pm-label, .art-menu-label, .pm-head', parent: 'menu', caps: TEXTY },
+  { id: 'menuHead', label: tk('Menu header'), cat: 'chrome', sel: '.rl-menu-head', parent: 'menu', caps: ALL },
   { id: 'modelBadge', label: tk('Model badge'), cat: 'chrome', sel: '.mo-badge', parent: 'menuItem', caps: BOX.concat(['type']) },
   { id: 'menuShortcut', label: tk('Menu shortcut'), cat: 'chrome', sel: '.pm-shortcut', parent: 'menuItem', caps: BOX.concat(['type']) },
   { id: 'menuDivider', label: tk('Menu divider'), cat: 'chrome', sel: '.pm-divider, .popover hr', parent: 'menu', caps: BOX },
   { id: 'menuAccount', label: tk('Menu account line'), cat: 'chrome', sel: '.pm-account', parent: 'menu', caps: TEXTY },
   { id: 'chordHint', label: tk('Chord hint'), cat: 'chrome', sel: '.chord-hint', caps: ALL },
-  { id: 'submenu', label: tk('Submenu'), cat: 'chrome', sel: '.model-submenu, .cm-sublist, .pm-subwrap', parent: 'menu', caps: ALL },
+  { id: 'submenu', label: tk('Submenu'), cat: 'chrome', sel: '.model-submenu, .cm-flyout, .pm-flyout', parent: 'menu', caps: ALL },
   { id: 'modelCard', label: tk('Model card'), cat: 'chrome', sel: '.model-card', parent: 'menu', caps: ALL },
   { id: 'modal', label: tk('Window'), cat: 'chrome', sel: '.modal', caps: ALL },
   { id: 'modalSide', label: tk('Window sidebar'), cat: 'chrome', sel: '.modal-side', parent: 'modal', caps: ALL },
@@ -335,7 +335,6 @@ export const ELEMENTS = [
   { id: 'branchNode', label: tk('Branch node'), cat: 'panels', sel: '.bt-node', parent: 'branchTree', caps: CTRL },
   { id: 'callPanel', label: tk('Voice panel'), cat: 'panels', sel: '.callpanel', caps: ALL },
   { id: 'callOrb', label: tk('Voice orb'), cat: 'panels', sel: '.call-orb', parent: 'callPanel', caps: BOX },
-  { id: 'ctxInspect', label: tk('Context inspector'), cat: 'panels', sel: '.ctx-inspect', caps: ALL },
   { id: 'chatCtl', label: tk('Chat controls panel'), cat: 'panels', sel: '.chatctl-panel', caps: ALL },
   /* controls */
   { id: 'button', label: tk('Button'), cat: 'controls', sel: '.btn', caps: CTRL },
@@ -355,7 +354,7 @@ export const ELEMENTS = [
   { id: 'skeleton', label: tk('Loading placeholder'), cat: 'feedback', sel: '.skeleton', caps: BOX },
   { id: 'toastIcon', label: tk('Notification icon'), cat: 'feedback', sel: '.toast-ico', parent: 'toast', caps: BOX },
   { id: 'skeleton', label: tk('Loading skeleton'), cat: 'feedback', sel: '.skeleton', caps: BOX },
-  { id: 'ctxGauge', label: tk('Context gauge'), cat: 'feedback', sel: '.ctx-gauge', caps: BOX },
+  { id: 'contextRing', label: tk('Context ring'), cat: 'feedback', sel: '.cx-ring', caps: BOX },
   { id: 'engineStrip', label: tk('Engine telemetry'), cat: 'feedback', sel: '.engine-strip', caps: ALL },
   { id: 'unavailBanner', label: tk('Warning banner'), cat: 'feedback', sel: '.unavail-banner', caps: ALL }
 ];
@@ -470,8 +469,8 @@ export const NODE_INDEX = (() => {
    Documents
 --------------------------------------------------------------------------- */
 
-export function emptyDoc(basePreset = 'anthropic') {
-  return { v: THEME_SCHEMA, basePreset: basePreset === 'openai' ? 'openai' : 'anthropic', tokens: {}, content: {}, elements: {}, slots: {}, css: '' };
+export function emptyDoc(basePreset) {
+  return { v: THEME_SCHEMA, basePreset: presetId(basePreset), tokens: {}, content: {}, elements: {}, slots: {}, css: '' };
 }
 
 // Older documents keep working: an unknown key is left alone and a missing one
@@ -481,7 +480,7 @@ export function migrateDoc(raw) {
   return {
     ...d,
     v: THEME_SCHEMA,
-    basePreset: d.basePreset === 'openai' ? 'openai' : 'anthropic',
+    basePreset: presetId(d.basePreset),
     tokens: d.tokens && typeof d.tokens === 'object' ? d.tokens : {},
     content: d.content && typeof d.content === 'object' ? d.content : {},
     elements: d.elements && typeof d.elements === 'object' ? d.elements : {},
@@ -538,8 +537,7 @@ export const ORDER_GROUPS = [
   {
     id: 'composerRight', container: '.composer-right', label: tk('Composer actions'),
     items: [
-      { id: 'cr.gauge', label: tk('Context gauge'), sel: '.composer-right > .ctx-gauge' },
-      { id: 'cr.model', label: tk('Model selector'), sel: '.composer-right > .model-select' },
+      { id: 'cr.model', label: tk('Model selector'), sel: '.composer-right > .model-slot' },
       { id: 'cr.mic', label: tk('Dictation'), sel: '.composer-right > .mic' },
       { id: 'cr.send', label: tk('Send'), sel: '.composer-right > .send' }
     ]

@@ -3,11 +3,17 @@ import '../../styles/setup.css';
 import { api } from '../../lib/api.js';
 import { t } from '../../i18n.jsx';
 import { useTheme } from '../../lib/theme/store.jsx';
+import { isPreset, presetById } from '../../lib/presets.js';
 import { logoFor, modelIconFor, useLogos } from '../../lib/logos.js';
+import { reasoningSummary } from '../../lib/modelcatalog.js';
 import { Chat, Check, Cube, Gauge, Gear, Plug, Sliders, Terminal } from '../ui/icons.jsx';
 import { Skel, SkelRows } from '../ui/Skeleton.jsx';
 
-const KNOWN_SWATCH = new Set(['anthropic', 'openai', 'blank']);
+function swatchStyle(id) {
+  if (!isPreset(id)) return undefined;
+  const s = presetById(id).swatch;
+  return { '--sw-bg': s.bg, '--sw-border': s.border, '--sw-dot': s.dot, '--sw-radius': s.radius };
+}
 
 function Mark({ name }) {
   const hit = logoFor(name, useLogos());
@@ -93,7 +99,7 @@ function LayoutStep({ chosen, onChoose }) {
         {themes.map(th => (
           <button key={th.id} type="button" className={'sg-card' + (chosen === th.id ? ' on' : '')}
             aria-pressed={chosen === th.id} onClick={() => onChoose(th.id)}>
-            <span className={'sg-swatch ' + (KNOWN_SWATCH.has(th.id) ? th.id : 'plain')}><span className="ps-dot" /></span>
+            <span className={'sg-swatch' + (isPreset(th.id) ? '' : ' plain')} style={swatchStyle(th.id)}><span className="ps-dot" /></span>
             <span className="sg-card-name">{th.name}</span>
             <span className="sg-card-desc">{t(th.blurb || th.note || '')}</span>
           </button>
@@ -166,6 +172,14 @@ function ConnectionStep({ types, draft, setDraft, probe, onTest, busy }) {
   );
 }
 
+function capsLine(caps) {
+  const kind = reasoningSummary(caps);
+  return [
+    kind === 'switch' ? t('Thinking switch') : kind === 'builtin' ? t('Reasoning') : kind ? t('Effort {range}', { range: kind }) : '',
+    caps.vision ? t('Images') : ''
+  ].filter(Boolean).join(' · ');
+}
+
 function ModelsStep({ list, picked, toggle, all, none, error }) {
   if (error) return <p className="sg-bad">{error}</p>;
   if (!list.length) {
@@ -189,6 +203,7 @@ function ModelsStep({ list, picked, toggle, all, none, error }) {
             <input type="checkbox" checked={picked.has(m.id)} onChange={() => toggle(m.id)} />
             <Mark name={m.id} />
             <span className="sg-row-name mono">{m.id}</span>
+            {m.caps && <span className="sg-row-caps">{capsLine(m.caps)}</span>}
           </label>
         ))}
       </div>
