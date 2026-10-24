@@ -6,6 +6,8 @@ export const STRETCH_PULL = 26;
 export const SQUASH_GIVE = 0.45;
 export const SLIDE_BASE = 160;
 export const SLIDE_SPAN = 240;
+export const MAGNET_ZONE = 0.35;
+export const MAGNET_GIVE = 0.15;
 
 export function clampPx(x, min, max) {
   if (!(max > min)) return min;
@@ -48,6 +50,17 @@ export function slideFor(distance, base = SLIDE_BASE, span = SLIDE_SPAN) {
 export function squashFor(stretch, give = SQUASH_GIVE) {
   if (!(stretch > 1)) return 1;
   return 1 / Math.pow(stretch, give);
+}
+
+export function magnetStep(t, span, zone = MAGNET_ZONE, give = MAGNET_GIVE) {
+  if (!(span >= 1)) return t;
+  const u = clampPx(t, 0, 1) * span;
+  const k = Math.round(u);
+  const d = u - k;
+  const x = Math.min(1, Math.abs(d) * 2);
+  const pull = x <= zone ? 0 : ((x - zone) / (1 - zone)) ** 2;
+  const h = give * x + (1 - give) * pull;
+  return (k + Math.sign(d) * h / 2) / span;
 }
 
 export function nearestIndex(stops, x) {

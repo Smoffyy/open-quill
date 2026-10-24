@@ -1,11 +1,15 @@
-import { db } from '../db.js';
+import path from 'path';
+import multer from 'multer';
+import { db, now } from '../db.js';
 import { authMiddleware } from '../auth.js';
 import * as sandbox from '../sandbox.js';
 import { workspaceFor } from '../lib/projectfiles.js';
-import { sandboxCap, attachName, fileInfo, sendDownload, restoreVersion, saveText } from '../lib/workspacefiles.js';
+import { sandboxCap, attachName, cleanPath, createEmpty, renameTo, fileInfo, sendDownload, restoreVersion, saveText } from '../lib/workspacefiles.js';
 import { activeTurn } from '../lib/ws/live.js';
 
 const wsOf = (c) => workspaceFor(c);
+const fileUpload = multer({ storage: multer.memoryStorage(), defParamCharset: 'utf8', limits: { fileSize: 100 * 1024 * 1024 } });
+const BUSY = 'Wait for the reply to finish before changing files.';
 
 function ownChat(req, res) {
   const c = db.chats.byId(req.params.id);
@@ -49,6 +53,7 @@ export default function registerArtifactRoutes(app) {
           id: c.id + ':' + f.path,
           chatId: c.id,
           chatTitle: c.title || '',
+          mode: c.mode === 'code' ? 'code' : 'chat',
           path: f.path,
           name: f.path.split('/').pop(),
           ext: f.ext || '',
@@ -65,6 +70,44 @@ export default function registerArtifactRoutes(app) {
   app.get('/api/chats/:id/files', authMiddleware, (req, res) => {
     const c = ownChat(req, res); if (!c) return;
     res.json({ files: sandbox.list(wsOf(c)) });
+  });
+
+  app.post('/api/chats/:id/files', authMiddleware, fileUpload.single('file'), (req, res) => {
+    const c = ownChat(req, res); if (!c) return;
+    if (activeTurn(c.id)) return res.status(409).json({ error: BUSY });
+    if (!req.file) return res.status(400).json({ error: 'No file received.' });
+    const ws = wsOf(c);
+    const p = cleanPath(ws, req.body?.path || path.basename(String(req.file.originalname || 'file')));
+    if (!p.ok) return res.status(400).json({ error: p.error });
+    const r = sandbox.importBuffer(ws, p.rel, req.file.buffer, sandboxCap(req.user));
+    if (!r.ok) return res.status(400).json({ error: r.error });
+    db.chats.update(c.id, { updated_at: now() });
+    res.json({ path: p.rel, files: sandbox.list(ws) });
+  });
+
+  app.post('/api/chats/:id/files/new', authMiddleware, (req, res) => {
+    const c = ownChat(req, res); if (!c) return;
+    if (activeTurn(c.id)) return res.status(409).json({ error: BUSY });
+    const ws = wsOf(c);
+    const r = createEmpty(ws, req.body?.path);
+    res.status(r.status).json(r.status === 200 ? { ...r.body, files: sandbox.list(ws) } : r.body);
+  });
+
+  app.post('/api/chats/:id/files/rename', authMiddleware, (req, res) => {
+    const c = ownChat(req, res); if (!c) return;
+    if (activeTurn(c.id)) return res.status(409).json({ error: BUSY });
+    const ws = wsOf(c);
+    const r = renameTo(ws, String(req.body?.path || ''), req.body?.to);
+    res.status(r.status).json(r.status === 200 ? { ...r.body, files: sandbox.list(ws) } : r.body);
+  });
+
+  app.delete('/api/chats/:id/files', authMiddleware, (req, res) => {
+    const c = ownChat(req, res); if (!c) return;
+    if (activeTurn(c.id)) return res.status(409).json({ error: BUSY });
+    const ws = wsOf(c);
+    const rel = String(req.query.path || '');
+    if (rel) sandbox.deleteFile(ws, rel);
+    res.json({ files: sandbox.list(ws) });
   });
 
   app.get('/api/chats/:id/file', authMiddleware, (req, res) => {

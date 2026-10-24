@@ -1,5 +1,6 @@
 import { db, getSetting } from '../db.js';
-import { oneShot } from './oneshot.js';
+import { oneShot, oneShotFull } from './oneshot.js';
+import { canPrefill } from './stream.js';
 
 export function resolveTitleModel(chattingModel) {
   if (getSetting('auto_title_model_mode', 'current') !== 'specific') return chattingModel;
@@ -47,9 +48,9 @@ Files, code, or documents produced, with their names and current state.
 ## Open Questions / Next Steps
 Anything unresolved or planned.
 
-Be concise but complete. Preserve specifics (names, numbers, snippets) over prose. Omit pleasantries and filler. Output only the summary.`;
+Be concise but complete. Preserve specifics (names, numbers, snippets) over prose. Images are described in full and kept separately, so refer to an image only briefly by its name. Omit pleasantries and filler. Output only the summary.`;
 
-export async function summarizeConversation(model, priorSummary, msgs) {
+export function summaryMessages(priorSummary, msgs, maxTokens = 0) {
   const flat = msgs.map(m => {
     let text = '';
     if (typeof m.content === 'string') text = m.content;
@@ -60,8 +61,33 @@ export async function summarizeConversation(model, priorSummary, msgs) {
   const user = (priorSummary && priorSummary.trim())
     ? `Summary of the conversation up to an earlier point:\n${priorSummary.trim()}\n\nNewer messages to fold into the summary:\n\n${flat}`
     : `Conversation to summarize:\n\n${flat}`;
-  try {
-    const t = await oneShot(model, [{ role: 'system', content: SUMMARY_SYSTEM }, { role: 'user', content: user }]);
-    return stripThink(model, t).trim();
-  } catch { return ''; }
+  const system = maxTokens > 0 ? `${SUMMARY_SYSTEM}\n\nThe whole summary must stay well under ${maxTokens} tokens.` : SUMMARY_SYSTEM;
+  return [{ role: 'system', content: system }, { role: 'user', content: user }];
+}
+
+const skipThinking = new Set();
+
+function closedThought(model) {
+  const open = (model.think_open && model.think_open.trim()) || '<think>';
+  const close = (model.think_close && model.think_close.trim()) || '</think>';
+  return { role: 'assistant', content: open + '\n\n' + close + '\n\n', prefill: true };
+}
+
+export async function summarizeConversation(model, priorSummary, msgs, { maxTokens = 0 } = {}) {
+  return oneShotAnswer(model, summaryMessages(priorSummary, msgs, maxTokens), { maxTokens });
+}
+
+export async function oneShotAnswer(model, messages, { maxTokens = 0 } = {}) {
+  const ask = async (list) => {
+    try { return stripThink(model, (await oneShotFull(model, list, { maxTokens })).text || '').trim(); }
+    catch { return ''; }
+  };
+  const key = String(model.id || model.internal_name || '');
+  if (!skipThinking.has(key)) {
+    const text = await ask(messages);
+    if (text || !canPrefill(model)) return text;
+  }
+  const text = await ask([...messages, closedThought(model)]);
+  if (text) skipThinking.add(key);
+  return text;
 }

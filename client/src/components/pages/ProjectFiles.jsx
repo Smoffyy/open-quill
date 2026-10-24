@@ -101,15 +101,15 @@ function FileTree({ node, prefix, depth, closed, renaming, onToggle, onOpen, onR
       continue;
     }
     rows.push(
-      <div key={'f:' + f.name} className="pj-row" style={{ paddingLeft: 8 + depth * 12 }} title={f.name}>
+      <div key={'f:' + f.name} className="pj-row" style={{ paddingLeft: 8 + depth * 12 }} data-tip={f.name}>
         <button type="button" className="pj-row-open" onClick={() => onOpen(f.name)}>
           <FileText className="pj-row-icon" style={{ width: 13 }} />
           <span className="pj-row-name">{f.base}</span>
           <span className="pj-row-meta">{fmtSize(f.size)}</span>
         </button>
         <span className="pj-row-actions">
-          <button type="button" className="ft-act" title={t('Rename')} aria-label={t('Rename {name}', { name: f.base })} onClick={() => onRename(f.name)}><Pencil /></button>
-          <button type="button" className="ft-act ft-del" title={t('Delete')} aria-label={t('Delete {name}', { name: f.base })} onClick={() => onRemove(f.name)}><X /></button>
+          <button type="button" className="ft-act" data-tip={t('Rename')} aria-label={t('Rename {name}', { name: f.base })} onClick={() => onRename(f.name)}><Pencil /></button>
+          <button type="button" className="ft-act ft-del" data-tip={t('Delete')} aria-label={t('Delete {name}', { name: f.base })} onClick={() => onRemove(f.name)}><X /></button>
         </span>
       </div>
     );
@@ -217,10 +217,10 @@ export default function ProjectFiles({ projectId }) {
           <span>{t('Files')}{files.length ? ` (${files.length})` : ''}</span>
           <span className="pj-card-tools">
             {files.length > 0 && (
-              <a className="pj-card-add" href={base + '/zip'} title={t('Download all')} aria-label={t('Download all')}><Download style={{ width: 15 }} /></a>
+              <a className="pj-card-add" href={base + '/zip'} data-tip={t('Download all')} aria-label={t('Download all')}><Download style={{ width: 15 }} /></a>
             )}
             <span className="pj-menu-wrap" ref={menuRef}>
-              <button type="button" className="pj-card-add" disabled={busy} title={t('Add files')} aria-label={t('Add files')}
+              <button type="button" className="pj-card-add" disabled={busy} data-tip={t('Add files')} aria-label={t('Add files')}
                 aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(m => !m)}><Plus style={{ width: 16 }} /></button>
               {menu && (
                 <div className="pj-menu pj-files-menu" role="menu">

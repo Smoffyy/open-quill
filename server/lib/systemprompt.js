@@ -12,8 +12,11 @@ import { userMemoryOn, memoriesText } from './memory.js';
 import { todosOf, todoText } from './todo.js';
 import { consultTargets, consultTargetsText } from './consult.js';
 import { sandboxHostText, sandboxWorkspaceText, conversationTiming, pinnedFilesText } from './prompts.js';
-import { promptVars } from './convo.js';
+import { promptVars, summaryText } from './convo.js';
+import { buildTools } from '../tools/index.js';
+import { hostEnvInfo } from '../sandbox.js';
 import { webSearchAvailable } from './websearch.js';
+import { codeToolState, codePrompt } from './codeprompt.js';
 
 const MIGRATION_KEY = 'prompt_blocks_version';
 const MIGRATION_VERSION = 1;
@@ -46,7 +49,15 @@ export function syncAllModels(before, after) {
   return changed;
 }
 
-export function toolState(chat, model, { sandboxOn = false, webSearchOn = false, canAsk = false } = {}) {
+export function toolsFor(flags) {
+  if (!flags.toolsOn) return [];
+  const consultNames = flags.consultOn ? flags.consultWith.map(t => t.display_name || t.internal_name) : [];
+  return buildTools({ ...flags, consultNames, hostEnv: flags.sandboxOn ? hostEnvInfo() : null, readOnly: flags.planMode });
+}
+
+export function toolState(chat, model, { sandboxOn = false, webSearchOn = false, canAsk = false, plan = false } = {}) {
+  const row = chat?.id ? (db.chats.byId(chat.id) || chat) : chat;
+  if (row?.mode === 'code') return codeToolState(row, { webSearchOn, canAsk, plan });
   const userId = chat?.user_id || null;
   const membankOn = getSetting('membank_enabled', '0') === '1' && referenceFiles.count() > 0;
   const chatSearchOn = !!model.chat_search_allowed && getSetting('chat_search_enabled', '0') === '1';
@@ -66,7 +77,7 @@ export function toolState(chat, model, { sandboxOn = false, webSearchOn = false,
   const toolsOn = sandboxOn || webSearchOn || membankOn || chatSearchOn || skillsOn || mcpOn || endChatOn || memoryOn
     || calculatorOn || todoOn || askUserOn || consultOn;
   return {
-    sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, userSkills, mcpSchemas, mcpOn, mcpUser: userId,
+    sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, userSkills, mcpSchemas, mcpOn, mcpUser: userId, recallOn: toolsOn && !!row?.summary,
     endChatOn, memoryAllowed, memoryOn, calculatorOn, todoOn, askUserOn, consultOn, consultWith, toolsOn
   };
 }
@@ -100,7 +111,7 @@ export function promptVarMap(chat, model, state, { userId = null, styleText = ''
     chatInstructions: row?.instructions || '',
     pinnedFiles: () => pinnedFilesText(row),
     responseStyle: styleText,
-    conversationSummary: row?.summary || '',
+    conversationSummary: () => summaryText(row, !!state.recallOn),
     conversationTiming: () => (row ? conversationTiming(row.id) : ''),
     sandboxHost: () => sandboxHostText(),
     sandboxWorkspace: () => (row ? sandboxWorkspaceText(projectfiles.workspaceFor(row), String(project?.name || '')) : ''),
@@ -115,6 +126,7 @@ export function promptVarMap(chat, model, state, { userId = null, styleText = ''
 export function systemPrompt(chat, model, state, { userId = null, styleText = '', callMode = false, client = null } = {}) {
   const row = chat ? (db.chats.byId(chat.id) || chat) : null;
   const vars = promptVarMap(chat, model, state, { userId, styleText, client });
+  if (state.code) return codePrompt(vars, state);
   const override = callMode && (model.call_prompt || '').trim() ? model.call_prompt
     : (row?.system_override || '').trim() ? row.system_override : null;
   return renderPrompt(model.system_prompt || '', { active: activeBlocks(model, state), vars, base: override });

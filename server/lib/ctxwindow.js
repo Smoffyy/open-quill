@@ -1,15 +1,21 @@
-import { modelCtx } from './models.js';
-import { isLlamaCpp, llamaPromptTokens } from './llamacpp.js';
+import { modelCtx, knownCtx } from './models.js';
+import { isLlamaCpp, llamaPromptTokens, llamaTextTokens } from './llamacpp.js';
+import { isVllm, vllmPromptTokens, vllmTextTokens } from './vllm.js';
 
 const HEAD_KEEP = 600;
 const DROP_NOTE = '[Older messages in this conversation were dropped to stay inside the model context window.]';
 const IMG_NOTE = '[{n} earlier image(s) from this message were removed to stay inside the model context window.]';
 const TRIM_NOTE = '\n\n[... middle of this message was cut to fit the model context window ...]\n\n';
 const MAX_PROBES = 8;
+const SHED_IMAGE = '[An image was removed here to save room in the context window.]';
+const SHED_TOOL = '\n[... tool output trimmed to save room in the context window ...]\n';
+const CODE_KEEP_HEAD = 10;
+const CODE_KEEP_TAIL = 5;
+const CODE_MAX_LINES = 40;
+const TOOL_MAX_CHARS = 1200;
 const MIN_TAIL_CHARS = 200;
 const MIN_RECLAIM_CHARS = 400;
 const RECLAIM_PROBES = 6;
-const CACHE_STEP = 0.25;
 
 const learnedCtx = new Map();
 const LEARNED_TTL = 30 * 60 * 1000;
@@ -37,15 +43,14 @@ export async function effectiveCtx(model) {
 }
 
 export function outputReserve(model, ctx) {
-  const half = Math.max(32, Math.floor(ctx * 0.5));
-  const floor = Math.min(half, Math.min(1024, Math.max(256, Math.floor(ctx * 0.05))));
+  const cap = Math.max(32, Math.floor(ctx * (model?.has_reasoning ? 0.6 : 0.5)));
+  const floor = Math.min(cap, Math.min(1024, Math.max(256, Math.floor(ctx * 0.05))));
   const want = parseInt(model?.max_tokens, 10);
-  if (Number.isFinite(want) && want > 0) return Math.min(Math.max(want, floor), half);
-  return Math.min(Math.max(2048, floor), half);
+  if (Number.isFinite(want) && want > 0) return Math.min(Math.max(want, floor), cap);
+  return Math.min(Math.max(model?.has_reasoning ? 4096 : 2048, floor), cap);
 }
 
-export async function contextBudget(model) {
-  const ctx = await effectiveCtx(model);
+export function budgetOf(model, ctx) {
   if (!(ctx > 0)) return { ctx: 0, reserve: 0, budget: 0 };
   const reserve = outputReserve(model, ctx);
   const safety = Math.min(256, Math.max(32, Math.floor(ctx * 0.01)));
@@ -53,9 +58,28 @@ export async function contextBudget(model) {
   return { ctx, reserve, budget: raw > 0 ? raw : Math.max(64, Math.floor(ctx * 0.5)) };
 }
 
+export function knownContext(model) {
+  return learnedFor(model) || knownCtx(model);
+}
+
+export async function contextBudget(model) {
+  return budgetOf(model, await effectiveCtx(model));
+}
+
+export function canCount(model) {
+  return isLlamaCpp(model) || isVllm(model);
+}
+
 export async function countExact(model, msgs, tools) {
-  if (!isLlamaCpp(model)) return 0;
-  return llamaPromptTokens(model, msgs, tools);
+  if (isLlamaCpp(model)) return llamaPromptTokens(model, msgs, tools);
+  if (isVllm(model)) return vllmPromptTokens(model, msgs, tools);
+  return 0;
+}
+
+export async function countText(model, text) {
+  if (isLlamaCpp(model)) return llamaTextTokens(model, text);
+  if (isVllm(model)) return vllmTextTokens(model, text);
+  return 0;
 }
 
 function textLen(m) {
@@ -173,7 +197,7 @@ function droppableIdx(keep) {
   return list;
 }
 
-async function reclaim(msgs, keep, dropCount, budget, count, fitted, fittedTokens, perChar) {
+async function reclaim(msgs, keep, dropCount, budget, count, fitted, fittedTokens) {
   const idx = droppableIdx(keep);
   if (dropCount < 1 || dropCount > idx.length) return { msgs: fitted, tokens: fittedTokens, reclaimed: false };
   const full = textLen(msgs[idx[dropCount - 1]]);
@@ -182,9 +206,7 @@ async function reclaim(msgs, keep, dropCount, budget, count, fitted, fittedToken
   let hi = full;
   let best = null;
   let bestTokens = fittedTokens;
-  let probe = perChar > 0
-    ? Math.min(hi, Math.max(lo, Math.floor((budget - fittedTokens) / perChar)))
-    : Math.floor((lo + hi) / 2);
+  let probe = Math.floor((lo + hi) / 2);
   for (let i = 0; i < RECLAIM_PROBES && lo <= hi; i++) {
     const cand = applyDrop(msgs, keep, dropCount, probe);
     const t = await count(cand);
@@ -203,17 +225,6 @@ async function reclaim(msgs, keep, dropCount, budget, count, fitted, fittedToken
 function droppableCount(keep) {
   let n = 0;
   for (let i = 0; i < keep.length; i++) if (!keep[i]) n++;
-  return n;
-}
-
-function guessDrop(msgs, keep, over, perChar) {
-  let need = over;
-  let n = 0;
-  for (let i = 0; i < msgs.length && need > 0; i++) {
-    if (keep[i]) continue;
-    need -= Math.max(1, Math.round(textLen(msgs[i]) * perChar));
-    n++;
-  }
   return n;
 }
 
@@ -298,46 +309,30 @@ async function trimBiggest(msgs, budget, count) {
   return { msgs: work, trimmed, tokens, images };
 }
 
-export function trimMode(model) {
-  return model && model.ctx_trim_mode === 'cache' ? 'cache' : 'retain';
-}
-
-export async function slideWithCounter(count, msgs, budget, opts = {}) {
+export async function slideWithCounter(count, msgs, budget) {
   const none = { msgs, dropped: 0, trimmed: false, tokens: 0, exact: false };
   if (!budget || !Array.isArray(msgs) || !msgs.length) return none;
-  const cacheMode = opts.mode === 'cache';
 
   const total = await count(msgs);
   if (!total) return none;
   if (total <= budget) return { msgs, dropped: 0, trimmed: false, tokens: total, exact: true };
 
-  const over = total - budget;
-  const step = Math.max(256, Math.floor(budget * CACHE_STEP));
-  const needRemoved = cacheMode ? Math.ceil(over / step) * step : over;
-  const target = total - needRemoved;
-
   const keep = protectedFlags(msgs);
   const maxDrop = droppableCount(keep);
-  let chars = 0;
-  for (const m of msgs) chars += textLen(m);
-  const perChar = chars > 0 ? total / chars : 0;
+  const probes = Math.ceil(Math.log2(maxDrop + 1)) + 1;
 
-  let lo = 0;
+  let lo = 1;
   let hi = maxDrop;
   let bestMsgs = null;
   let bestTokens = 0;
   let bestDrop = 0;
-  let fitMsgs = null;
-  let fitTokens = 0;
-  let fitDrop = 0;
-  let probe = Math.min(maxDrop, Math.max(1, guessDrop(msgs, keep, needRemoved, perChar)));
+  let probe = Math.floor((lo + hi) / 2);
 
-  for (let i = 0; i < MAX_PROBES && lo <= hi; i++) {
+  for (let i = 0; i < probes && lo <= hi; i++) {
     const cand = applyDrop(msgs, keep, probe);
     const t = await count(cand);
     if (!t) return none;
-    if (t <= budget && (!fitMsgs || probe < fitDrop)) { fitMsgs = cand; fitTokens = t; fitDrop = probe; }
-    if (t <= target) {
+    if (t <= budget) {
       bestMsgs = cand; bestTokens = t; bestDrop = probe;
       hi = probe - 1;
     } else {
@@ -349,16 +344,13 @@ export async function slideWithCounter(count, msgs, budget, opts = {}) {
   }
 
   if (bestMsgs) {
-    if (!cacheMode) {
-      const headroom = budget - bestTokens;
-      if (bestDrop > 0 && headroom > Math.max(200, Math.floor(budget * 0.04))) {
-        const back = await reclaim(msgs, keep, bestDrop, budget, count, bestMsgs, bestTokens, perChar);
-        if (back.reclaimed) return { msgs: back.msgs, dropped: bestDrop - 1, trimmed: true, tokens: back.tokens, exact: true };
-      }
+    const headroom = budget - bestTokens;
+    if (bestDrop > 0 && headroom > Math.max(200, Math.floor(budget * 0.04))) {
+      const back = await reclaim(msgs, keep, bestDrop, budget, count, bestMsgs, bestTokens);
+      if (back.reclaimed) return { msgs: back.msgs, dropped: bestDrop - 1, trimmed: true, tokens: back.tokens, exact: true };
     }
     return { msgs: bestMsgs, dropped: bestDrop, trimmed: false, tokens: bestTokens, exact: true };
   }
-  if (fitMsgs) return { msgs: fitMsgs, dropped: fitDrop, trimmed: false, tokens: fitTokens, exact: true };
 
   const stripped = applyDrop(msgs, keep, maxDrop);
   const after = await count(stripped);
@@ -368,8 +360,61 @@ export async function slideWithCounter(count, msgs, budget, opts = {}) {
   return { msgs: t.msgs, dropped: maxDrop, trimmed: !!t.trimmed, images: t.images || 0, tokens: t.tokens, exact: !!t.tokens };
 }
 
-export async function slideToFit(model, msgs, budget, tools) {
-  return slideWithCounter((list) => countExact(model, list, tools), msgs, budget, { mode: trimMode(model) });
+function shedCode(text) {
+  return text.replace(/(^|\n)(`{3,}|~{3,})([^\n]*)\n([\s\S]*?)\n\2[ \t]*(?=\n|$)/g, (all, lead, fence, info, body) => {
+    const lines = body.split('\n');
+    if (lines.length <= CODE_MAX_LINES) return all;
+    const cut = lines.length - CODE_KEEP_HEAD - CODE_KEEP_TAIL;
+    const kept = [...lines.slice(0, CODE_KEEP_HEAD), `[... ${cut} lines removed to save room in the context window ...]`, ...lines.slice(-CODE_KEEP_TAIL)];
+    return lead + fence + info + '\n' + kept.join('\n') + '\n' + fence;
+  });
+}
+
+function shedMessage(m) {
+  if (m.role === 'tool') {
+    const text = String(m.content ?? '');
+    if (text.length <= TOOL_MAX_CHARS) return m;
+    return { ...m, content: text.slice(0, 600) + SHED_TOOL + text.slice(-300) };
+  }
+  if (typeof m.content === 'string') {
+    const text = shedCode(m.content);
+    return text === m.content ? m : { ...m, content: text };
+  }
+  if (!Array.isArray(m.content)) return m;
+  let changed = false;
+  const parts = m.content.map(p => {
+    if (p && p.type === 'image_url') { changed = true; return { type: 'text', text: SHED_IMAGE }; }
+    if (!p || p.type !== 'text') return p;
+    const text = shedCode(p.text || '');
+    if (text === p.text) return p;
+    changed = true;
+    return { ...p, text };
+  });
+  return changed ? { ...m, content: parts } : m;
+}
+
+export function shedBulk(msgs) {
+  const keep = protectedFlags(msgs);
+  let shed = 0;
+  const out = msgs.map((m, i) => {
+    if (keep[i]) return m;
+    const next = shedMessage(m);
+    if (next !== m) shed++;
+    return next;
+  });
+  return { msgs: shed ? out : msgs, shed };
+}
+
+export async function fitToWindow(model, msgs, budget, tools, { drop = true } = {}) {
+  const count = (list) => countExact(model, list, tools);
+  const result = (list, tokens, extra = {}) => ({ msgs: list, tokens, fits: !!tokens && tokens <= budget, shed: 0, dropped: 0, trimmed: false, images: 0, ...extra });
+  const total = await count(msgs);
+  if (!total || total <= budget) return result(msgs, total);
+  const lean = shedBulk(msgs);
+  const tokens = lean.shed ? await count(lean.msgs) : total;
+  if (!drop || (tokens && tokens <= budget)) return result(lean.msgs, tokens, { shed: lean.shed });
+  const r = await slideWithCounter(count, lean.msgs, budget);
+  return result(r.msgs, r.tokens, { shed: lean.shed, dropped: r.dropped, trimmed: r.trimmed, images: r.images || 0 });
 }
 
 export function shrinkByRatio(msgs, factor) {

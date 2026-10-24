@@ -2,19 +2,23 @@ import { useMemo } from 'react';
 import Dialog from '../ui/Dialog.jsx';
 import CloseButton from '../ui/CloseButton.jsx';
 import { t } from '../../i18n.jsx';
-import { KEYBIND_ACTIONS, comboKeys, resolveKeybinds } from '../../lib/keybinds.js';
+import { KEYBIND_ACTIONS, comboKeys, keyLabels, resolveKeybinds } from '../../lib/keybinds.js';
 
 const STATIC_GROUPS = [
   { title: 'Composer', items: [
     ['Send message', ['Enter']],
-    ['New line', ['Shift', 'Enter']],
-    ['Paste image', ['Ctrl', 'V']],
+    ['New line', ['shift', 'Enter']],
+    ['Paste image', ['mod', 'V']],
+    ['Slash commands (at the start)', ['/']],
   ]},
   { title: 'In this conversation', items: [
-    ['Next / previous match', ['Enter', 'Shift+Enter'], 'threadFind'],
+    ['Next match', ['Enter'], 'threadFind'],
+    ['Previous match', ['shift', 'Enter'], 'threadFind'],
   ]},
   { title: 'Messages', items: [
-    ['Pin / unpin', ['Hover', '📌']],
+    ['Edit, branch, pin or delete (right-click or long-press)', ['shift', 'F10']],
+    ['Save an edited message', ['mod', 'Enter']],
+    ['Cancel an edit', ['Esc']],
     ['Cycle versions', ['‹', '›']],
   ]},
 ];
@@ -41,7 +45,7 @@ export default function ShortcutsModal({ prefs, onClose, onCustomize }) {
     for (const g of STATIC_GROUPS) {
       for (const [label, keys, need] of g.items) {
         if (need && p[need] === false) continue;
-        push(g.title, [label, keys]);
+        push(g.title, [label, keyLabels(keys)]);
       }
     }
     return [...map.entries()]

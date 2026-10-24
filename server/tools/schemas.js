@@ -1,3 +1,5 @@
+import { SANDBOX_READONLY } from './aliases.js';
+
 function fn(name, description, properties = {}, required = []) {
   return {
     type: 'function',
@@ -21,9 +23,11 @@ function bashDescription(env) {
     : 'none detected';
   const shell = env ? `${env.osName} / ${env.shellName}` : 'the host shell';
   const lines = [
-    `Run one shell command inside your workspace directory on ${shell}. This is your main tool: run and test code, install project dependencies, scaffold, inspect data.`,
-    `Programs available on this host: ${runtimes}.${env && env.utils && env.utils.length ? ` Utilities: ${env.utils.join(', ')}.` : ''} Calling anything else fails.`
+    `Run one shell command inside your workspace directory on ${shell}. This is your main tool: run and test code, install project dependencies, scaffold, inspect data.`
   ];
+  if (!env || env.probed) {
+    lines.push(`Programs available on this host: ${runtimes}.${env && env.utils && env.utils.length ? ` Utilities: ${env.utils.join(', ')}.` : ''} Calling anything else fails.`);
+  }
   if (env && env.missingUtils && env.missingUtils.length) {
     lines.push(`NOT installed on this host, do not call them: ${env.missingUtils.join(', ')}.`);
   }
@@ -196,12 +200,19 @@ export function consultModelSchema(names = []) {
   }, ['model', 'question']);
 }
 
-export function buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, memoryOn = false, calculatorOn = false, todoOn = false, askUserOn = false, consultNames = [], hostEnv = null }) {
+export function recallSchema() {
+  return fn('recall', 'Search the earlier part of THIS conversation that is no longer in your context because it was folded into the conversation summary. Returns the matching messages word for word, and any image they contain at full quality. Use it when the summary is not detailed enough, for example to quote what the user said, to get exact names, numbers or code, or to look at an earlier image again (search for its name).', {
+    query: str('Words to look for in the earlier messages (case-insensitive).')
+  }, ['query']);
+}
+
+export function buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, memoryOn = false, calculatorOn = false, todoOn = false, askUserOn = false, recallOn = false, consultNames = [], hostEnv = null, readOnly = false }) {
   const out = [];
-  if (sandboxOn) out.push(...sandboxToolSchemas(hostEnv));
+  if (sandboxOn) out.push(...sandboxToolSchemas(hostEnv).filter(s => !readOnly || SANDBOX_READONLY.has(s.function.name)));
   if (webSearchOn) out.push(webSearchSchema());
   if (membankOn) out.push(...membankSchemas());
   if (chatSearchOn) out.push(...chatSearchSchemas());
+  if (recallOn) out.push(recallSchema());
   if (skillsOn) out.push(skillSchema());
   if (memoryOn) out.push(memorySchema());
   if (calculatorOn) out.push(calculatorSchema());

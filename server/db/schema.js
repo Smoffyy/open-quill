@@ -75,7 +75,13 @@ CREATE INDEX IF NOT EXISTS idx_sessions_seen ON sessions(last_seen);`,
 
   `CREATE TABLE IF NOT EXISTS releases (id TEXT PRIMARY KEY, version INTEGER, created_at INTEGER, data TEXT NOT NULL);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_releases_version ON releases(version);
-CREATE TABLE IF NOT EXISTS draft_edits (id TEXT PRIMARY KEY, updated_at INTEGER, data TEXT NOT NULL);`
+CREATE TABLE IF NOT EXISTS draft_edits (id TEXT PRIMARY KEY, updated_at INTEGER, data TEXT NOT NULL);`,
+
+  `UPDATE models SET data = json_set(data, '$.num_ctx', 0) WHERE json_valid(data) AND json_extract(data, '$.num_ctx') > 0;
+UPDATE settings SET value = (
+  SELECT json_group_array(json(json_set(e.value, '$.num_ctx', 0)))
+  FROM (SELECT value FROM json_each(settings.value) ORDER BY key) e
+) WHERE key = 'published_models' AND json_valid(value) AND json_type(value) = 'array' AND json_array_length(value) > 0;`
 ];
 
 export const LATEST_VERSION = MIGRATIONS.length + 1;

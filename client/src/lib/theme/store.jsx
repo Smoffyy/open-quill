@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useRef, useCallback, us
 import { api } from '../api.js';
 import { docToCss, injectCss, clearCss } from './css.js';
 import { emptyDoc, migrateDoc, fillPlaceholders, CONTENT_INDEX } from './schema.js';
+import { DEFAULT_PRESET } from '../presets.js';
 
 const Ctx = createContext(null);
 export const useTheme = () => useContext(Ctx);
@@ -152,7 +153,7 @@ export function ThemeProvider({ user, cfg, children }) {
       baseline.current = saved.baseline ? { themeId: draft.id, doc: saved.baseline } : null;
       setDepth({ undo: past.current.length, redo: future.current.length, baseline: !!baseline.current });
     } catch {
-      setTheme({ id: '', name: '', basePreset: 'anthropic', doc: emptyDoc() });
+      setTheme({ id: '', name: '', basePreset: DEFAULT_PRESET, doc: emptyDoc() });
     }
   }, [isAdmin]);
 

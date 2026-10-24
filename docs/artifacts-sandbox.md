@@ -1,40 +1,49 @@
-# Artifacts & Sandbox
+# Code sessions and the sandbox
 
-## What it is
+## Code mode
 
-With **Sandbox tools** on (composer **+** menu, `Alt+S`, or on by default for some models), the assistant gets a workspace of its own: a file system and a shell. It can create and edit files, install packages, build and run code, and fix what fails. Every chat has its own workspace; chats inside a project share the project's workspace, so files you upload to the project are ordinary files in it.
+The sidebar has a **Chat / Code** switch. Chats are ordinary conversations. A **Code session** is a chat that also gets a sandbox: a workspace with a file system and a shell. The assistant can create and edit files, install packages, run builds and fix what fails.
 
-Every file the assistant writes appears in the **Artifacts** panel. Open it with the artifacts button in the top bar, whose badge counts the files, or `Alt+A`.
+To start one, switch to **Code** and start a chat. Only models an admin has marked **Available in Code** can run Code sessions, and they are greyed out in the Code model picker otherwise.
 
-Sandbox tools are only offered when the admin allows them for the selected model, and never in incognito chats.
+Chats inside a project get the same sandbox. They share the project's workspace, so files in the project's **Files** are ordinary files the chats can read and edit. See [Organizing your chats](organizing-chats.md#projects).
 
-## The panel
+Ordinary chats outside a project have no sandbox, and incognito chats never have one.
 
-- A file tree, or a flat list if you prefer. Folders collapse and expand, and build and dependency folders such as `node_modules` are hidden, as is anything in the workspace's `.gitignore`.
+## The files panel
+
+Every file the assistant writes in a Code session appears in the files panel. Open it from the top bar, or with `Alt+A` (**Files panel (Code)** in the shortcut list). Its badge counts the files.
+
+- Folders expand and collapse. Build and dependency folders such as `node_modules` are hidden, and so is anything in the workspace's `.gitignore`.
 - **Filter files** narrows the list by name.
-- Open a second file beside the first to compare them, and close the split when you are done.
-- Drag the panel's edge to resize it, or switch to **Full screen**.
-- A file the assistant is still writing streams in live, marked as being written.
+- Open a second file beside the first to compare them.
+- Drag the edge to resize the panel, or use full screen.
+- A file the assistant is still writing appears live, marked as being written.
 
 ## Viewing and editing
 
-- **Code and text** are highlighted, with **Find in file** and word wrap.
-- **HTML, SVG and Markdown** can switch between the source and a live **Preview**.
-- **Images** open in a viewer with zoom.
-- Files that cannot be shown are offered as a download.
+- **Code and text** are highlighted, with **Find in file**.
+- **HTML, SVG and Markdown** switch between the source and a **Preview**.
+- **Images** open in a viewer.
+- Files that cannot be shown are offered as downloads.
 
-**Edit** opens a file for changes; **Save** writes them as a new version. Editing waits until the current reply has finished, so you and the assistant never write the same file at once.
+**Edit** opens a file for changes, and **Save** writes a new version. Editing waits until the current reply finishes, so you and the assistant never write the same file at once.
 
 ## Versions
 
-Every change to a file is kept. **Version history** steps through the versions, and **Show changes from previous version** shows a diff with **Jump to first change**. **Restore** brings back an older version as the newest one, so nothing after it is lost.
+Every change to a file is kept.
+
+- **Version history** steps through the versions.
+- **Show changes from previous version** shows a diff, and **Jump to first change** moves to the first difference.
 
 ## Downloading
 
-Download any single file, or **Download all** for the whole workspace as a zip. The **Artifacts** page in the sidebar lists files from every chat in one place.
+Download a single file, or **Download all** for the whole workspace as a zip. The **Artifacts** page in the sidebar lists the files from every chat in one place.
 
 ## Where it runs
 
-The sandbox runs on the same machine as Open Quill, in a folder per workspace, with a fixed list of dangerous host commands refused and paths kept inside the workspace. It has the same network access as the machine itself, so code it runs can make its own requests, just as if you ran it yourself. See [Privacy & Security](privacy-security.md#what-leaves-the-machine).
+The sandbox runs on the same machine as Open Quill, in a folder for each workspace. Paths stay inside the workspace, and a fixed list of dangerous host commands is refused.
 
-An admin sets how much storage each member's sandbox may use under **Admin Panel → Quotas**.
+The sandbox has the same network access as the machine, so code it runs can make its own requests, just as if you ran it yourself. See [Privacy and security](privacy-security.md#what-leaves-the-machine).
+
+An admin sets how much storage each sandbox can use under **Admin Panel → Quotas**.

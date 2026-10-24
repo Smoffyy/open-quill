@@ -56,8 +56,8 @@ function MemoryItem({ item, onSave, onRemove }) {
         <div className="mem-meta">{when ? `${by} · ${when}` : by}</div>
       </div>
       <div className="mem-acts">
-        <button className="mem-btn" onClick={start} aria-label={t('Edit memory')} title={t('Edit')}><Pencil /></button>
-        <button className="mem-btn danger" onClick={() => onRemove(item)} aria-label={t('Delete memory')} title={t('Delete')}><Trash /></button>
+        <button className="mem-btn" onClick={start} aria-label={t('Edit memory')} data-tip={t('Edit')}><Pencil /></button>
+        <button className="mem-btn danger" onClick={() => onRemove(item)} aria-label={t('Delete memory')} data-tip={t('Delete')}><Trash /></button>
       </div>
     </li>
   );
@@ -148,19 +148,16 @@ export default function MemoryTab({ prefs, setPref }) {
             )}
             {items != null && list.length > 0 && <div className="muted-note count-note">{list.length}/{MEMORY_MAX_ITEMS}</div>}
           </div>
-          {!confirmClear ? (
-            <SetRow label={t('Forget everything')} desc={t('Deletes every saved memory. The assistant may save new ones while memory is on.')}>
-              <button className="btn ghost danger" disabled={!list.length} onClick={() => setConfirmClear(true)}><Trash className="btn-ic" /> {t('Clear')}</button>
-            </SetRow>
-          ) : (
-            <div className="dz-confirm" role="group" aria-label={t('Forget everything')}>
-              <div className="muted-note">{t("Delete every memory? This can't be undone.")}</div>
-              <div className="edit-actions">
+          <SetRow label={t('Forget everything')} desc={confirmClear ? t("Delete every memory? This can't be undone.") : t('Deletes every saved memory. The assistant may save new ones while memory is on.')}>
+            {!confirmClear ? (
+              <button className="btn ghost" disabled={!list.length} onClick={() => setConfirmClear(true)}><Trash className="btn-ic" /> {t('Clear')}</button>
+            ) : (
+              <div className="set-actions">
                 <button className="btn ghost" onClick={() => setConfirmClear(false)}>{t('Cancel')}</button>
-                <button className="btn danger" onClick={clear}>{t('Yes, clear memory')}</button>
+                <button className="btn primary" onClick={clear}>{t('Clear')}</button>
               </div>
-            </div>
-          )}
+            )}
+          </SetRow>
         </>
       )}
     </>

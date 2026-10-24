@@ -1,87 +1,140 @@
 # Settings
 
-Open **Settings** from the profile menu at the bottom left, or with `Ctrl+,`. The search box at the top of the window finds any setting by name and jumps to it.
+Open **Settings** from the profile menu, or with `Ctrl+,`. The search box at the top finds any setting by name.
 
-## Settings
+The left column has three groups: **Settings** (General, Interface, Security, Keybinds, Memory and Usage), **Customize** (Skills and MCP) and **About** (Version).
 
-### General
+## General
+
+**Profile**
 
 - **What should we call you?** Your display name, used in greetings.
-- **Language**: the interface language on this device. Replies are not translated.
-- **Instructions for the Assistant**: added to every chat you have, up to 8000 characters.
-- **Export everything** downloads your chats, styles, personas, prompts and memory as one JSON file. **Import** reads one back, adding its chats and merging the rest.
-- **Danger zone**: **Delete all chats** (your account stays), **Reset all settings** to the current theme's defaults, and **Delete account**, which removes the account and everything in it. The owner account cannot be deleted.
 
-### Interface
+**Preferences**
+
+- **Language**: the interface language on this device. Chats and replies are not translated.
+- **Instructions for the Assistant**: added to every chat, up to 8000 characters. See [How instructions combine](#how-instructions-combine).
+
+**Your data**
+
+- **Export** downloads your chats, styles and memory as one JSON file.
+- **Import** reads one of those files back. Imported chats are added, and profile data is merged.
+
+**Danger zone**
+
+- **Delete all saved chats** removes every chat and its files. Your account stays.
+- **Reset all settings** returns settings to the defaults for the current theme. Chats and your account are untouched.
+- **Delete account** removes your account and everything in it. The owner account cannot be deleted.
+
+## How instructions combine
+
+Several sources can apply to one chat. All of them are sent together:
+
+- The **Instructions for the Assistant** in General, which apply to every chat.
+- **Project instructions**, which apply to every chat in that project.
+- **Chat instructions**, which apply to one chat.
+- The **response style** you picked for the chat.
+
+An admin's system prompt for the model sits around all of these. **What gets sent** (`Alt+P`) shows exactly what ended up in the prompt.
+
+## Interface
+
+This page controls how the app looks and behaves on this device. The layout itself is set by an admin.
 
 **Appearance**
 
-- **Theme**: **System** follows your device, or pick one of the current preset's palettes. Colors only, the layout never changes.
-- **Chat font**: overrides the theme's font on this device.
+- **Colour palette**: **System** follows your device, or pick a palette for the current layout. Colours only.
+- **Chat font**: Theme default, Literata, Newsreader or Open Sans. Applies to this device only.
 - **Message density**: Comfortable or Compact.
 - **Reading width**: Comfortable, or Wide for tables and code.
-- **OLED screen protection**: shifts the interface by a few pixels and eases brightness to limit burn-in.
+- **OLED screen protection**: nudges the interface a few pixels and eases brightness to limit burn-in.
+- **Speed on each reply**: shows tokens per second beside each reply. See [Models and reasoning](models.md#readouts).
 
 **Streaming text**
 
-- **Text reveal**: **Instant**, **Modern** or **Legacy**, with a reveal speed for the animated styles.
-- **Streaming cursor**: a cursor at the point where text is being written, with a choice of block or circle and its blink or pulse speed.
-
-**Navigation**: **Conversation map**, **Find in conversation**, **Branch map**, **Contents** and **Message shortcuts**. See [Chatting](chatting.md#finding-your-way-around-a-long-chat). Turning one off removes its button and its shortcut.
-
-### Security
-
-- **Password**: change it. Every other device is signed out when you do.
-- **Two-factor authentication**: set it up with an authenticator app, then keep the one-time recovery codes somewhere safe. See [Privacy & Security](privacy-security.md#two-factor-authentication).
-- **Active sessions**: every device signed in to your account, with browser, address and last activity. **Revoke** one, or **Revoke others** to end every session except this one. Sessions end on their own after 30 days without use, unless an admin changed that limit.
-
-### Chat
-
-- **Auto-scroll**: follow the reply as it is written unless you scroll up.
-- **Web search on by default**: new chats start with web search on, where the model allows it. Shown only when web search is set up.
-- **Engine telemetry**, **Context gauge**, **Speed on each reply**, **Progress line** and **Context ledger on open**: see [Models & Reasoning](models.md#readouts).
+- **Auto-scroll**: keeps the latest text in view unless you scroll up.
+- **Text reveal**: Instant, Modern (words fade in) or Legacy (letters type out). Not every layout offers this.
+- **Reveal speed**: Fast, Normal or Relaxed. Shown with the Legacy style.
+- **Streaming cursor**: a block or a circle at the point where text is being written, with blink or pulse speed.
+- **Engine telemetry**: live speed and context fill above the composer while a reply streams.
+- **Progress line**: shows what the model is doing when a reply takes a while.
 - **Mid-stream steering**: lets you correct a reply while it is being written. See [Chatting](chatting.md#sending-and-streaming).
 
-### Keybinds
+**Notifications**
 
-Change any shortcut, switch presets or back up your layout. See [Keyboard Shortcuts](keyboard-shortcuts.md).
+- **Notify when a reply is ready**: a system notification when a chat you are not looking at finishes, including scheduled tasks. If your browser blocks notifications, allow them in the site settings first.
 
-### Memory
+**Navigation**
+
+These are tools for moving around a long conversation. Turning one off removes its button and shortcut. See [Chatting](chatting.md#finding-your-way-around-a-long-chat).
+
+- **Conversation map**: a rail down the right edge with one mark per turn. Off by default.
+- **Find in conversation**
+- **Branch map**
+- **Contents**
+- **Message shortcuts**
+
+**Tools and context**
+
+- **Web search on by default**: new chats start with web search on, where the model allows it. Shown only when web search is set up.
+
+**Presets and themes**
+
+Two settings are easy to mix up:
+
+- The **preset** (Anthropic-style or OpenAI-style) sets the whole layout: fonts, composer shape and where the model picker sits. An admin sets it for everyone.
+- The **theme** is the colour palette you choose here. Themes never change the layout.
+
+## Security
+
+- **Password**: change it. Every other device is signed out. Passwords must be at least 4 characters.
+- **Two-factor authentication**: set it up with an authenticator app, then keep the recovery codes somewhere safe. See [Privacy and security](privacy-security.md#two-factor-authentication).
+- **Active sessions**: every device signed in to your account, with its browser, address and last activity. **Revoke** one device, or **Revoke others** to end every session except this one. Sessions expire after 30 days without use.
+
+## Keybinds
+
+Change any shortcut, switch between the defaults and a Vim-style layout, or export and import your keys. See [Keyboard shortcuts](keyboard-shortcuts.md).
+
+## Memory
 
 Memory is a list of facts about you that the assistant saves while you chat, so later conversations can use them. It is stored on this server.
 
 - **Use memory in chats**: when on, the assistant sees your memories and can save new ones. When off, it can neither read nor change them.
-- **Saved memories**: add your own, or edit and delete any entry. Each entry shows whether you or the assistant added it.
+- **Saved memories**: add, edit or delete entries. Each one shows whether you or the assistant added it.
 - **Forget everything** deletes every saved memory.
 
-Memory only works with models an admin has given the memory tool.
+Memory works only with models an admin has given the memory tool.
 
-### Usage
+## Usage
 
-Your own token counts and estimated cost for the last 7, 30 or 90 days, or all time, broken down by model. Cost is estimated from prices an admin set; models marked **no price** are local or free.
+Your token counts and estimated cost, broken down by model, for the last 7, 30 or 90 days, or all time.
+
+Cost is estimated from prices an admin set. Models marked **no price** are local or free.
 
 ## Customize
 
 **Customize** in the sidebar opens this group directly.
 
-### Skills
+**Skills**
 
 Skills are instruction files the assistant loads when a task matches their description.
 
-- **Browse** a directory of starter skills and add the ones you want.
-- **Add** one by writing it (**Write skill instructions**), uploading a file (**Upload a skill**), or **Create with the assistant**, which starts a chat that writes one with you.
-- Each skill can be enabled, disabled, edited, tried in a chat or removed.
+- **Browse** a list of starter skills and add the ones you want.
+- **Add** a skill by writing its instructions, uploading a file, or using **Create with the assistant**, which starts a chat that writes one with you.
+- Enable, disable, edit, try or remove each skill.
 
-Skills an admin added for the whole workspace appear too, but are managed in the Admin Panel. Turn skills on or off per chat with the composer's **+ → Skills**.
+Skills an admin added for the whole workspace appear here too, but only admins can change them. You can also turn skills on or off for one chat from **+ → Skills** in the composer.
 
-### MCP
+**MCP**
 
-Connect your own MCP servers over HTTP so their tools are available in your chats. **Add server**, give it a name and URL, and add headers such as an API key if it needs them. **Import a config** fills the fields from the JSON in a server's README. Saved headers are kept on the server and are not shown again.
+Connect your own MCP servers over HTTP so their tools work in your chats. Press **Add server**, give it a name and URL, and add any headers it needs, such as an API key. Paste the JSON from a server's README and the fields fill in.
 
-Each server shows whether it is connected and which tools it offers, and can be reconnected, edited, disabled or deleted. Servers listed under **From this workspace** were added by an admin for everyone and cannot be changed here. Servers that run as a local command can only be added by an admin.
+Saved headers stay on the server and are never shown again. Each server shows whether it is connected and which tools it offers. You can reconnect, edit, disable or delete it.
+
+Servers listed under **From this workspace** were added by an admin and cannot be changed here. Servers that run as a local command can only be added by an admin.
 
 ## About
 
-### Version
+**Version**
 
 The version you are running, its release notes and a link to the changelog. **Copy details** copies the version information for a bug report.

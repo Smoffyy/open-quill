@@ -21,7 +21,7 @@ function Row({ depth, label, note, on, hidden, count, onClick, onToggleHide, onG
   return (
     <div className={'bx-row' + (on ? ' on' : '') + (hidden ? ' off' : '')} style={{ paddingLeft: 8 + depth * 12 }}>
       {onGripDown && (
-        <span className="bx-grip" onPointerDown={onGripDown} role="presentation" title={t('Drag to reorder')}>⋮⋮</span>
+        <span className="bx-grip" onPointerDown={onGripDown} role="presentation" data-tip={t('Drag to reorder')}>⋮⋮</span>
       )}
       <button type="button" className="bx-row-main" onClick={onClick}>
         <span className="bx-row-label">{label}</span>
@@ -29,7 +29,7 @@ function Row({ depth, label, note, on, hidden, count, onClick, onToggleHide, onG
         {count > 0 && <span className="bx-row-n">{count}</span>}
       </button>
       {onToggleHide && (
-        <button type="button" className="bx-row-eye" title={hidden ? t('Show') : t('Hide')} aria-label={hidden ? t('Show') : t('Hide')}
+        <button type="button" className="bx-row-eye" data-tip={hidden ? t('Show') : t('Hide')} aria-label={hidden ? t('Show') : t('Hide')}
           onClick={(e) => { e.stopPropagation(); onToggleHide(); }}>
           {hidden ? <EyeOff /> : <Eye />}
         </button>
@@ -183,7 +183,7 @@ export function LayersPanel({ selection, onSelect }) {
                       note={String(n.props?.text || '').slice(0, 18)}
                       on={selection?.kind === 'node' && selection.id === n.id}
                       onClick={() => onSelect({ kind: 'node', id: n.id })} />
-                    <button type="button" className="bx-row-eye danger" title={t('Delete')} aria-label={t('Delete')}
+                    <button type="button" className="bx-row-eye danger" data-tip={t('Delete')} aria-label={t('Delete')}
                       onClick={() => { apply(d => removeNode(d, slot, n.id)); if (selection?.id === n.id) onSelect(null); }}>
                       <Trash />
                     </button>

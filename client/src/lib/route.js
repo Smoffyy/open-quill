@@ -31,6 +31,10 @@ export function parseRoute(pathname, opts = {}) {
   const chat = p.match(/^\/chat\/(.+)$/);
   if (chat) return { view: 'chat', id: decodeStrict(chat[1]) };
 
+  const session = p.match(/^\/code\/(.+)$/);
+  if (session) return { view: 'code', id: decodeStrict(session[1]) };
+  if (/^\/code\/?$/.test(p)) return { view: 'code', id: null };
+
   if (p === '/' || p === '') return { view: 'home' };
   return { view: 'notfound' };
 }
@@ -61,5 +65,6 @@ export function shouldResetPath(view, pathname) {
 export const LIBRARY_PAGES = ['artifacts', 'scheduled'];
 
 export function pathForChat(id) { return '/chat/' + id; }
+export function pathForCode(id) { return id ? '/code/' + id : '/code'; }
 export function pathForLibrary(page) { return LIBRARY_PAGES.includes(page) ? '/' + page : '/'; }
 export function pathForProject(id) { return id ? '/project/' + id : '/projects'; }

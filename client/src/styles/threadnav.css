@@ -42,7 +42,6 @@
 .trail-tick.is-tool { width: 4px; background: color-mix(in srgb, var(--text) 45%, var(--text-faint)); }
 .trail-tick.is-branch { width: 13px; }
 .trail-tick.is-pinned { background: var(--text); }
-.trail-tick.is-out { opacity: .35; }
 .trail-tick.is-match { background: #e0a33c; }
 .trail-tick.is-match.in-view { background: #f0b64a; }
 
@@ -72,7 +71,7 @@
 
 .thread-find {
   position: absolute;
-  top: calc(62px + var(--ledger-h, 0px));
+  top: 62px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 12;
@@ -257,7 +256,7 @@
 
 .outline-panel {
   position: absolute;
-  top: calc(62px + var(--ledger-h, 0px));
+  top: 62px;
   right: 20px;
   z-index: 12;
   display: flex;
