@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [28.0.0] - 2026-12-25
+## [28.0.0] - 2026-10-24
 ### Added
 - **PDF export** - Export as, then PDF, in a chat's menu downloads the conversation as a styled PDF: its title and export date, any summary of earlier messages, each message labelled as yours or the assistant's, headings, lists, quotes, tables and links laid out without their Markdown, and code in monospace. Chinese, Japanese, Korean, Cyrillic, symbols and emoji print correctly through bundled Noto fonts, with nothing fetched from the network.
 - **Code** - a separate coding interface beside Chat, switched with the Chat/Code control at the top of the sidebar and reached at `/code`. Each session has its own private folder on the server; the assistant creates, edits, renames, runs, debugs and deletes files there with its tools, and the sidebar lists sessions separately from chats.
