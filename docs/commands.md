@@ -69,7 +69,7 @@ Run these in `client/`.
 
 ## What CI runs
 
-The workflow in `.github/workflows/ci.yml` runs on every push and pull request to `dev` and `main`, using Node 24. These steps run in order, and all must pass:
+The workflow in `.github/workflows/ci.yml` runs on every push and pull request to `dev` and `main`, using Node 26. These steps run in order, and all must pass:
 
 1. Syntax-check every server `.js` file
 2. `npm run lint -- --quiet`

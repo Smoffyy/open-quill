@@ -25,7 +25,7 @@ Server tests: `cd server && npm test` runs `node --test`, which auto-discovers e
 
 Client-only extras live in `client/`: `npm run dead:css` is an **advisory** unused-class report (a zero-hit class can still be emitted by a library), `npm run check:local` re-runs the off-origin check against an existing `dist/`.
 
-CI (`.github/workflows/ci.yml`, Node 24) runs, in order: server syntax check, `lint --quiet`, build, `i18n:check`, `smoke`, `check:release`, `test:client`, `cd server && npm test`. All must stay green.
+CI (`.github/workflows/ci.yml`, Node 26) runs, in order: server syntax check, `lint --quiet`, build, `i18n:check`, `smoke`, `check:release`, `test:client`, `cd server && npm test`. All must stay green.
 
 ## Not a marketing site
 

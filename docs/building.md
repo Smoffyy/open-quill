@@ -4,7 +4,7 @@ This page covers installing Open Quill from source or from a release, configurin
 
 ## Requirements
 
-- **Node.js 22.23.2 or newer.** CI and release builds use Node 24, so use 24 if you hit a difference.
+- **Node.js 22.23.2 or newer.** CI and release builds use Node 26, so use 26 if you hit a difference.
 - **npm**, which comes with Node.
 - **A model**: one running on your machine (Ollama, llama.cpp, LM Studio or vLLM), or an API key from a cloud provider.
 - **Git**, if you clone the repository. Otherwise download a release.
