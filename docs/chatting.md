@@ -2,62 +2,68 @@
 
 ## Sending and streaming
 
-Type in the composer and press **Enter** to send, **Shift+Enter** for a new line. The reply streams in as it is written. While it streams:
+Type in the composer and press **Enter** to send. **Shift+Enter** starts a new line. The reply streams in as it is written. While it streams, you can:
 
-- **Stop** it with the stop button or `Ctrl+.`. If the assistant is in the middle of a tool step, it finishes that step and then stops.
-- **Queue** a follow-up. Type while the reply is running and send it: the message waits above the composer and goes out the moment the reply finishes. Queued messages can be removed before they send.
-- **Steer** the reply, if **Mid-stream steering** is on in **Settings → Interface → Streaming text**. A short correction such as "shorter" or "you misread the file" is applied to the reply in progress. It restarts from where it was cut, so it costs an extra request.
+- **Stop** it with the stop button or `Ctrl+.`. If it is in the middle of a tool step, it finishes that step first.
+- **Queue** a follow-up by typing and sending while the reply runs. The message waits above the composer and sends when the reply finishes. You can remove it before it sends.
+- **Steer** the reply, if **Mid-stream steering** is on under **Settings → Interface → Streaming text**. A short correction such as "shorter" is applied to the reply in progress. It costs an extra request.
 
-The thread follows new text as it arrives. Scroll up to read and it stops following; a button appears to jump back to the latest message (`Alt+↓`).
+The thread follows new text. Scroll up to read, and it stops following. A button jumps you back to the latest message (`Alt+↓`).
 
-If a reply stops early, for example because it hit the length limit, a **Continue** button picks up where it left off.
+If a reply stops early, for example at the length limit, press **Continue** to pick up where it left off.
 
 ## Message actions
 
-Hover a message to see its actions. With **Message shortcuts** on you can also move between messages with `J` and `K` and act on the focused one from the keyboard.
+Hover a message to see its actions. With **Message shortcuts** on, `J` and `K` move between messages, and the keys below act on the focused one.
 
-**Your messages**: copy, edit, and from the **⋯** menu branch, pin or delete. Editing resends from that point as a new version.
+**Your messages:** copy, edit, and from **⋯**, branch, pin or delete. Editing resends from that point as a new version.
 
-**Assistant replies**:
+**Assistant replies:**
 
-- **Copy**, or copy what has been written so far while it is still streaming.
-- **Read aloud**, using the speech settings the admin configured.
-- **Good response** and **Bad response**, which an admin can see under **Admin Panel → Ratings**.
-- **Retry** to write the reply again. To use a different model, pick it in the model picker first.
-- **Compare versions**, once a reply has more than one version.
-- From the **⋯** menu: **Edit** the reply's text, **Branch** into a new chat, **Pin** it, or **Delete** it.
+- **Copy**, including the text so far while it is still streaming
+- **Read aloud**, using the speech settings your admin chose
+- **Good response** or **Bad response**. Admins see these under **Admin Panel → Ratings**
+- **Retry** to write the reply again. To use another model, pick it in the picker first
+- **Compare versions**, once a reply has more than one version
+- From **⋯**: **Edit** the text, **Branch** into a new chat, **Pin** or **Delete**
 
-A pinned message is never folded into the rolling summary, so it always stays in what the model sees. Files attached to a message can be pinned the same way, with the pin button on the attachment.
+A pinned message is never folded into the summary, so the model always sees it. You can pin an attachment the same way.
 
 ## Branching
 
-Editing a message or retrying a reply never overwrites anything. It creates a new version from that point, and the chat you see is one path through those versions.
+Editing a message or retrying a reply never overwrites anything. It creates a new version from that point. The chat shows one path through the versions.
 
-- **Version arrows** (`‹ 2/3 ›`) on a message step between its versions in place.
-- **Compare versions** shows the versions of a reply side by side, and **Use this version** switches to the one you like.
-- The **branch map** (`B`, or **⋯ → Branch map**) draws every version as a tree. Long straight runs fold into "N more turns", and your current path is highlighted. Click any message to **Jump to this message** or **Switch to this branch**, or **Copy into the current branch** to bring it over without leaving where you are.
-- **Branch** in a message's **⋯** menu copies the conversation up to that point into a new, separate chat.
+- **Version arrows** (`‹ 2/3 ›`) switch between versions in place.
+- **Compare versions** shows the versions side by side. **Use this version** picks one.
+- The **branch map** (`B`, or **⋯ → Branch map**) draws every version as a tree. Click a message to jump to it, switch to its branch, or copy it into the current branch.
+- **Branch** in a message's **⋯** menu copies the conversation up to that point into a new chat.
 
 ## Finding your way around a long chat
 
-These live under **Settings → Interface → Navigation**. Each one can be turned off, which removes its button and its shortcut.
+These live under **Settings → Interface → Navigation**. Turning one off removes its button and shortcut.
 
-- **Find in conversation** (`Ctrl+F`) searches the open chat and steps between matches. Turn it off to give `Ctrl+F` back to the browser.
+- **Find in conversation** (`Ctrl+F`) searches the open chat. Turn it off to give `Ctrl+F` back to the browser.
 - **Branch map**, described above.
-- **Contents** (`Alt+O`) lists the headings in the assistant's replies. Click one to jump to it.
-- **Conversation map** puts a rail down the right edge with one mark per turn. Off by default.
-- **Message shortcuts**: `J`/`K` to move, then `C` copy, `E` edit, `R` retry, `Y` branch.
+- **Contents** (`Alt+O`) lists the headings in replies.
+- **Conversation map** adds a rail down the right edge with one mark per turn. Off by default.
+- **Message shortcuts**: `J` and `K` move, `C` copies, `E` edits, `R` retries and `Y` branches.
 
-**Focus mode** (`Alt+F`) hides the sidebar and everything else but the conversation.
+**Focus mode** (`Alt+F`) hides everything except the conversation.
 
 ## What the model sees
 
-Once a chat has started, the ring beside the model name shows how full the context window is; hover it for the exact count. After switching models it is recounted when you send the next message, or right away with Shift+Click on the ring.
+The ring beside the model name shows how full the context window is. Hover it for the exact count. After you switch models, the count is updated when you send the next message. Shift+click the ring to update it right away.
 
-**What gets sent** (`Alt+P`) shows the exact prompt in order, ready to copy.
+**What gets sent** (`Alt+P`) shows the exact prompt, in order, ready to copy.
 
-Once a chat fills about two thirds of the model's context window, the model folds its oldest turns into a rolling summary after a reply, so the next message never waits for it. The most recent turns and pinned messages always stay word for word, and the ring's tooltip says how many messages are summarized. **Conversation memory** in the **⋯** menu shows the summary. When a turn with an image is summarized, a model that can see images writes a detailed description of it once, and that description stays beside the summary word for word. A model that uses tools can also look up the exact wording of summarized messages with **recall**, which brings an earlier image back at full quality when the model needs to look at it again. If the window still overflows, bulky parts of older turns (images, long code blocks, tool output) are trimmed first and the oldest messages are dropped only as a last resort. If a reply runs out of room partway through, it stops cleanly and **Continue** picks it up. If the model runs out of room while still thinking, its reasoning is cut short and it answers from what it worked out.
+When a chat fills about two thirds of the context window, the model folds its oldest turns into a rolling summary after a reply, so your next message does not wait for it. The most recent turns and pinned messages always stay word for word.
+
+- **Conversation memory** in the **⋯** menu shows the summary.
+- When a turn with an image is summarized, a vision model writes a description of the image once. That description stays next to the summary.
+- A model that uses tools can search the exact wording of summarized messages with **recall**.
+- If the window still overflows, long parts of older turns (images, long code blocks, tool output) are trimmed first. Old messages are dropped only as a last resort.
+- If a reply runs out of room partway through, it stops cleanly, and **Continue** picks it up.
 
 ## Managing a chat
 
-Click the chat title in the top bar to rename it, star it, add it to or remove it from a project, export it as Markdown or JSON, or delete it. The same menu is on each chat in the sidebar. See [Organizing Your Chats](organizing-chats.md) for projects, archiving and search.
+Click the chat title in the top bar to rename it, star it, add or remove it from a project, export it, or delete it. The same menu is on each chat in the sidebar. See [Organizing your chats](organizing-chats.md) for projects, archiving and search.
