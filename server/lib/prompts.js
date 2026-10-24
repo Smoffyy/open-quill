@@ -39,17 +39,19 @@ export function sandboxHostText() {
   const env = sandbox.hostEnvInfo();
   const L = [];
   L.push(`- Operating system: **${env.osName}** (${env.arch}). Shell used by \`bash\`: \`${env.shellName}\`.`);
-  if (env.interpreters.length) {
-    L.push('- Programs installed on this host. These are the ONLY ones you may invoke:');
-    for (const i of env.interpreters) L.push(`  - \`${i.name}\`: ${i.label}, ${i.version}${i.run ? ` (e.g. \`${i.run}\`)` : ''}`);
-  } else {
-    L.push('- **No language runtimes were detected on this host.** Do not assume `node`, `python`, `npm` or a compiler exist. Do everything with the file tools, and tell the user if a task genuinely needs a runtime that is missing.');
+  if (env.probed) {
+    if (env.interpreters.length) {
+      L.push('- Programs installed on this host. These are the ONLY ones you may invoke:');
+      for (const i of env.interpreters) L.push(`  - \`${i.name}\`: ${i.label}, ${i.version}${i.run ? ` (e.g. \`${i.run}\`)` : ''}`);
+    } else {
+      L.push('- **No language runtimes were detected on this host.** Do not assume `node`, `python`, `npm` or a compiler exist. Do everything with the file tools, and tell the user if a task genuinely needs a runtime that is missing.');
+    }
+    if (env.utils.length) L.push(`- Extra utilities on PATH, safe to call: ${env.utils.map(u => '`' + u + '`').join(', ')}.`);
+    if (env.missingUtils.length) L.push(`- **NOT installed on this host.** Calling any of these fails, so never try, not even to check: ${env.missingUtils.map(u => '`' + u + '`').join(', ')}.`);
+    if (env.pythonCmd && env.pythonCmd !== 'python3') L.push(`- The Python command here is \`${env.pythonCmd}\`. \`python3\` does NOT exist on this host.`);
+    if (!env.pythonCmd) L.push('- Python is NOT installed here. Do not write `python`, `python3` or `pip` commands.');
+    if (!env.runtimes.node) L.push('- Node.js is NOT installed here. Do not write `node` or `npm` commands.');
   }
-  if (env.utils.length) L.push(`- Extra utilities on PATH, safe to call: ${env.utils.map(u => '`' + u + '`').join(', ')}.`);
-  if (env.missingUtils.length) L.push(`- **NOT installed on this host.** Calling any of these fails, so never try, not even to check: ${env.missingUtils.map(u => '`' + u + '`').join(', ')}.`);
-  if (env.pythonCmd && env.pythonCmd !== 'python3') L.push(`- The Python command here is \`${env.pythonCmd}\`. \`python3\` does NOT exist on this host.`);
-  if (!env.pythonCmd) L.push('- Python is NOT installed here. Do not write `python`, `python3` or `pip` commands.');
-  if (!env.runtimes.node) L.push('- Node.js is NOT installed here. Do not write `node` or `npm` commands.');
   if (!env.unix) {
     L.push('- This is **cmd.exe on Windows, not a Unix shell.** `find`, `sort` and `more` exist but are the Windows commands with different syntax, not the Unix ones.');
     L.push('- Unix FLAGS fail, even on commands that do exist: `mkdir -p`, `rm -rf`, `cp -r`, `ls -la`. Plain `mkdir a\\b` already creates parent folders.');

@@ -290,7 +290,8 @@ export function bash(chatId, cmd, timeoutMs = 60000, workdir, signal = null) {
         const after = text.slice(mi + CWD_MARK.length);
         const nl = after.indexOf('\n');
         const cwdAbs = (nl === -1 ? after : after.slice(0, nl)).trim();
-        text = text.slice(0, mi).replace(/\n$/, '');
+        const rest = nl === -1 ? '' : after.slice(nl + 1);
+        text = (text.slice(0, mi) + rest).replace(/\n$/, '');
         if (cwdAbs) {
           try {
             const r = relOf(chatId, path.resolve(cwdAbs));

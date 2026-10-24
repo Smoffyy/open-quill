@@ -85,12 +85,25 @@ export function primeHostEnv(env) {
   return ENV_CACHE;
 }
 
-export function hostEnvInfo() {
-  if (ENV_CACHE) return ENV_CACHE;
+function hostFacts() {
   const win = process.platform === 'win32';
-  const osName = win ? 'Windows' : process.platform === 'darwin' ? 'macOS' : 'Linux';
   const shellPath = String(pickShell());
-  const shellName = path.basename(shellPath);
+  let osVersion = '';
+  try { osVersion = `${os.release()}`; } catch {}
+  return {
+    osName: win ? 'Windows' : process.platform === 'darwin' ? 'macOS' : 'Linux',
+    osVersion,
+    arch: process.arch,
+    shellName: path.basename(shellPath),
+    shellPath,
+    shellKind: win ? 'cmd' : 'posix',
+    unix: !win,
+    pathSep: '/',
+    winDifferent: win ? WIN_DIFFERENT : []
+  };
+}
+
+function probeTools() {
   const probe = (bin, args) => {
     const found = whichBin(bin);
     if (!found) return null;
@@ -121,28 +134,29 @@ export function hostEnvInfo() {
   const pythonCmd = runtimes.python ? 'python' : runtimes.python3 ? 'python3' : null;
   const pipCmd = runtimes.pip ? 'pip' : runtimes.pip3 ? 'pip3' : null;
 
-  let osVersion = '';
-  try { osVersion = `${os.release()}`; } catch {}
-
-  ENV_CACHE = {
-    osName,
-    osVersion,
-    arch: process.arch,
-    shellName,
-    shellPath,
-    shellKind: win ? 'cmd' : 'posix',
-    unix: !win,
-    pathSep: '/',
+  return {
+    probed: true,
     runtimes,
     interpreters,
     utils,
     missingUtils,
-    winDifferent: win ? WIN_DIFFERENT : [],
     pythonCmd,
     pipCmd,
     hasNode: !!runtimes.node,
     names: interpreters.map(i => i.name)
   };
+}
+
+const UNPROBED_TOOLS = {
+  probed: false, runtimes: {}, interpreters: [], utils: [], missingUtils: [], pythonCmd: null, pipCmd: null, hasNode: false, names: []
+};
+
+export function hostEnvInfo() {
+  return ENV_CACHE || { ...hostFacts(), ...UNPROBED_TOOLS };
+}
+
+export function probeHostEnv() {
+  if (!ENV_CACHE) ENV_CACHE = { ...hostFacts(), ...probeTools() };
   return ENV_CACHE;
 }
 
@@ -150,7 +164,7 @@ export function missingCommandHint() {
   const env = hostEnvInfo();
   const have = env.interpreters.length ? env.interpreters.map(i => i.name).join(', ') : 'none';
   const parts = [`that program is not installed on this host (${env.osName}, ${env.shellName}).`];
-  parts.push(`Commands available here: ${have}.`);
+  if (env.probed) parts.push(`Commands available here: ${have}.`);
   if (env.utils.length) parts.push(`Utilities on PATH: ${env.utils.join(', ')}.`);
   if (env.missingUtils.length) parts.push(`NOT installed here: ${env.missingUtils.join(', ')}.`);
   if (!env.unix) parts.push('This is cmd.exe, not a Unix shell, so Unix flags such as `-p`, `-rf`, `-r`, `-la` fail even on commands that do exist.');

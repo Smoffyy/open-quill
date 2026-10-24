@@ -1425,9 +1425,9 @@ test('sandbox: a directory that already exists is the asked-for state, not a fai
   await sboxReset();
 });
 
-test('sandbox: hostEnvInfo reports a usable shape without leaking host paths', async () => {
-  const { hostEnvInfo } = await import('../sandbox.js');
-  const env = hostEnvInfo();
+test('sandbox: the host probe reports a usable shape without leaking host paths', async () => {
+  const { probeHostEnv } = await import('../sandbox.js');
+  const env = probeHostEnv();
   assert.ok(env.osName && env.shellName);
   assert.ok(Array.isArray(env.interpreters));
   assert.ok(Array.isArray(env.missingUtils));

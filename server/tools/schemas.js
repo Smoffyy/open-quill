@@ -23,9 +23,11 @@ function bashDescription(env) {
     : 'none detected';
   const shell = env ? `${env.osName} / ${env.shellName}` : 'the host shell';
   const lines = [
-    `Run one shell command inside your workspace directory on ${shell}. This is your main tool: run and test code, install project dependencies, scaffold, inspect data.`,
-    `Programs available on this host: ${runtimes}.${env && env.utils && env.utils.length ? ` Utilities: ${env.utils.join(', ')}.` : ''} Calling anything else fails.`
+    `Run one shell command inside your workspace directory on ${shell}. This is your main tool: run and test code, install project dependencies, scaffold, inspect data.`
   ];
+  if (!env || env.probed) {
+    lines.push(`Programs available on this host: ${runtimes}.${env && env.utils && env.utils.length ? ` Utilities: ${env.utils.join(', ')}.` : ''} Calling anything else fails.`);
+  }
   if (env && env.missingUtils && env.missingUtils.length) {
     lines.push(`NOT installed on this host, do not call them: ${env.missingUtils.join(', ')}.`);
   }
