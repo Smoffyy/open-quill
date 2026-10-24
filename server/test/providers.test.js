@@ -128,7 +128,7 @@ test('Anthropic streams text, summarized thinking, tool calls and usage', async 
   const model = { provider_id: useProvider('anthropic', mock.url + '/v1', 'sk-ant-test'), internal_name: 'claude-opus-5-5', has_reasoning: 1 };
   const r = await run(model, [{ role: 'system', content: 'Sys' }, { role: 'user', content: 'What is 17*23?' }], { tools: [CALC_TOOL] });
   assert.equal(mock.requests[0].rejected, undefined, mock.requests[0].rejected);
-  assert.equal(mock.requests[0].headers['anthropic-version'], '2023-06-01');
+  assert.equal(mock.requests[0].headers['anthropic-version'], '2026-10-21');
   assert.deepEqual(mock.requests[0].body.system, [{ type: 'text', text: 'Sys', cache_control: { type: 'ephemeral' } }]);
   assert.equal(r.reasoning, 'Need to add.');
   assert.equal(r.text, 'Let me compute.');

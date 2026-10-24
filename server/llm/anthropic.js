@@ -17,8 +17,9 @@ const EPHEMERAL = { type: 'ephemeral' };
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
 export function anthropicClient({ base, key }) {
   return new Anthropic({
-    apiKey: key || '',
+    apiKey: null,
     authToken: null,
+    defaultHeaders: key ? { 'x-api-key': key } : { authorization: null },
     baseURL: String(base || '').replace(ANTHROPIC_VERSIONED, '').replace(/\/+$/, ''),
     maxRetries: 2,
     fetch: (...args) => globalThis.fetch(...args)
