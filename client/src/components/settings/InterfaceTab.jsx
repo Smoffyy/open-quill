@@ -73,6 +73,12 @@ export default function InterfaceTab({ prefs, setPref, cfg }) {
         <SegSlide label={t("Reading width")} value={prefs.readWidth === 'wide' ? 'wide' : 'normal'} onPick={(v) => setPref('readWidth', v)}
           options={[{ v: 'normal', label: t('Comfortable') }, { v: 'wide', label: t('Wide') }]} />
       </SetRow>
+      <SetRow label={t("Motion")} desc={t("Liquid menus and controls, or a simple interface that opens instantly.")}>
+        <SegSlide label={t("Motion")} value={prefs.motion === 'simple' ? 'simple' : 'liquid'} onPick={(v) => setPref('motion', v)}
+          options={[{ v: 'liquid', label: t('Liquid') }, { v: 'simple', label: t('Simple') }]} />
+      </SetRow>
+      <SwitchRow label={t("Quick buttons on +")} desc={t("Show your most used tools as buttons first. Turn off to open the full menu straight away.")}
+        on={prefs.quickTools === true} onToggle={() => setPref('quickTools', prefs.quickTools !== true)} />
       <SwitchRow label={t("OLED screen protection")} desc={t("Nudges the interface a few pixels and eases brightness to limit burn-in.")}
         on={prefs.oledShift} onToggle={() => setPref('oledShift', !prefs.oledShift)} />
       <SwitchRow label={t("Speed on each reply")} desc={t("Keep the tokens per second beside each reply, so models stay comparable.")}

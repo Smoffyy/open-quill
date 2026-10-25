@@ -1,5 +1,4 @@
 [data-layout="pill"] .topbar { justify-content: flex-start; gap: 8px; height: auto; padding: 14px 20px; position: relative; }
-[data-layout="pill"] .topbar-actions { margin-left: auto; }
 [data-layout="pill"] .chat-name-wrap { min-width: 0; }
 @media (min-width: 721px) {
   [data-layout="pill"] .chat-name-wrap,
@@ -42,7 +41,6 @@
   [data-layout="pill"] .topbar .mobile-menu-btn { order: -1; }
   [data-layout="pill"] .topbar-model { flex: 0 1 auto; min-width: 0; margin-right: 0; overflow: hidden; }
   [data-layout="pill"] .topbar .topbar-model { max-width: none; }
-  [data-layout="pill"] .topbar .topbar-actions { flex-shrink: 0; }
   [data-layout="pill"] .topbar { padding-left: 8px; padding-right: 8px; gap: 6px; }
   [data-layout="pill"] .home-topbar .topbar-model { max-width: calc(100vw - 112px); }
   [data-layout="pill"] .topbar-model .model-select { min-width: 0; max-width: 100%; }
@@ -51,7 +49,6 @@
   [data-layout="pill"] .topbar-model .model-trigger { white-space: nowrap; min-width: 0; overflow: hidden; }
   [data-layout="pill"] .topbar-model .model-trigger > span:first-child { overflow: hidden; text-overflow: ellipsis; }
   [data-layout="pill"] .topbar-model .model-trigger .ext { display: none; }
-  [data-layout="pill"] .topbar-actions { flex-shrink: 0; margin-left: auto; }
   [data-layout="pill"] .topbar .chat-name-wrap { display: none; }
   [data-layout="pill"] .topbar { height: auto; padding: 10px 12px; padding-top: calc(10px + env(safe-area-inset-top)); }
 }

@@ -158,24 +158,6 @@
 .art-binary-icon { margin-bottom: 2px; }
 .art-bname { font-size: 15px; color: var(--text); }
 
-/* paper toggle */
-.topbar-actions { display: flex; align-items: center; gap: 2px; }
-.topbar-actions .paper-btn svg { width: 21px; height: 21px; }
-.tb-more .tb-more-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
-.tb-more button.on {
-  color: var(--pop-blue);
-  background: color-mix(in srgb, var(--pop-blue) 12%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pop-blue) 45%, transparent);
-}
-.tb-more .tb-more-badge { flex-shrink: 0; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--pop-blue); color: #fff; font-family: var(--font-sans); font-size: 10.5px; display: grid; place-items: center; }
-.paper-btn { position: relative; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 9px; color: var(--text-muted); transition: background var(--fx-t, .14s), color var(--fx-t, .14s), transform var(--fx-t, .14s); }
-.paper-btn:hover { background: var(--hover-soft); color: var(--text); }
-.paper-btn.active {
-  color: var(--pop-blue);
-  background: color-mix(in srgb, var(--pop-blue) 14%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pop-blue) 55%, transparent);
-}
-.paper-count { position: absolute; top: -3px; right: -3px; background: var(--pop-blue); color: #fff; font-size: 10px; font-family: var(--font-sans); min-width: 15px; height: 15px; border-radius: 8px; display: grid; place-items: center; padding: 0 3px; }
 
 /* plus menu + sandbox pill */
 .plus-wrap { position: relative; }

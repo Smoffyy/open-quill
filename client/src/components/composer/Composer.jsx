@@ -8,7 +8,11 @@ import { notify } from '../../lib/notify.js';
 import { useAttachments, NO_VISION } from '../../lib/attachments.js';
 import { useDictation } from '../../lib/dictation.js';
 import { captureScreenshot, screenshotSupported, isCaptureCancel } from '../../lib/screenshot.js';
-import { Plus, Mic, Wave, Up, Enter, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, NewChatIcon, Sliders, Steer, Screenshot, Plug, SkillIcon, ImageIcon, Copy, Folder, ChevDown, Calendar, Ghost, Sparkles, Compact, Eye } from '../ui/icons.jsx';
+import { Plus, Mic, Wave, Up, Enter, Stop, FileText, Cube, Check, Globe, Box, X, Chevron, NewChatIcon, Sliders, Steer, Screenshot, Plug, SkillIcon, ImageIcon, Copy, Folder, ChevDown, Calendar, Ghost, Sparkles, Compact, Eye, Dots } from '../ui/icons.jsx';
+import LiquidBuds, { BUD_SIZE } from '../liquid/LiquidBuds.jsx';
+import { gridTargets, sourceOn, wrapLeft } from '../../lib/liquid.js';
+import { edgeColor, surfaceOf } from '../../lib/liquiddraw.js';
+import { useLiquidMenu } from '../../lib/liquidmenu.js';
 import StyleSubmenu, { styleNameFor, STYLE_PRESETS } from './StyleMenu.jsx';
 import { slashState, matchSlash } from '../../lib/slash.js';
 import { extLabel } from '../../lib/files.js';
@@ -55,7 +59,7 @@ function ActiveChip({ icon, label, onRemove }) {
 export default function Composer({
   value, onChange, onSend, onStop, streaming, stopping = false, models, modelsReady = true,
   currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, onOpenProject, projects = [], onSetProject, onNewChat, onShortcuts,
-  voiceMic = false, voiceCall = false, sttEngine = 'browser', onStartCall, callActive = false,
+  voiceMic = false, voiceCall = false, sttEngine = 'browser', onStartCall, callActive = false, quickTools = false,
   safetyFlagged = false, safetyChecking = false, safetyVerbose = false, safetyReason = '',
   styles = [], styleId = 'normal', onSelectStyle, onSaveStyles,
   conversationEnded = false, endedReason = '',
@@ -72,6 +76,8 @@ export default function Composer({
   const ta = useRef(null);
   const fileInput = useRef(null);
   const plusRef = useRef(null);
+  const plusBtnRef = useRef(null);
+  const plusMenuRef = useRef(null);
   const [uploading, setUploading] = useState(false);
   const valueRef = useRef(value);
   useEffect(() => { valueRef.current = value; }, [value]);
@@ -89,6 +95,9 @@ export default function Composer({
   const [voiceMenu, setVoiceMenu] = useState(false);
   const voiceRef = useRef(null);
   useDismiss(voiceMenu, () => setVoiceMenu(false), voiceRef);
+  const voiceBtnRef = useRef(null);
+  const voiceMenuRef = useRef(null);
+  useLiquidMenu(voiceMenu, voiceMenuRef, voiceBtnRef);
   const rootRef = useRef(null);
   const placeFooter = useCallback(() => {
     const root = rootRef.current;
@@ -151,6 +160,7 @@ export default function Composer({
     }
   }, [plusMenu]);
   useDismiss(plusMenu, () => setPlusMenu(false), plusRef, { inside: '.pm-flyout' });
+  useLiquidMenu(plusMenu, plusMenuRef, plusBtnRef);
 
   const grewOnce = useRef(false);
   const fitWidth = useRef(0);
@@ -218,6 +228,62 @@ export default function Composer({
     window.addEventListener('oq-attach-files', h);
     return () => window.removeEventListener('oq-attach-files', h);
   }, []);
+  const dictateRef = useRef(toggleDictation);
+  dictateRef.current = toggleDictation;
+  useEffect(() => {
+    if (!voiceMic) return undefined;
+    const h = () => dictateRef.current();
+    window.addEventListener('oq-dictate', h);
+    return () => window.removeEventListener('oq-dictate', h);
+  }, [voiceMic]);
+  const [drops, setDrops] = useState(null);
+  useEffect(() => { setDrops(d => (d && d.open ? { ...d, open: false } : d)); }, [value]);
+  const openDrops = (viaKeyboard) => {
+    if (drops && drops.open) { setDrops({ ...drops, open: false }); return; }
+    const btn = plusRef.current && plusRef.current.querySelector('.plus');
+    const root = rootRef.current;
+    if (!btn || !root) { setPlusMenu(true); return; }
+    const b = btn.getBoundingClientRect();
+    const surface = surfaceOf(root);
+    const box = surface.rect;
+    const count = dropItems().length;
+    const radius = parseFloat(surface.style.borderTopLeftRadius) || 0;
+    const offset = BUD_SIZE / 2 + 8;
+    if (box.left >= offset + BUD_SIZE / 2 + 8) {
+      const y = Math.max(box.top + box.height / 2, box.bottom - radius - 20);
+      const source = { ...sourceOn(box, radius, box.left, y), spread: 10, half: 30 };
+      const targets = wrapLeft({
+        left: box.left, top: box.top, bottom: box.bottom, radius, offset, gap: 52, count,
+        minY: 8 + BUD_SIZE / 2, maxY: window.innerHeight - 8 - BUD_SIZE / 2
+      });
+      setDrops({ open: true, keyboard: viaKeyboard, source, targets });
+      return;
+    }
+    const source = { ...sourceOn(box, radius, b.left + b.width / 2, box.top), spread: 18, half: 54 };
+    const targets = gridTargets({
+      count, cols: count, gap: 52, size: BUD_SIZE, x: source.x + 4, y: box.top - 34, rowStep: -52, width: window.innerWidth, align: 'start'
+    });
+    setDrops({ open: true, keyboard: viaKeyboard, source, targets });
+  };
+  const composerEdge = () => edgeColor(surfaceOf(rootRef.current).style) || 'var(--border)';
+  const pendingSub = useRef(null);
+  useEffect(() => {
+    if (!plusMenu || !pendingSub.current) return;
+    sub.show(pendingSub.current);
+    pendingSub.current = null;
+  }, [plusMenu]);
+  const fullMenu = (subId) => {
+    pendingSub.current = subId;
+    setPlusMenu(true);
+  };
+  const dropItems = () => [
+    { id: 'attach', icon: <FileText />, label: visionSupported ? t('Add files or photos') : t('Add files'), run: () => fileInput.current?.click() },
+    webSearchAvailable && { id: 'web', icon: <Globe />, label: t('Web search'), active: !!webSearch, toggle: true, keep: true, run: () => onToggleWebSearch && onToggleWebSearch() },
+    onSelectStyle && { id: 'style', icon: <Sliders />, label: t('Response style'), run: () => fullMenu('styles') },
+    { id: 'skills', icon: <SkillIcon />, label: t('Skills'), run: () => fullMenu('skills') },
+    voiceMic && { id: 'dictate', icon: <Mic />, label: dictating ? t('Stop dictation') : t('Dictate'), run: () => toggleDictation() },
+    { id: 'more', icon: <Dots />, label: t('Everything else'), run: () => fullMenu(null) }
+  ].filter(Boolean);
 
   const [steerMode, setSteerMode] = useState(true);
   const steering = canSteer && steerMode && !!onSteer;
@@ -295,6 +361,8 @@ export default function Composer({
   const { parent: slashParent, items: slashShown } = matchSlash(slashCmds, value);
   const slashOpen = slashShown.length > 0;
   const runSlash = (c) => (c.items ? onChange('/' + c.word + ' ') : c.run());
+  const slashMenuRef = useRef(null);
+  useLiquidMenu(slashOpen, slashMenuRef, rootRef);
   const slashListRef = useRef(null);
   useEffect(() => { slashListRef.current?.children[slashIdx]?.scrollIntoView({ block: 'nearest' }); }, [slashIdx]);
 
@@ -424,7 +492,7 @@ export default function Composer({
       </div>
     )}
     {panel}
-    <div className={cls} style={{ '--glow': glow }} ref={rootRef}>
+    <div className={cls} style={{ '--glow': glow }} ref={rootRef} data-liquid-source>
       {files.length > 0 && (
         <div className="attach-row">
           {files.map(f => (
@@ -446,7 +514,7 @@ export default function Composer({
       )}
       {upErr && <div className="attach-err">{upErr === NO_VISION ? t('This model cannot see images, so they were left out.') : upErr}</div>}
       {slashOpen && (
-        <div className="slash-menu" role="listbox" aria-label={slashParent ? slashParent.label : t('Commands')}>
+        <div ref={slashMenuRef} className="slash-menu" role="listbox" aria-label={slashParent ? slashParent.label : t('Commands')}>
           <div className="slash-head">{slashParent ? slashParent.label : t("Commands")}</div>
           <div className="slash-list" ref={slashListRef}>
             {slashShown.map((c, i) => (
@@ -491,13 +559,22 @@ export default function Composer({
         <div className="composer-left">
           <div className="plus-wrap" ref={plusRef}>
             <Tip label={t('More')} keys="/">
-              <button className={'plus' + (plusMenu ? ' on' : '')} onClick={() => setPlusMenu(m => !m)} aria-label={t("More")}
-                aria-haspopup="menu" aria-expanded={plusMenu}>
+              <button ref={plusBtnRef} className={'plus' + (plusMenu || (drops && drops.open) ? ' on' : '')} onClick={(e) => {
+                if (plusMenu) setPlusMenu(false);
+                else if (quickTools) openDrops(e.detail === 0);
+                else setPlusMenu(true);
+              }} aria-label={t("More")}
+                aria-haspopup="true" aria-expanded={plusMenu || !!(drops && drops.open)}>
                 <Plus style={{ width: 20, height: 20 }} />
               </button>
             </Tip>
+            {drops && (
+              <LiquidBuds open={drops.open} source={drops.source} targets={drops.targets} items={dropItems()}
+                color="var(--composer-bg, var(--input-bg))" rim={composerEdge} label={t('Composer tools')} trigger={plusRef} focusFirst={drops.keyboard}
+                onClose={() => setDrops(d => (d ? { ...d, open: false } : d))} />
+            )}
             {plusMenu && (
-              <div className={'plus-menu' + (plusDown ? ' down' : '')}>
+              <div ref={plusMenuRef} className={'plus-menu' + (plusDown ? ' down' : '')}>
                 <button className="pm-item" onClick={() => { setPlusMenu(false); fileInput.current?.click(); }}>
                   <FileText />
                   <span className="pm-label">{visionSupported ? t('Add files or photos') : t('Add files')}</span>
@@ -659,12 +736,12 @@ export default function Composer({
           )}
           {thread && layout.id === 'card' && (voiceMic || voiceCall) && (
             <div className="voice-wrap" ref={voiceRef}>
-              <button type="button" className={'voice-trigger' + (voiceMenu ? ' on' : '')} onClick={() => setVoiceMenu(m => !m)}
+              <button ref={voiceBtnRef} type="button" className={'voice-trigger' + (voiceMenu ? ' on' : '')} onClick={() => setVoiceMenu(m => !m)}
                 aria-label={t('Voice options')} data-tip={t('Voice options')} aria-haspopup="menu" aria-expanded={voiceMenu}>
                 <ChevDown style={{ width: 14, height: 14 }} />
               </button>
               {voiceMenu && (
-                <div className="plus-menu voice-menu" role="menu">
+                <div ref={voiceMenuRef} className="plus-menu voice-menu" role="menu">
                   {voiceMic && (
                     <button type="button" role="menuitemradio" aria-checked="true" className="pm-item" onClick={() => { setVoiceMenu(false); toggleDictation(); }}>
                       <Mic /><span className="pm-label">{t('Dictate')}</span><Check className="pm-check" />

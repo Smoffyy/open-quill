@@ -124,8 +124,6 @@
 .dnav-addtab { margin: 0 8px; }
 
 .mdoc-overlay { overflow: hidden; }
-.main:has(.mdoc-overlay) .topbar-actions.home-actions,
-.main:has(.mdoc-overlay) .topbar > .topbar-actions { display: none; }
 .mdoc-page {
   flex: 1; min-height: 0; overflow: hidden auto;
   background: var(--dk-page); color: var(--dk-primary); font-family: var(--dk-sans);

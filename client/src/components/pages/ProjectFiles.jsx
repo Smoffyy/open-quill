@@ -3,6 +3,7 @@ import { api } from '../../lib/api.js';
 import { notify } from '../../lib/notify.js';
 import { askConfirm } from '../../lib/confirm.js';
 import { useDismiss } from '../../lib/dismiss.js';
+import { useLiquidMenu } from '../../lib/liquidmenu.js';
 import { droppedFiles, pickedFiles } from '../../lib/dropfiles.js';
 import { baseName } from '../../lib/artifacts.js';
 import { Plus, Chevron, FileText, Folder, Pencil, Upload, Download, X } from '../ui/icons.jsx';
@@ -147,6 +148,9 @@ export default function ProjectFiles({ projectId }) {
   const folderInput = useRef(null);
   const menuRef = useRef(null);
   useDismiss(menu, () => setMenu(false), menuRef);
+  const menuBtnRef = useRef(null);
+  const menuListRef = useRef(null);
+  useLiquidMenu(menu, menuListRef, menuBtnRef);
 
   const apply = useCallback((d) => { if (d?.files) setFiles(d.files); if (d?.cap) setCap(d.cap); }, []);
   const load = useCallback(async () => { try { apply(await api.get(base + '/files')); } catch {} }, [base, apply]);
@@ -220,10 +224,10 @@ export default function ProjectFiles({ projectId }) {
               <a className="pj-card-add" href={base + '/zip'} data-tip={t('Download all')} aria-label={t('Download all')}><Download style={{ width: 15 }} /></a>
             )}
             <span className="pj-menu-wrap" ref={menuRef}>
-              <button type="button" className="pj-card-add" disabled={busy} data-tip={t('Add files')} aria-label={t('Add files')}
+              <button ref={menuBtnRef} type="button" className="pj-card-add" disabled={busy} data-tip={t('Add files')} aria-label={t('Add files')}
                 aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(m => !m)}><Plus style={{ width: 16 }} /></button>
               {menu && (
-                <div className="pj-menu pj-files-menu" role="menu">
+                <div ref={menuListRef} className="pj-menu pj-files-menu" role="menu">
                   <button type="button" role="menuitem" onClick={() => pick(() => fileInput.current?.click())}><Upload style={{ width: 15 }} /> {t('Upload files')}</button>
                   <button type="button" role="menuitem" onClick={() => pick(() => folderInput.current?.click())}><Folder style={{ width: 15 }} /> {t('Upload a folder')}</button>
                   <button type="button" role="menuitem" onClick={() => pick(() => { setRenaming(null); setCreating(true); })}><FileText style={{ width: 15 }} /> {t('New file')}</button>

@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
-import { createPortal } from 'react-dom';
 import Markdown, { ReasonSegs } from './Markdown.jsx';
 import { copyText } from '../../lib/clipboard.js';
 import { openFilePreview, previewKind } from '../../lib/filepreview.js';
@@ -12,9 +11,8 @@ import { Copy, Check, ThumbUp, ThumbDown, Retry, FileText, Pencil, Fork, Pin, Tr
 import { api } from '../../lib/api.js';
 import { extLabel } from '../../lib/files.js';
 import { useStatusLabel } from '../../lib/status.js';
-import { menuStyleOf, scrollInsideMenu, MENU_EDGE } from '../../lib/anchor.js';
-import { useDismiss } from '../../lib/dismiss.js';
 import { useLongPress } from '../../lib/longpress.js';
+import LiquidBuds, { BUD_SIZE } from '../liquid/LiquidBuds.jsx';
 import { t } from '../../i18n.jsx';
 
 function UserBubble({ content }) {
@@ -56,36 +54,22 @@ function fmtTime(ts) {
   };
 }
 
-function MessageMenu({ at, items, onClose }) {
-  const menuRef = useRef(null);
-  const [pos, setPos] = useState(null);
-  useDismiss(true, onClose, menuRef);
-  useEffect(() => {
-    const onScroll = (e) => { if (!scrollInsideMenu(menuRef.current, e.target)) onClose(); };
-    window.addEventListener('resize', onClose);
-    window.addEventListener('scroll', onScroll, true);
-    return () => {
-      window.removeEventListener('resize', onClose);
-      window.removeEventListener('scroll', onScroll, true);
-    };
-  }, [onClose]);
-  useEffect(() => { menuRef.current.querySelector('button')?.focus({ preventScroll: true }); }, []);
-  useLayoutEffect(() => {
-    const r = menuRef.current.getBoundingClientRect();
-    const vw = document.documentElement.clientWidth;
-    const vh = document.documentElement.clientHeight;
-    const top = at.y + r.height > vh - MENU_EDGE ? Math.max(MENU_EDGE, at.y - r.height) : at.y;
-    const left = Math.min(Math.max(MENU_EDGE, at.x), vw - MENU_EDGE - r.width);
-    setPos({ top, left });
-  }, [at]);
-  return createPortal(
-    <div ref={menuRef} className="retry-menu more-menu portal" role="menu" aria-label={t("More actions")} style={menuStyleOf(pos)}>
-      {items.map((it, i) => (
-        <button key={i} role="menuitem" aria-checked={it.on ? 'true' : undefined} className={(it.on ? 'on' : '') + (it.danger ? ' danger' : '')} onClick={() => { onClose(); it.run(); }}>
-          {it.icon}{it.label}
-        </button>
-      ))}
-    </div>, document.body);
+const MSG_RING_GAP = 54;
+
+function ringPlan(r, point, count) {
+  const radius = Math.max(52, (count * MSG_RING_GAP) / (2 * Math.PI));
+  const reach = radius + BUD_SIZE / 2 + 8;
+  const at = point || { x: r.left + Math.min(r.width / 2, 160), y: r.top + Math.min(r.height / 2, 80) };
+  const x = Math.min(Math.max(at.x, reach), window.innerWidth - reach);
+  const y = Math.min(Math.max(at.y, reach), window.innerHeight - reach);
+  return {
+    source: { x, y, nx: 0, ny: -1, core: true },
+    targets: Array.from({ length: count }, (_, i) => {
+      const angle = -Math.PI / 2 + (i / count) * Math.PI * 2;
+      const nx = Math.cos(angle), ny = Math.sin(angle);
+      return { x: x + nx * radius, y: y + ny * radius, nx, ny };
+    })
+  };
 }
 
 function BranchNav({ msg, onSelectBranch }) {
@@ -365,28 +349,39 @@ function Message({ msg, model, streaming, phase, liveCall, liveCalls = null, can
   const statusInfo = useStatusLabel(status, statusDelay);
 
   const incognito = String(msg.id).startsWith('inc-');
-  const menuItems = [
-    msg.role !== 'user' && onEditAssistant && !incognito && { label: t('Edit'), icon: <Pencil style={{ width: 15 }} />, run: startEdit },
-    msg.branchCount > 1 && chatId && { label: t('Compare versions'), icon: <Columns style={{ width: 15 }} />, run: () => setCompare(true) },
-    onFork && { label: t('Branch'), icon: <Fork style={{ width: 15 }} />, run: () => onFork(msg.id) },
-    onTogglePin && { label: msg.pinned ? t('Unpin') : t('Pin'), icon: <Pin style={{ width: 15 }} />, on: !!msg.pinned, run: () => onTogglePin(msg.id, !msg.pinned) },
-    onDelete && chatId && (msg.role === 'user' || !incognito) && { label: t('Delete'), icon: <Trash style={{ width: 15 }} />, danger: true, run: () => onDelete(msg.id) }
+  const budItems = [
+    { id: 'copy', icon: <Copy />, label: t('Copy'), run: doCopy },
+    onRegenerate && { id: 'retry', icon: <Retry />, label: t('Retry'), run: () => onRegenerate(msg.id) },
+    msg.role === 'user' && onEdit && { id: 'edit', icon: <Pencil />, label: t('Edit'), run: startEdit },
+    msg.role !== 'user' && onEditAssistant && !incognito && { id: 'edit', icon: <Pencil />, label: t('Edit'), run: startEdit },
+    msg.branchCount > 1 && chatId && { id: 'compare', icon: <Columns />, label: t('Compare versions'), run: () => setCompare(true) },
+    onFork && { id: 'fork', icon: <Fork />, label: t('Branch'), run: () => onFork(msg.id) },
+    onTogglePin && { id: 'pin', icon: <Pin />, label: msg.pinned ? t('Unpin') : t('Pin'), active: !!msg.pinned, run: () => onTogglePin(msg.id, !msg.pinned) },
+    onDelete && chatId && (msg.role === 'user' || !incognito) && { id: 'delete', icon: <Trash />, label: t('Delete'), danger: true, run: () => onDelete(msg.id) }
   ].filter(Boolean);
+  const ringItems = budItems.filter(it => !it.danger);
+  const danger = budItems.find(it => it.danger);
+  if (danger) ringItems.splice(Math.ceil(ringItems.length / 2), 0, danger);
   const [menu, setMenu] = useState(null);
-  const closeMenu = React.useCallback(() => setMenu(null), []);
-  const menuAllowed = (target) => !editing && !streaming && !!(msg.content || msg.truncated) && menuItems.length > 0
-    && !target.closest('a, img, video, textarea, input, [role="dialog"], [role="menu"]');
-  const press = useLongPress((target, x, y) => { if (menuAllowed(target)) setMenu({ x, y }); });
+  const closeMenu = React.useCallback(() => setMenu(m => (m ? { ...m, open: false } : m)), []);
+  const menuAllowed = (target) => !editing && !streaming && !!(msg.content || msg.truncated)
+    && !target.closest('a, img, video, textarea, input, [role="dialog"], [role="menu"], [role="toolbar"]');
+  const openBuds = (el, point, keyboard) => setMenu({ ...ringPlan(el.getBoundingClientRect(), point, budItems.length), keyboard, open: true });
+  const press = useLongPress((target, x, y) => { if (menuAllowed(target)) openBuds(target.closest('[data-buds]') || target, { x, y }, false); });
   const menuProps = {
     ...press,
+    'data-buds': '',
     onContextMenu(e) {
       if (!menuAllowed(e.target) || String(window.getSelection())) return;
       e.preventDefault();
-      if (e.clientX || e.clientY) setMenu({ x: e.clientX, y: e.clientY });
-      else { const r = e.target.getBoundingClientRect(); setMenu({ x: r.left, y: r.bottom }); }
+      const pointer = !!(e.clientX || e.clientY);
+      openBuds(e.currentTarget, pointer ? { x: e.clientX, y: e.clientY } : null, !pointer);
     }
   };
-  const messageMenu = menu && <MessageMenu at={menu} items={menuItems} onClose={closeMenu} />;
+  const messageMenu = menu && (
+    <LiquidBuds open={menu.open} source={menu.source} targets={menu.targets} items={ringItems} color="var(--pop-bg, var(--surface))" rim="var(--border)"
+      membrane={false} label={t('Message actions')} focusFirst={menu.keyboard} closeOnScroll onClose={closeMenu} />
+  );
 
   if (msg.role === 'user') {
     return (

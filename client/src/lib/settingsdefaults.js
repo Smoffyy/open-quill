@@ -6,7 +6,7 @@ export function presetDefaults(layout, theme = 'system') {
     streamCursor: layout.cursor.on, cursorStyle: layout.cursor.style,
     cursorBlinkMs: 500, cursorPulseMs: 1000, revealMs: 40,
     oledShift: false,
-    threadRail: false, threadFind: true, branchMap: true, threadOutline: true, msgKeys: true, readWidth: 'normal', keybinds: {}
+    threadRail: false, threadFind: true, branchMap: true, threadOutline: true, msgKeys: true, readWidth: 'normal', motion: 'liquid', quickTools: false, keybinds: {}
   };
 }
 

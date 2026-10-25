@@ -290,8 +290,8 @@ function SampleStates() {
       </div>
       <span className="cx-ring">
         <svg viewBox="0 0 12 12">
-          <circle cx="6" cy="6" r="5" className="cx-ring-track" />
-          <circle cx="6" cy="6" r="5" className="cx-ring-fill" strokeDasharray="31.4" strokeDashoffset="18.2" />
+          <path className="cx-ring-fluid" d="M1.6 6.6 Q4 6 6 6.6 T10.4 6.6 A4.4 4.4 0 0 1 1.6 6.6 Z" />
+          <circle cx="6" cy="6" r="5" className="cx-ring-glass" />
         </svg>
       </span>
       <div className="engine-strip final"><span className="es-icon"><Gauge style={{ width: 13 }} /></span><span className="es-stat">{t('Sample telemetry')}</span></div>

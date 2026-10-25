@@ -29,7 +29,6 @@ import ThemeSlot from './components/builder/ThemeSlot.jsx';
 
 import ContextRing from './components/chat/ContextRing.jsx';
 import Message from './components/chat/Message.jsx';
-import TopbarActions from './components/chat/TopbarActions.jsx';
 import SettingsModal from './components/settings/SettingsModal.jsx';
 import PromptLedger from './components/dialogs/PromptLedger.jsx';
 import DocModal from './components/dialogs/DocModal.jsx';
@@ -46,6 +45,10 @@ import Tip from './components/ui/Tip.jsx';
 import ProjectsPanel from './components/pages/ProjectsPanel.jsx';
 import SearchModal from './components/dialogs/SearchModal.jsx';
 import Island from './components/ui/Island.jsx';
+import ControlDrop from './components/liquid/ControlDrop.jsx';
+import PullToSearch from './components/liquid/PullToSearch.jsx';
+import SidebarPeek from './components/liquid/SidebarPeek.jsx';
+import ThreadScrubber from './components/liquid/ThreadScrubber.jsx';
 import ConfirmHost from './components/ui/ConfirmHost.jsx';
 import Lightbox from './components/dialogs/Lightbox.jsx';
 import FilePreview from './components/dialogs/FilePreview.jsx';
@@ -83,7 +86,7 @@ import { collectTags } from './lib/chattags.js';
 import { readUnread, writeUnread, addUnread, removeUnread, shouldNotify, notifyPermission, showNotification, titleWithUnread, notify, dismissNotice } from './lib/notify.js';
 import { askConfirm } from './lib/confirm.js';
 import { copyText } from './lib/clipboard.js';
-import { Down, Compact, Ghost, Search, Menu, Sliders, X, Fork, Panel, Copy, TextIcon, Expand } from './components/ui/icons.jsx';
+import { Down, Compact, Ghost, Search, Menu, Sliders, X, Fork, Panel, Copy, TextIcon, Expand, Globe, Mic, Sun, Link } from './components/ui/icons.jsx';
 import { setCustomFavicon } from './lib/favicon.js';
 import BrandMark from './components/ui/BrandMark.jsx';
 import { SKELETON_DELAY } from './lib/skeleton.js';
@@ -455,7 +458,7 @@ export default function App() {
       const text = chat ? replyNotice(chat, 'busy') : null;
       if (!chat || live.get(id) === text) continue;
       live.set(id, text);
-      notify(text, { key: 'reply:' + id, icon: 'chat', progress: true, onClick: () => sbOpenChat(id) });
+      notify(text, { key: 'reply:' + id, icon: 'chat', progress: true, onClick: () => sbOpenChat(id), onStop: () => stopChat(id) });
     }
     for (const id of live.keys()) {
       if (id !== activeId && busyChats.includes(id)) continue;
@@ -1511,6 +1514,7 @@ export default function App() {
   genOptsRef.current = { extended, reasoningEffort, kwargValues, webSearch, plan: codeMode && planMode, styleId };
 
   const composerProps = {
+    quickTools: user?.prefs?.quickTools === true,
     placeholder: activeId && !incognito ? t('Write a message...') : undefined,
     draftId: incognito ? undefined : activeId,
     projects,
@@ -1633,6 +1637,25 @@ export default function App() {
     { id: 'privacy', label: t('View privacy & security'), keywords: 'legal data incognito gdpr cookies', action: () => setShowPrivacy(true) },
     { id: 'logout', label: t('Log out'), keywords: 'sign out exit', action: () => logout() }
   ];
+
+  const chatActions = [
+    messages.length > 0 && user?.prefs?.threadFind !== false && { id: 'find', icon: <Search />, label: t('Find in conversation'), active: findOpen, onClick: () => (findOpen ? closeFind() : setFindOpen(true)) },
+    outline.length > 1 && user?.prefs?.threadOutline !== false && { id: 'outline', icon: <TextIcon />, label: t('Contents'), active: outlineOpen, onClick: () => setOutlineOpen(o => !o) },
+    activeId && messages.length > 0 && user?.prefs?.branchMap !== false && { id: 'tree', icon: <Fork />, label: t('Branch map'), active: treeOpen, onClick: () => setTreeOpen(o => !o) },
+    hasSummary && { id: 'summary', icon: <Compact />, label: t("Conversation memory"), onClick: () => setSummaryOpen(true) },
+    messages.length > 0 && { id: 'copyall', icon: <Copy />, label: t('Copy all'), onClick: () => copyConversation() },
+    activeId && messages.length > 0 && { id: 'focus', icon: <Expand />, label: focusMode ? t('Exit focus mode') : t('Focus mode'), active: focusMode, onClick: () => setFocusMode(o => !o) },
+    user?.isAdmin && (activeId || !incognito) && { id: 'ctl', icon: <Sliders />, label: t("Chat controls (admin)"), active: ctlOpen, onClick: () => setCtlOpen(o => !o) }
+  ].filter(Boolean);
+
+  const quickControls = [
+    ...chatActions.map(({ onClick, ...it }) => ({ ...it, toggle: 'active' in it, run: onClick })),
+    activeId && !incognito && { id: 'link', icon: <Link />, label: t('Copy chat link'), run: () => { copyText(location.origin + (codeMode ? pathForCode(activeId) : pathForChat(activeId))).then(ok => ok && notify(t('Link copied'), { icon: 'copy' })); } },
+    { id: 'theme', icon: <Sun />, label: t('Switch light or dark'), keep: true, run: () => kbHandlers.current.toggleTheme() },
+    { id: 'incognito', icon: <Ghost />, label: incognito ? t('Exit incognito') : t('Incognito chat'), active: incognito, toggle: true, keep: true, disabled: streaming || queued, run: () => toggleIncognito() },
+    webSearchAvailable && { id: 'web', icon: <Globe />, label: t('Web search'), active: webSearchOn, toggle: true, keep: true, run: () => setWebSearch(v => !v) },
+    cfg.voiceMic && !codeMode && { id: 'dictate', icon: <Mic />, label: t('Dictate'), run: () => window.dispatchEvent(new CustomEvent('oq-dictate')) }
+  ].filter(Boolean);
 
   const contextRing = activeId && !incognito
     ? <ContextRing chatId={activeId} modelId={currentId} revision={ctxRevision} streaming={streaming || queued} live={liveCtx} className="chat-ring" />
@@ -1758,17 +1781,6 @@ export default function App() {
         {empty && !codeMode && (
           <button className="mobile-menu-btn empty-menu" onClick={() => setMobileDrawer(true)} data-tip={t("Menu")} aria-label={t("Menu")}><Menu style={{ width: 20 }} /></button>
         )}
-        {!incognito && empty && !codeMode && (
-          <TopbarActions className="home-actions"
-            leading={<>
-              <button className="paper-btn" onClick={toggleIncognito} data-tip={t("Incognito chat, not saved")} aria-label={t("Incognito chat, not saved")} disabled={streaming || queued}>
-                <Ghost />
-              </button>
-            </>}
-            items={[
-              user?.isAdmin && !incognito && { id: 'ctl', icon: <Sliders />, label: t("Chat controls (admin)"), active: ctlOpen, onClick: () => setCtlOpen(o => !o) },
-            ]} />
-        )}
         {empty && !incognito && !codeMode && (
           <ModelPickerSlot at="topbar">
             <div className="home-topbar">
@@ -1801,20 +1813,10 @@ export default function App() {
               chat={activeChat} chatId={activeId} project={activeProject} booting={booting}
               projects={projects} busy={busyChats.includes(activeId)}
               onOpenMenu={() => setMobileDrawer(true)} onOpenProject={openProjects} onRename={renameChat}
-              onStopChat={stopChat} onToggleStar={toggleStar} onToggleArchive={toggleArchive} onSetTags={setChatTags} allTags={allTags} onMoveToProject={moveChatToProject} onDelete={deleteChat}
-              actions={
-              <TopbarActions
-                items={[
-                  hasSummary && { id: 'summary', icon: <Compact />, label: t("Conversation memory"), onClick: () => setSummaryOpen(true) },
-                  messages.length > 0 && { id: 'copyall', icon: <Copy />, label: t('Copy all'), onClick: () => copyConversation() },
-                  user?.isAdmin && activeId && { id: 'ctl', icon: <Sliders />, label: t("Chat controls (admin)"), active: ctlOpen, onClick: () => setCtlOpen(o => !o) },
-                  messages.length > 0 && user?.prefs?.threadFind !== false && { id: 'find', icon: <Search />, label: t('Find in conversation'), active: findOpen, onClick: () => (findOpen ? closeFind() : setFindOpen(true)) },
-                  activeId && messages.length > 0 && user?.prefs?.branchMap !== false && { id: 'tree', icon: <Fork />, label: t('Branch map'), active: treeOpen, onClick: () => setTreeOpen(o => !o) },
-                  outline.length > 1 && user?.prefs?.threadOutline !== false && { id: 'outline', icon: <TextIcon />, label: t('Contents'), active: outlineOpen, onClick: () => setOutlineOpen(o => !o) },
-                  activeId && messages.length > 0 && { id: 'focus', icon: <Expand />, label: focusMode ? t('Exit focus mode') : t('Focus mode'), active: focusMode, onClick: () => setFocusMode(o => !o) },
-                ]} />
-              } />
+              onStopChat={stopChat} onToggleStar={toggleStar} onToggleArchive={toggleArchive} onSetTags={setChatTags} allTags={allTags} onMoveToProject={moveChatToProject} onDelete={deleteChat} />
             {findOpen && user?.prefs?.threadFind !== false && <ThreadFind scrollRef={scrollRef} revision={findRevision} onMatches={onFindMatches} onClose={closeFind} />}
+            <PullToSearch scrollRef={scrollRef} onFire={() => setShowSearch(true)} />
+            {activeId && messages.filter(m => m.role === 'user').length > 1 && <ThreadScrubber scrollRef={scrollRef} />}
             <div className="scroll-area" id="oq-thread" ref={scrollRef} onScroll={onScroll} onWheel={onWheel} onTouchMove={onTouchMove}>
               <div className={'thread' + (heavyThread ? ' virt' : '') + (findOpen ? ' finding' : '') + (threadSwap ? ' swapping' : '')}
                 role="log" aria-label={t('Conversation')} aria-live="polite" aria-relevant="additions text" aria-busy={streaming ? 'true' : 'false'}>
@@ -1865,6 +1867,14 @@ export default function App() {
         )}
       </div>
       <Island />
+      <ControlDrop items={quickControls} />
+      {!mobileDrawer && !docsTarget && (
+        <SidebarPeek chats={modeChats.filter(c => !c.archived)} onOpen={sbOpenChat}
+          onExpand={() => {
+            if (window.matchMedia('(max-width: 768px)').matches) setMobileDrawer(true);
+            else setCollapsed(false);
+          }} />
+      )}
 
       {ctlOpen && user?.isAdmin && !incognito && (
         <ChatControls chatId={activeId || null} initialParams={chatGenParams} initialOverride={chatSysOverride} onChange={(p, o) => { setChatGenParams(p && Object.keys(p).length ? p : null); setChatSysOverride(o || ''); }} onClose={() => setCtlOpen(false)} />

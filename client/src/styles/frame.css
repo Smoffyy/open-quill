@@ -10,6 +10,7 @@
   :root .app-incognito .main { margin: 0; border-radius: 0; box-shadow: none; }
   .app:has(.sidebar.docs-mode) { background: var(--dk-page); }
   :root:root .sidebar { border-right: 0; }
+  :root:root .side-resize { right: 0; }
   .rail-open { top: calc(8px + var(--frame-gap)); left: calc(8px + var(--frame-gap)); }
   :root:root .pj-overview {
     top: var(--frame-gap); right: var(--frame-gap); bottom: var(--frame-gap); left: max(var(--frame-gap), var(--sb-w, 288px));

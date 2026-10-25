@@ -12,6 +12,7 @@ import { resolveKeybinds, comboKeys } from '../../lib/keybinds.js';
 import { parseVersion } from '../../lib/appversion.js';
 import { nextFitSize, FIT_PASSES } from '../../lib/fittext.js';
 import { useDismiss } from '../../lib/dismiss.js';
+import { useLiquidMenu } from '../../lib/liquidmenu.js';
 import { pathForChat, pathForCode, pathForProject } from '../../lib/route.js';
 import { collectTags, hasTag } from '../../lib/chattags.js';
 
@@ -67,6 +68,9 @@ export function storedSidebarWidth() {
 
 function SideResize({ targetRef, onCommit, onHide }) {
   const drag = useRef(null);
+  const tap = useRef(0);
+
+  useEffect(() => () => clearTimeout(tap.current), []);
 
   useEffect(() => {
     const move = (e) => {
@@ -83,7 +87,7 @@ function SideResize({ targetRef, onCommit, onHide }) {
       el.style.transition = '';
       document.body.classList.remove('resizing-x');
       if (e.type === 'pointerup' && Math.abs(e.clientX - d.x) < 3) {
-        if (onHide) onHide();
+        if (onHide && !tap.current) tap.current = setTimeout(() => { tap.current = 0; onHide(); }, 260);
         return;
       }
       const w = Math.round(el.getBoundingClientRect().width);
@@ -122,6 +126,12 @@ function SideResize({ targetRef, onCommit, onHide }) {
     if (onCommit) onCommit(w);
   };
 
+  const reset = () => {
+    clearTimeout(tap.current);
+    tap.current = 0;
+    setWidth(null);
+  };
+
   const nudge = (e) => {
     const el = targetRef.current;
     if (e.key === 'Enter' && onHide) { e.preventDefault(); onHide(); return; }
@@ -135,7 +145,7 @@ function SideResize({ targetRef, onCommit, onHide }) {
   return (
     <Tip label={t('Hide sidebar')} keys={t('Drag to resize')}>
       <div className="side-resize" role="separator" aria-orientation="vertical" aria-label={t('Resize sidebar')}
-        tabIndex={0} onPointerDown={start} onKeyDown={nudge}>
+        tabIndex={0} onPointerDown={start} onDoubleClick={reset} onKeyDown={nudge}>
         <span className="side-resize-grip" aria-hidden="true" />
       </div>
     </Tip>
@@ -173,6 +183,7 @@ function ProfileMenu({ user, anchorRef, onSettings, onAdmin, onPlayground, onCre
     setPos({ left, width, bottom: window.innerHeight - r.top + 5.8 });
   }, [anchorRef]);
   useDismiss(true, onClose, [ref, anchorRef]);
+  useLiquidMenu(true, ref, anchorRef);
   return createPortal(
     <div className="popover" ref={ref} role="menu" aria-label={t('Profile menu')}
       style={pos ? { position: 'fixed', left: pos.left, bottom: pos.bottom, width: pos.width, right: 'auto' } : { visibility: 'hidden' }}>
@@ -302,6 +313,9 @@ function Sidebar({
   const [tagFilter, setTagFilter] = useState(() => { try { return localStorage.getItem('oq-tag-filter') || ''; } catch { return ''; } });
   const pickTagFilter = (v) => { setTagFilter(v); setGroupMenu(false); try { localStorage.setItem('oq-tag-filter', v); } catch {} };
   useDismiss(groupMenu, () => setGroupMenu(false), groupRef);
+  const groupBtnRef = useRef(null);
+  const groupMenuRef = useRef(null);
+  useLiquidMenu(groupMenu, groupMenuRef, groupBtnRef);
   useEffect(() => {
     const down = (e) => { if (e.key === 'Shift') setShiftHeld(true); };
     const up = (e) => { if (e.key === 'Shift') setShiftHeld(false); };
@@ -461,10 +475,10 @@ function Sidebar({
                 </button>
               )}
               {!code && <button className="rl-group" data-tip={t('All chats')} aria-label={t('All chats')} onClick={onChatsOverview}><ArrowOut /></button>}
-              <button className="rl-group" data-tip={t('Group by')} aria-label={t('Group by')} aria-haspopup="menu" aria-expanded={groupMenu}
+              <button ref={groupBtnRef} className="rl-group" data-tip={t('Group by')} aria-label={t('Group by')} aria-haspopup="menu" aria-expanded={groupMenu}
                 onClick={() => setGroupMenu(o => !o)}><Sliders /></button>
               {groupMenu && (
-                <div className="rl-menu" role="menu">
+                <div ref={groupMenuRef} className="rl-menu" role="menu">
                   <div className="rl-menu-head">{t('Group by')}</div>
                   {[['none', t('None')], ['date', t('Date')], ['project', t('Project')], ['tag', t('Tag')]].map(([v, label]) => (
                     <button key={v} role="menuitemradio" aria-checked={groupBy === v} onClick={() => pickGroup(v)}>

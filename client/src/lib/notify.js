@@ -71,7 +71,8 @@ function fields(text, opts, prev) {
     progress,
     sticky: opts.sticky !== undefined ? !!opts.sticky : prev ? prev.sticky : progress != null,
     duration: opts.duration || (prev && !opts.kind ? prev.duration : DURATION[kind] || DURATION.info),
-    onClick: opts.onClick !== undefined ? opts.onClick : prev ? prev.onClick : null
+    onClick: opts.onClick !== undefined ? opts.onClick : prev ? prev.onClick : null,
+    onStop: opts.onStop !== undefined ? opts.onStop : prev ? prev.onStop : null
   };
 }
 
@@ -107,11 +108,20 @@ export function notify(text, opts = {}) {
   return handle(id);
 }
 
+const HISTORY = 5;
+let history = [];
+
 export function dismissNotice(idOrKey) {
-  const next = notices.filter(n => n.id !== idOrKey && n.key !== idOrKey);
-  if (next.length === notices.length) return;
-  notices = next;
+  const gone = notices.filter(n => n.id === idOrKey || n.key === idOrKey);
+  if (!gone.length) return;
+  const at = Date.now();
+  history = [...gone.filter(n => !n.sticky).map(n => ({ id: n.id, text: n.text, icon: n.icon, kind: n.kind, onClick: n.onClick, at })), ...history].slice(0, HISTORY);
+  notices = notices.filter(n => !gone.includes(n));
   emit();
+}
+
+export function noticeHistory() {
+  return history;
 }
 
 export function subscribeNotices(fn) {

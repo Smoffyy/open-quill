@@ -4,7 +4,7 @@ import { ChatMenu, menuAtButton } from '../sidebar/ChatMenu.jsx';
 import { ChevDown, Menu } from '../ui/icons.jsx';
 
 export default function ChatTopbar({
-  lead, actions, chat, chatId, project, booting = false, projects, busy = false,
+  lead, chat, chatId, project, booting = false, projects, busy = false,
   allTags, onOpenMenu, onOpenProject, onRename, onStopChat, onToggleStar, onToggleArchive, onSetTags, onMoveToProject, onDelete
 }) {
   const [renaming, setRenaming] = useState(false);
@@ -67,7 +67,6 @@ export default function ChatTopbar({
           )}
         </div>
       )}
-      {actions}
     </div>
   );
 }

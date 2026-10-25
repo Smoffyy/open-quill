@@ -1,7 +1,51 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { simpleMotion } from '../../lib/motion.js';
 import Tip from '../ui/Tip.jsx';
 import { api } from '../../lib/api.js';
+import { springStep } from '../../lib/liquid.js';
 import { t } from '../../i18n.jsx';
+
+const TOP = 1.4;
+const SPAN = 9.2;
+
+function fluidPath(level, amp, phase) {
+  const surface = TOP + SPAN * (1 - level);
+  let d = 'M0 12 L0 ' + surface.toFixed(2);
+  for (let x = 0; x <= 12; x += 0.75) d += ' L' + x + ' ' + (surface + Math.sin(phase + x * 1.1) * amp).toFixed(2);
+  return d + ' L12 12 Z';
+}
+
+function useVessel(target) {
+  const path = useRef(null);
+  const state = useRef({ level: 0, v: 0, amp: 0, phase: 0 });
+  const frame = useRef(0);
+  useEffect(() => {
+    const s = state.current;
+    if (simpleMotion()) {
+      s.level = target;
+      s.amp = 0;
+      if (path.current) path.current.setAttribute('d', fluidPath(s.level, 0, 0));
+      return undefined;
+    }
+    let last = performance.now();
+    const tick = () => {
+      const now = performance.now();
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
+      const before = s.level;
+      [s.level, s.v] = springStep(s.level, s.v, target, 60, 9, dt);
+      s.amp = Math.min(0.9, s.amp * Math.exp(-2.6 * dt) + Math.abs(s.level - before) * 5);
+      s.phase += dt * 9;
+      if (path.current) path.current.setAttribute('d', fluidPath(s.level, s.amp, s.phase));
+      const still = Math.abs(s.level - target) < 0.001 && Math.abs(s.v) < 0.002 && s.amp < 0.02;
+      frame.current = still ? 0 : requestAnimationFrame(tick);
+    };
+    cancelAnimationFrame(frame.current);
+    frame.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame.current);
+  }, [target]);
+  return path;
+}
 
 export default function ContextRing({ chatId, modelId, revision, streaming, live, className = '' }) {
   const [data, setData] = useState(null);
@@ -12,6 +56,7 @@ export default function ContextRing({ chatId, modelId, revision, streaming, live
   const modelRef = useRef(modelId);
   modelRef.current = modelId;
   const forced = useRef(false);
+  const clip = useId();
 
   const wasStreaming = useRef(streaming);
   useEffect(() => {
@@ -63,8 +108,7 @@ export default function ContextRing({ chatId, modelId, revision, streaming, live
   const used = liveUsed || (current ? current.used : 0);
   const pct = capTokens > 0 ? Math.min(100, Math.round((used / capTokens) * 100)) : 0;
   const summarized = current ? current.summarized || 0 : 0;
-  const r = 5;
-  const len = 2 * Math.PI * r;
+  const fluid = useVessel(pct / 100);
   let label = t('Context: nothing used yet');
   if (busy) label = t('Refreshing context…');
   else if (shift && canRefresh) label = t('Shift+Click to refresh context');
@@ -87,8 +131,9 @@ export default function ContextRing({ chatId, modelId, revision, streaming, live
         onMouseMove={(e) => setShift(e.shiftKey)}
         onMouseLeave={() => { setHover(false); setShift(false); }}>
         <svg viewBox="0 0 12 12">
-          <circle cx="6" cy="6" r={r} className="cx-ring-track" />
-          <circle cx="6" cy="6" r={r} className="cx-ring-fill" strokeDasharray={len} strokeDashoffset={len - (len * pct) / 100} />
+          <defs><clipPath id={clip}><circle cx="6" cy="6" r="4.4" /></clipPath></defs>
+          <path ref={fluid} className="cx-ring-fluid" clipPath={'url(#' + clip + ')'} d={fluidPath(0, 0, 0)} />
+          <circle cx="6" cy="6" r="5" className="cx-ring-glass" />
         </svg>
       </span>
     </Tip>

@@ -194,9 +194,6 @@ body:has(.app.has-bg) > .model-submenu.pinned {
   .topbar .chat-name { font-size: 14px; max-width: 100%; overflow: hidden; }
   .topbar .chat-name span, .topbar .chat-name { white-space: nowrap; text-overflow: ellipsis; }
   .chat-name-wrap { min-width: 0; flex: 0 1 auto; }
-  .topbar-actions { gap: 2px; flex-shrink: 0; }
-  .paper-btn { width: 32px; height: 32px; }
-  .paper-btn svg { width: 18px; height: 18px; }
   .chat-rename { max-width: 100%; }
 
   .artifacts {
@@ -210,7 +207,6 @@ body:has(.app.has-bg) > .model-submenu.pinned {
   .greeting { font-size: 30px; line-height: 38px; text-align: center; text-wrap: balance; flex-direction: column; align-items: center; gap: 12px; margin-bottom: 32px; }
   .greeting .greeting-icon { width: 44px !important; height: 44px !important; }
   .greeting svg { width: 34px !important; height: 34px !important; }
-  .home-actions, .topbar > .topbar-actions { top: 12px; right: 12px; }
 
   /* ---- thread / messages ---- */
   .thread { padding: 0 16px; }
@@ -284,7 +280,6 @@ body:has(.app.has-bg) > .model-submenu.pinned {
   .chats-overview .co-head, .co-head { padding-top: calc(14px + env(safe-area-inset-top)); }
   .incognito-bar { padding-top: calc(8px + env(safe-area-inset-top)); }
   .mobile-menu-btn.empty-menu { top: calc(8px + env(safe-area-inset-top)); }
-  .home-actions, .topbar > .topbar-actions { top: calc(12px + env(safe-area-inset-top)); }
   .sidebar-head { padding-top: calc(8px + env(safe-area-inset-top)); }
 
   .center-wrap { padding: calc(18vh + 1px) 12px 24px; justify-content: flex-start; overflow: hidden auto; }

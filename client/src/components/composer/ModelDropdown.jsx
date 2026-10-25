@@ -8,6 +8,7 @@ import { clampPx, overshoot, stretchFor, squashFor, stretchOrigin, slideFor, mag
 import { paintCells, fadeTrail, stampTrail, headColumn, CELL, CELL_FPS, CELL_SPEED } from '../../lib/cellfield.js';
 import { controlOf, defaultValueOf, falseValueOf, trueValueOf, kwargValuesArr, resolveKwargValues, isRange, isSteps, stopLabel, clampToRange, rangeSteps, nearestStep, rangeLabel, kwargVisible, pickerChips } from '../../lib/kwargs.js';
 import { useDismiss } from '../../lib/dismiss.js';
+import { useLiquidMenu } from '../../lib/liquidmenu.js';
 import { Skel, SkelMenu } from '../ui/Skeleton.jsx';
 import { ModelMark } from '../ui/Weave.jsx';
 import { useLayout } from '../../lib/uselayout.js';
@@ -318,6 +319,7 @@ function MoreGroup({ label, items, renderOpt, openKey, setOpenKey }) {
   const subRef = useRef(null);
   const timer = useRef(null);
   const [pos, setPos] = useState(null);
+  useLiquidMenu(open, subRef, rowRef);
   useEffect(() => () => clearTimeout(timer.current), []);
   useLayoutEffect(() => {
     if (!open) { setPos(null); return undefined; }
@@ -385,6 +387,8 @@ export default function ModelDropdown({ models, modelsReady = true, currentId, o
   const menuRef = useRef(null);
   const listRef = useRef(null);
   useDismiss(open, () => setOpen(false), ref, { inside: '.model-submenu' });
+  const triggerRef = useRef(null);
+  useLiquidMenu(open, menuRef, triggerRef);
   useEffect(() => { if (!open) setOpenSub(null); }, [open]);
   useLayoutEffect(() => {
     if (!open) {
@@ -501,7 +505,7 @@ export default function ModelDropdown({ models, modelsReady = true, currentId, o
 
   return (
     <div className="model-select" ref={ref}>
-      <button type="button" className={'model-trigger' + (open ? ' on' : '')} onClick={() => setOpen(o => !o)}>
+      <button ref={triggerRef} type="button" className={'model-trigger' + (open ? ' on' : '')} onClick={() => setOpen(o => !o)}>
         <span className="mt-label">
           {current?.displayName || (hasModels ? 'Model' : t('No models available'))}
           {chips.length

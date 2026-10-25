@@ -25,6 +25,7 @@ export function applyPrefs(prefs, preset) {
   try { localStorage.setItem('oq-palette', pal.id); } catch {}
   root.setAttribute('data-density', prefs?.density === 'compact' ? 'compact' : 'comfortable');
   root.setAttribute('data-read', prefs?.readWidth === 'wide' ? 'wide' : 'normal');
+  root.setAttribute('data-motion', prefs?.motion === 'simple' ? 'simple' : 'liquid');
   const cursorOn = prefs?.streamCursor == null ? layout.cursor.on : !!prefs.streamCursor;
   const cursorStyle = prefs?.cursorStyle || layout.cursor.style;
   root.setAttribute('data-cursor', cursorOn ? (cursorStyle === 'circle' ? 'circle' : 'block') : 'off');

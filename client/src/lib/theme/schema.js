@@ -138,8 +138,6 @@ export const ELEMENTS = [
   { id: 'app', label: tk('App'), cat: 'shell', sel: '.app', caps: ['layout', 'color', 'motion', 'responsive'] },
   { id: 'main', label: tk('Content area'), cat: 'shell', sel: '.main', parent: 'app', caps: ALL },
   { id: 'topbar', label: tk('Header'), cat: 'shell', sel: '.topbar', parent: 'main', caps: ALL },
-  { id: 'topbarActions', label: tk('Header actions'), cat: 'shell', sel: '.topbar-actions', parent: 'topbar', caps: ALL, orders: true },
-  { id: 'topbarBtn', label: tk('Header button'), cat: 'shell', sel: '.paper-btn', parent: 'topbarActions', caps: CTRL, icon: true },
   { id: 'incognitoBar', label: tk('Incognito bar'), cat: 'shell', sel: '.incognito-bar', parent: 'main', caps: ALL },
   { id: 'incognitoTitle', label: tk('Incognito title'), cat: 'shell', sel: '.incognito-title', parent: 'incognitoBar', caps: TEXTY },
   { id: 'appBg', label: tk('Background layer'), cat: 'shell', sel: '.app-bg-layer', parent: 'app', caps: ['size', 'color', 'effects', 'motion'] },

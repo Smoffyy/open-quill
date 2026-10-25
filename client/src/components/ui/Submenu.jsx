@@ -1,9 +1,11 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useLiquidMenu } from '../../lib/liquidmenu.js';
 
 export function Flyout({ anchorRef, className, children }) {
   const ref = useRef(null);
   const [pos, setPos] = useState(null);
+  useLiquidMenu(true, ref, anchorRef);
   useLayoutEffect(() => {
     const pad = 8;
     const gap = 8;

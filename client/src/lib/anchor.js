@@ -1,5 +1,6 @@
 import { useState, useEffect, useLayoutEffect } from 'react';
 import { useDismiss } from './dismiss.js';
+import { useLiquidMenu } from './liquidmenu.js';
 
 export const MENU_EDGE = 8;
 export const MENU_GAP = 6;
@@ -21,6 +22,7 @@ export function useAnchoredMenu(open, setOpen, btnRef, menuRef, opts) {
   const gap = (opts && typeof opts.gap === 'number') ? opts.gap : MENU_GAP;
   const [pos, setPos] = useState(null);
   useDismiss(open, () => setOpen(false), [menuRef, btnRef]);
+  useLiquidMenu(open, menuRef, btnRef);
   useEffect(() => {
     if (!open) { setPos(null); return; }
     const close = () => setOpen(false);

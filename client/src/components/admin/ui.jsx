@@ -7,6 +7,7 @@ import { logoFor, useLogos } from '../../lib/logos.js';
 import { SkelLines, SkelRows, SkelTable, SkelStats } from '../ui/Skeleton.jsx';
 import { useFocusTrap } from '../../lib/focus.js';
 import { useLayer } from '../../lib/dismiss.js';
+import { pointRef, useLiquidMenu } from '../../lib/liquidmenu.js';
 
 export { Switch };
 
@@ -364,7 +365,9 @@ export function Confirm({ ask, onClose }) {
 // A menu anchored to a point rather than an element — the models list opens one
 // on right-click. Clicking away, resizing or Escape all dismiss it.
 export function PointMenu({ at, onClose, width = 250, anchorEl, children }) {
+  const menuRef = useRef(null);
   useLayer(true, () => onClose());
+  useLiquidMenu(true, menuRef, pointRef(at.x, at.y));
   useEffect(() => {
     const away = (e) => { if (anchorEl && anchorEl.contains(e.target)) return; onClose(); };
     window.addEventListener('mousedown', away);
@@ -376,7 +379,7 @@ export function PointMenu({ at, onClose, width = 250, anchorEl, children }) {
   }, [onClose, anchorEl]);
 
   return createPortal(
-    <div className="cp-menu" role="menu"
+    <div ref={menuRef} className="cp-menu" role="menu"
       style={{ position: 'fixed', left: at.x, top: at.y, width }}
       onMouseDown={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.preventDefault()}>

@@ -34,6 +34,32 @@
 .island-ring-track { stroke: color-mix(in srgb, currentColor 26%, transparent); }
 .island-ring-fill { stroke: currentColor; transform: rotate(-90deg); transform-origin: 50% 50%; transition: stroke-dashoffset .3s ease; }
 .island-ring.spin { animation: island-spin .9s linear infinite; }
+.island.expanded { cursor: default; user-select: text; }
+.island-host:has(.island.expanded) { height: min(480px, calc(100vh - 16px)); }
+.island-panel {
+  flex: none; width: 340px; max-width: var(--island-max); align-self: flex-start;
+  display: flex; flex-direction: column; gap: 2px; padding: 10px 10px 8px;
+}
+.island-head { padding: 4px 6px 2px; font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--text-faint); }
+.island-row { display: flex; align-items: center; gap: 9px; min-height: 34px; padding: 4px 6px; border-radius: 10px; }
+.island-row .island-ring { margin-left: 0; }
+.island-row[data-kind="success"] .island-ico { color: var(--island-success, var(--success)); }
+.island-row[data-kind="warn"] .island-ico { color: var(--island-warn, var(--warning)); }
+.island-row[data-kind="error"] .island-ico { color: var(--island-error, var(--danger)); }
+.island-row-text {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;
+  padding: 0; border: 0; background: none; color: inherit; font: inherit;
+}
+button.island-row-text { cursor: pointer; }
+button.island-row-text:hover { text-decoration: underline; }
+.island-stop {
+  flex: none; padding: 5px 10px; border: 0; border-radius: 999px; background: var(--hover-mid); color: var(--text);
+  font: 600 12px/1 var(--font-sans); cursor: pointer;
+}
+.island-stop:hover { background: var(--surface-hover); }
+.island-row-text:focus-visible, .island-stop:focus-visible { outline: 2px solid var(--focus-ring, var(--accent)); outline-offset: 2px; }
+.island-when { flex: none; font-size: 12px; color: var(--text-faint); }
+.island-empty { padding: 6px; color: var(--text-faint); }
 .island-count { flex: none; padding: 1px 7px; border-radius: 999px; background: var(--hover-mid); font-size: 12px; font-weight: 600; }
 @keyframes island-spin { to { transform: rotate(360deg); } }
 

@@ -6,6 +6,7 @@ import { Skel, SkelMenu } from '../ui/Skeleton.jsx';
 import { SubItem } from '../ui/Submenu.jsx';
 import { useDismiss } from '../../lib/dismiss.js';
 import { useSubmenus } from '../../lib/submenu.js';
+import { pointRef, useLiquidMenu } from '../../lib/liquidmenu.js';
 import { MAX_TAGS, MAX_TAG_LENGTH, hasTag, toggleTag } from '../../lib/chattags.js';
 
 export function ChatMenu({ chat, at, projects = [], projectsReady = true, busy = false, anchorRef, allTags = [], onStopChat, onToggleStar, onToggleArchive, onSetTags, onMoveToProject, onDelete, onClose }) {
@@ -19,6 +20,7 @@ export function ChatMenu({ chat, at, projects = [], projectsReady = true, busy =
   useEffect(() => { setPos({ ...at, ready: false }); }, [at]);
 
   useDismiss(true, onClose, anchorRef ? [menuRef, anchorRef] : menuRef, { inside: '.cm-flyout' });
+  useLiquidMenu(true, menuRef, at.point ? pointRef(at.point.x, at.point.y) : anchorRef);
   useEffect(() => {
     const onScroll = (e) => {
       if (menuRef.current && menuRef.current.contains(e.target)) return;
@@ -134,5 +136,5 @@ export function menuAtButton(el) {
 }
 
 export function menuAtPointer(e) {
-  return { top: e.clientY + 4, left: e.clientX, anchorTop: e.clientY };
+  return { top: e.clientY + 4, left: e.clientX, anchorTop: e.clientY, point: { x: e.clientX, y: e.clientY } };
 }
