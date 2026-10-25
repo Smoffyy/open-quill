@@ -3028,5 +3028,12 @@
   "Use these settings": "Применить эти настройки",
   "set up by hand": "настроить вручную",
   "Effort {range}": "Усилия {range}",
-  "Supports": "Поддерживает"
+  "Supports": "Поддерживает",
+  "Replying in “{title}”": "Отвечает в «{title}»",
+  "Importing chats": "Импорт чатов",
+  "The reply in “{title}” stopped with an error.": "Ответ в «{title}» остановился из-за ошибки.",
+  "Reply ready in “{title}”": "Ответ готов в «{title}»",
+  "Replying in a new chat": "Отвечает в новом чате",
+  "The reply in a new chat stopped with an error.": "Ответ в новом чате остановился из-за ошибки.",
+  "Reply ready in a new chat": "Ответ готов в новом чате"
 }

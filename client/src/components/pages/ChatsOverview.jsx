@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../../lib/api.js';
-import { toast } from '../../lib/toast.js';
+import { notify } from '../../lib/notify.js';
 import { askConfirm } from '../../lib/confirm.js';
 import { t } from '../../i18n.jsx';
 import { useSkeleton } from '../../lib/skeleton.js';
@@ -102,7 +102,7 @@ export default function ChatsOverview({ onOpen, onClose, onChatsChanged }) {
     setSelected(new Set());
     setBusy(false);
     const n = ids.length;
-    toast(archived
+    notify(archived
       ? (n === 1 ? t('{n} chat archived.', { n }) : t('{n} chats archived.', { n }))
       : (n === 1 ? t('{n} chat restored.', { n }) : t('{n} chats restored.', { n })));
     onChatsChanged?.();
@@ -121,7 +121,7 @@ export default function ChatsOverview({ onOpen, onClose, onChatsChanged }) {
     setChats(cs => cs.filter(c => !selected.has(c.id)));
     setSelected(new Set());
     setBusy(false);
-    toast(ids.length === 1 ? t('{n} chat deleted.', { n: ids.length }) : t('{n} chats deleted.', { n: ids.length }));
+    notify(ids.length === 1 ? t('{n} chat deleted.', { n: ids.length }) : t('{n} chats deleted.', { n: ids.length }));
     onChatsChanged?.();
   }
 

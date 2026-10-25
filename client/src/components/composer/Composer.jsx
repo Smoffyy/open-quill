@@ -4,7 +4,7 @@ import ModelDropdown from './ModelDropdown.jsx';
 import ModelPickerSlot from './ModelPickerSlot.jsx';
 import Tip from '../ui/Tip.jsx';
 import { api } from '../../lib/api.js';
-import { toast } from '../../lib/toast.js';
+import { notify } from '../../lib/notify.js';
 import { useAttachments, NO_VISION } from '../../lib/attachments.js';
 import { useDictation } from '../../lib/dictation.js';
 import { captureScreenshot, screenshotSupported, isCaptureCancel } from '../../lib/screenshot.js';
@@ -131,7 +131,7 @@ export default function Composer({
     setCapturing(true);
     shot
       .then(file => { addFiles([file]); focusUnlessTouch(ta.current); })
-      .catch(err => { if (!isCaptureCancel(err)) toast(t('The upload failed.')); })
+      .catch(err => { if (!isCaptureCancel(err)) notify(t('The upload failed.')); })
       .finally(() => setCapturing(false));
   }, [addFiles, closePlusMenu]);
   const [showReason, setShowReason] = useState(false);

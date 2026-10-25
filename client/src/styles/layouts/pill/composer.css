@@ -6,7 +6,7 @@
   display: flex; flex-direction: column; justify-content: center; margin: 0 auto;
 }
 [data-layout="pill"] .composer:focus-within { border-color: var(--composer-border, var(--border-soft)); }
-[data-layout="pill"] .composer.ml, [data-layout="pill"] .center-wrap .composer.ml { padding-bottom: 52px; justify-content: flex-start; }
+[data-layout="pill"] .composer.ml, [data-layout="pill"] .center-wrap .composer.ml { padding-left: 16px; padding-right: 16px; padding-bottom: 52px; justify-content: flex-start; }
 [data-layout="pill"] .composer-bar {
   position: absolute; left: 8px; right: 8px; bottom: 8px; top: auto; height: 36px;
   display: flex; align-items: center; justify-content: space-between; pointer-events: none; padding: 0; margin: 0; z-index: 6;
@@ -20,6 +20,9 @@
 [data-layout="pill"] .composer .continue-row, [data-layout="pill"] .composer .slash-menu,
 [data-layout="pill"] .composer .steer-row { margin-left: -36px; margin-right: -84px; }
 [data-layout="pill"] .composer .attach-row { margin-top: 0; padding: 0 0 8px; }
+[data-layout="pill"] .composer.ml .attach-row, [data-layout="pill"] .composer.ml .queued-chip,
+[data-layout="pill"] .composer.ml .continue-row, [data-layout="pill"] .composer.ml .slash-menu,
+[data-layout="pill"] .composer.ml .steer-row { margin-left: -4px; margin-right: -4px; }
 
 [data-layout="pill"] .lib-overlay { z-index: 35; }
 

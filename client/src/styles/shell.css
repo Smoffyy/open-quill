@@ -148,12 +148,6 @@ body:has(.app.has-bg) > .model-submenu.pinned {
 
 .pm-empty { font-size: 12px; color: var(--text-faint); padding: 7px 10px; }
 
-/* ---- toasts ---- */
-.toaster { position: absolute; top: calc(66px + var(--find-h, 0px)); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; align-items: center; z-index: 200; pointer-events: none; width: max-content; max-width: 90vw; }
-.toast { display: flex; align-items: center; gap: 9px; padding: 11px 17px; border-radius: 13px; background: color-mix(in srgb, var(--menu-bg) 72%, transparent); border: 1px solid var(--border-soft); color: var(--text); font-size: 13.5px; box-shadow: 0 12px 40px #00000055; backdrop-filter: blur(18px) saturate(1.4); -webkit-backdrop-filter: blur(18px) saturate(1.4); pointer-events: auto; cursor: pointer; max-width: 80vw; }
-.toast-ico { display: grid; place-items: center; color: var(--text); }
-.toast-msg { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
 /* ---- message jump flash ---- */
 .msg-speed {
   margin-left: 6px; font-size: 11px; color: var(--text-faint); font-family: var(--font-sans);
@@ -235,7 +229,6 @@ body:has(.app.has-bg) > .model-submenu.pinned {
   .composer .model-trigger > span:first-child { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .composer-wrap { padding: 0 !important; }
   .active-composer { padding: var(--composer-dock-top) 8px 8px !important; max-width: 100% !important; }
-  .toaster { top: calc(58px + var(--find-h, 0px)); }
 
   .model-menu, .model-menu.up { max-width: calc(100vw - 24px); max-height: 70vh; overflow: hidden auto; }
   .plus-menu, .model-submenu, .chat-menu, .popover { max-width: calc(100vw - 24px); }

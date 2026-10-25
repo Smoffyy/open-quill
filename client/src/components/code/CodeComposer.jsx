@@ -9,7 +9,7 @@ import { useAttachments } from '../../lib/attachments.js';
 import { useDictation } from '../../lib/dictation.js';
 import { resolveKwargValues, kwargVisible, pickerChips } from '../../lib/kwargs.js';
 import { api } from '../../lib/api.js';
-import { toast } from '../../lib/toast.js';
+import { notify } from '../../lib/notify.js';
 import { t } from '../../i18n.jsx';
 
 function useDigits(open, count, pick) {
@@ -112,7 +112,7 @@ export default function CodeComposer({
     if (files.length) {
       setUploading(true);
       try { const r = await api.uploadFiles(files.map(f => f.file)); attachments = r.files || []; }
-      catch (e) { setUploading(false); toast(e?.message || t('The upload failed.')); return; }
+      catch (e) { setUploading(false); notify(e?.message || t('The upload failed.')); return; }
       setUploading(false);
       clearFiles();
     }

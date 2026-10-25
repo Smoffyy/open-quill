@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '../../lib/api.js';
-import { toast } from '../../lib/toast.js';
+import { notify } from '../../lib/notify.js';
 import { t } from '../../i18n.jsx';
 import Dialog from '../ui/Dialog.jsx';
 import CloseButton from '../ui/CloseButton.jsx';
@@ -27,7 +27,7 @@ export default function SummaryModal({ chatId, onClose, onChanged }) {
       setSaved(true);
       clearTimeout(savedTimer.current);
       savedTimer.current = setTimeout(() => setSaved(false), 1400);
-    } catch { toast(t('Could not save these changes.'), { icon: 'info', kind: 'warn' }); }
+    } catch { notify(t('Could not save these changes.'), { kind: 'warn' }); }
   }
   async function clear() {
     try {
@@ -35,7 +35,7 @@ export default function SummaryModal({ chatId, onClose, onChanged }) {
       setText('');
       onChanged?.(false);
       onClose();
-    } catch { toast(t('Could not save these changes.'), { icon: 'info', kind: 'warn' }); }
+    } catch { notify(t('Could not save these changes.'), { kind: 'warn' }); }
   }
 
   return (

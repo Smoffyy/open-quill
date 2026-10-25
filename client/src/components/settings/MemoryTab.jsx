@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '../../lib/api.js';
-import { toast } from '../../lib/toast.js';
+import { notify } from '../../lib/notify.js';
 import { t } from '../../i18n.jsx';
 import { Pencil, Plus, Trash } from '../ui/icons.jsx';
 import { SetRow, SwitchRow } from '../ui/controls.jsx';
@@ -80,7 +80,7 @@ export default function MemoryTab({ prefs, setPref }) {
     return () => { live = false; };
   }, [on]);
 
-  const failed = () => toast(t('Could not save these changes.'), { icon: 'info', kind: 'warn' });
+  const failed = () => notify(t('Could not save these changes.'), { kind: 'warn' });
 
   async function add(e) {
     e.preventDefault();

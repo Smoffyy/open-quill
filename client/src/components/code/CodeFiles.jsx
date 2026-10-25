@@ -4,7 +4,7 @@ import CodeMenu, { MenuItem, MenuSep } from './CodeMenu.jsx';
 import Tip from '../ui/Tip.jsx';
 import { Menu, Search, FilePlus, Upload, Download, Expand, Collapse, X, Dots, ChevDown, Folder, FileText, CodeTag, Pencil, Trash, Copy } from '../ui/icons.jsx';
 import { api } from '../../lib/api.js';
-import { toast } from '../../lib/toast.js';
+import { notify } from '../../lib/notify.js';
 import { copyText } from '../../lib/clipboard.js';
 import { askConfirm } from '../../lib/confirm.js';
 import { buildTree, extOf, baseName, ancestorDirs } from '../../lib/artifacts.js';
@@ -157,10 +157,10 @@ export default function CodeFiles({ chatId, files, live, pending = {}, busy, foc
   const toggleTree = () => setShowTree(v => { try { localStorage.setItem(TREE_KEY, v ? '0' : '1'); } catch {} return !v; });
   const toggleDir = useCallback((p) => setClosed(c => { const n = new Set(c); if (n.has(p)) n.delete(p); else n.add(p); return n; }), []);
   const apply = (r) => { if (r && Array.isArray(r.files)) onFilesChanged(r.files); };
-  const fail = (e) => toast(e?.message || t('Could not change the file.'), { icon: 'info', kind: 'warn' });
+  const fail = (e) => notify(e?.message || t('Could not change the file.'), { kind: 'warn' });
 
   async function onAction(kind, path, extra) {
-    if (kind === 'rename') { if (busy) { toast(t('Wait for the reply to finish before changing files.')); return; } setRenaming(path); return; }
+    if (kind === 'rename') { if (busy) { notify(t('Wait for the reply to finish before changing files.')); return; } setRenaming(path); return; }
     if (kind === 'renamed') {
       setRenaming(null);
       const name = String(extra || '').trim();
@@ -170,10 +170,10 @@ export default function CodeFiles({ chatId, files, live, pending = {}, busy, foc
       return;
     }
     if (kind === 'download') { window.location.href = base + '/download?path=' + encodeURIComponent(path); return; }
-    if (kind === 'copy') { if (await copyText(path)) toast(t('Path copied'), { icon: 'copy' }); return; }
+    if (kind === 'copy') { if (await copyText(path)) notify(t('Path copied'), { icon: 'copy' }); return; }
     if (kind === 'new') { setCreating(path || ''); setShowTree(true); return; }
     if (kind === 'delete') {
-      if (busy) { toast(t('Wait for the reply to finish before changing files.')); return; }
+      if (busy) { notify(t('Wait for the reply to finish before changing files.')); return; }
       const ok = await askConfirm({
         title: extra ? t('Delete folder {name}?', { name: path }) : t('Delete {name}?', { name: baseName(path) }),
         message: extra ? t('Every file inside it is deleted too. This cannot be undone.') : t('This cannot be undone.'),
@@ -195,7 +195,7 @@ export default function CodeFiles({ chatId, files, live, pending = {}, busy, foc
     const list = Array.from(e.target.files || []);
     e.target.value = '';
     if (!list.length) return;
-    if (busy) { toast(t('Wait for the reply to finish before changing files.')); return; }
+    if (busy) { notify(t('Wait for the reply to finish before changing files.')); return; }
     for (const f of list) {
       try { apply(await api.uploadTo(base + '/files', f)); } catch (err) { fail(err); }
     }

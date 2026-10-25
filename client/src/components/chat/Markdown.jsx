@@ -2,13 +2,15 @@ import React from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
-import { BASE_MACROS, CODE_SPLIT, KATEX_OPTIONS, ensureKatex, hasMath, isolateDisplayMath, katexPlugin, katexVersion, subscribeKatex, wrapMathEnvironments } from '../../lib/mathjs.js';
+import { BASE_MACROS, CODE_SPLIT, KATEX_OPTIONS, ensureKatex, guardBlock, hasMath, isolateDisplayMath, katexPlugin, katexVersion, normalizeMathDelims, subscribeKatex, wrapBarePowers, wrapMathEnvironments } from '../../lib/mathjs.js';
 import CodeBlock from './CodeBlock.jsx';
 import MermaidBlock from './MermaidBlock.jsx';
 import { rehypeRevealWords } from '../../lib/revealwords.js';
 import ToolCard from './ToolCard.jsx';
 import { b64decode } from '../../lib/oqr.js';
 import { transformTools } from '../../lib/toolfences.js';
+import { repairTables } from '../../lib/tablefix.js';
+import { foldInlineHtml, htmlBlockText } from '../../lib/rawhtml.js';
 import ReasoningBlock from './ReasoningBlock.jsx';
 
 export const ReasonSegs = React.createContext(null);
@@ -30,15 +32,24 @@ function splitBreaks(value) {
   return out;
 }
 
+const PHRASING = new Set(['paragraph', 'heading', 'emphasis', 'strong', 'delete', 'link', 'tableCell']);
+
 function remarkBreaks() {
   return (tree) => {
     const walk = (node) => {
       if (!node || !Array.isArray(node.children)) return;
+      const phrasing = PHRASING.has(node.type);
+      if (phrasing) node.children = foldInlineHtml(node.children);
       const out = [];
       for (const child of node.children) {
         if (child.type === 'html' && typeof child.value === 'string' && /^(?:\s*<br\s*\/?>\s*)+$/i.test(child.value)) {
           const count = (child.value.match(/<br\s*\/?>/gi) || []).length || 1;
           for (let i = 0; i < count; i++) out.push({ type: 'break' });
+        } else if (child.type === 'html' && typeof child.value === 'string') {
+          if (phrasing) { out.push(...splitBreaks(child.value)); continue; }
+          const text = htmlBlockText(child.value);
+          const parts = splitBreaks(text === null ? child.value : text);
+          if (parts.length) out.push({ type: 'paragraph', children: parts });
         } else if (child.type === 'text' && typeof child.value === 'string' && child.value.indexOf('\n') !== -1) {
           for (const part of splitBreaks(child.value)) out.push(part);
         } else {
@@ -156,86 +167,6 @@ const MarkdownBlock = React.memo(function MarkdownBlock({ text, reveal }) {
   );
 });
 
-const SENT = '\u0000';
-
-function guardDollars(s) {
-  if (s.indexOf('$') === -1) return s;
-  const singles = [];
-  for (let i = 0; i < s.length; i++) {
-    const c = s[i];
-    if (c === '\\') { i++; continue; }
-    if (c !== '$') continue;
-    if (s[i + 1] === '$') { i++; continue; }
-    if (s[i - 1] === SENT || s[i + 1] === SENT) continue;
-    singles.push(i);
-  }
-  if (!singles.length) return s;
-  const esc = new Set();
-  for (const i of singles) {
-    // `$PATH`, `$JAVA_HOME` — shell variables, never math. Two of them in one
-    // paragraph used to pair up and get typeset.
-    if (/^[A-Z][A-Z0-9_]{1,}\b/.test(s.slice(i + 1, i + 24))) { esc.add(i); continue; }
-    const m = /^\d[\d,]*(?:\.\d+)?/.exec(s.slice(i + 1, i + 24));
-    if (!m) continue;
-    const after = s[i + 1 + m[0].length] || '';
-    if (after === '$') continue;
-    if (after && '^_{\\'.includes(after)) continue;
-    let mathish = false;
-    for (let j = i + 1 + m[0].length; j < Math.min(s.length, i + 260); j++) {
-      const ch = s[j];
-      if (ch === '\\' || ch === '^' || ch === '_') { mathish = true; break; }
-      if (ch === '$' || ch === '\n') break;
-    }
-    if (!mathish) esc.add(i);
-  }
-  const rest = singles.filter(i => !esc.has(i));
-  const pairs = [];
-  for (let k = 0; k + 1 < rest.length; k += 2) {
-    const a = rest[k], b = rest[k + 1];
-    const inner = s.slice(a + 1, b);
-    if (!inner || inner.includes('**') || inner.includes('\n\n') || inner.length > 300) {
-      esc.add(a);
-      esc.add(b);
-    } else {
-      pairs.push([a, b]);
-    }
-  }
-  const needsTrim = pairs.some(([a, b]) => { const c = s[a + 1], d = s[b - 1]; return (c === ' ' || c === '\t') || (d === ' ' || d === '\t'); });
-  if (!esc.size && !needsTrim && !pairs.some(([a, b]) => s.slice(a + 1, b).includes('\\$'))) return s;
-  let out = '';
-  let idx = 0;
-  let pi = 0;
-  while (idx < s.length) {
-    if (pi < pairs.length && idx === pairs[pi][0]) {
-      const [a, b] = pairs[pi++];
-      let inner = '';
-      for (let j = a + 1; j < b; j++) inner += esc.has(j) ? '\\$' : s[j];
-      inner = inner.split('\\$').join('\\mdollar ');
-      if (/^\s/.test(inner) || /\s$/.test(inner)) inner = inner.trim();
-      out += '$' + inner + '$';
-      idx = b + 1;
-      continue;
-    }
-    out += esc.has(idx) ? '\\$' : s[idx];
-    idx++;
-  }
-  return out;
-}
-
-function guardBlock(text) {
-  if (text.indexOf(SENT) !== -1) {
-    text = text.replace(/\u0000(\${1,2})([\s\S]*?)\1\u0000/g, (full, d, inner) => SENT + d + inner.split('\\$').join('\\mdollar ') + d + SENT);
-  }
-  if (text.indexOf('$') === -1) return text.indexOf(SENT) === -1 ? text : text.split(SENT).join('');
-  const parts = text.split(/(```[\s\S]*?(?:```|$)|`[^`\n]*`)/);
-  for (let i = 0; i < parts.length; i++) {
-    const p = parts[i];
-    if (!p || p.startsWith('`')) continue;
-    parts[i] = guardDollars(p);
-  }
-  return parts.join('').split(SENT).join('');
-}
-
 function neutralizeOpenMath(text) {
   let i = 0;
   let open = -1;
@@ -285,7 +216,7 @@ function neutralizeOpenMath(text) {
   return out + text.slice(open + openLen);
 }
 
-const BARE_MATH_ARG = /\\(?:sqrt|frac|tfrac|dfrac|cfrac|binom|tbinom|dbinom|mathbb|mathbf|mathcal|mathfrak|mathrm|mathsf|mathit|text|operatorname|overline|underline|hat|bar|vec|dot|ddot|tilde|widehat|widetilde|overbrace|underbrace|overset|underset|stackrel|bcancel|cancel|xcancel|boxed|colorbox|color)\s*[{([\d]/;
+const BARE_MATH_ARG = /\\(?:ce|pu|sqrt|frac|tfrac|dfrac|cfrac|binom|tbinom|dbinom|mathbb|mathbf|mathcal|mathfrak|mathrm|mathsf|mathit|text|operatorname|overline|underline|hat|bar|vec|dot|ddot|tilde|widehat|widetilde|overbrace|underbrace|overset|underset|stackrel|bcancel|cancel|xcancel|boxed|colorbox|color)\s*[{([\d]/;
 const BARE_MATH_SYM = /\\(?:sum|prod|int|iint|iiint|oint|lim|inf|sup|max|min|log|ln|exp|sin|cos|tan|sec|csc|cot|arcsin|arccos|arctan|sinh|cosh|tanh|alpha|beta|gamma|delta|epsilon|varepsilon|zeta|eta|theta|vartheta|iota|kappa|lambda|mu|nu|xi|pi|varpi|rho|varrho|sigma|varsigma|tau|upsilon|phi|varphi|chi|psi|omega|Gamma|Delta|Theta|Lambda|Xi|Pi|Sigma|Upsilon|Phi|Psi|Omega|partial|nabla|infty|forall|exists|nexists|emptyset|varnothing|in|notin|subset|supset|subseteq|supseteq|cup|cap|setminus|cdot|cdots|ldots|ddots|vdots|times|div|pm|mp|leq|geq|neq|approx|equiv|sim|simeq|cong|propto|perp|parallel|angle|triangle|square|circ|bullet|star|dagger|ddagger|ell|hbar|Re|Im|wp|aleph|beth|left|right|big|Big|bigg|Bigg)(?=[^a-zA-Z]|$)/;
 const BARE_MATH_CMD = new RegExp(BARE_MATH_ARG.source + '|' + BARE_MATH_SYM.source);
 
@@ -380,25 +311,6 @@ function wrapBareMathCommands(text) {
   return parts.join('');
 }
 
-function normalizeMathDelims(text) {
-  if (!text || (text.indexOf('\\[') === -1 && text.indexOf('\\(') === -1)) return text;
-  const parts = text.split(CODE_SPLIT);
-  for (let i = 0; i < parts.length; i++) {
-    const p = parts[i];
-    if (!p || p.startsWith('`') || p.startsWith('~~~')) continue;
-    // `\\` is consumed first and returned untouched, so the row-spacing form
-    // `\\[4pt]` inside align/cases/pmatrix keeps its bracket instead of having
-    // the second backslash read as the opener of a display-math delimiter.
-    parts[i] = p.replace(/\\\\|\\\[|\\\]|\\\(|\\\)/g, (m) => (
-      m === '\\\\' ? m
-        : m === '\\[' ? SENT + '$$'
-          : m === '\\]' ? '$$' + SENT
-            : m === '\\(' ? SENT + '$' : '$' + SENT
-    ));
-  }
-  return parts.join('');
-}
-
 const PROGRESSIVE_SIZE_TRIGGER = 20000;
 const PROGRESSIVE_BLOCK_TRIGGER = 40;
 const PROGRESSIVE_INITIAL_LINES = 300;
@@ -434,7 +346,7 @@ function Markdown({ children, streaming, reveal }) {
   if (typeof children !== 'string') {
     return <MarkdownBlock text={children} />;
   }
-  let text = isolateDisplayMath(wrapMathEnvironments(wrapBareMathCommands(normalizeMathDelims(transformTools(children)))));
+  let text = isolateDisplayMath(wrapMathEnvironments(wrapBareMathCommands(normalizeMathDelims(wrapBarePowers(repairTables(transformTools(children)))))));
   if (streaming) text = neutralizeOpenMath(text);
   const blocks = blockify(text);
   if (!streaming && (text.length > PROGRESSIVE_SIZE_TRIGGER || blocks.length > PROGRESSIVE_BLOCK_TRIGGER)) {

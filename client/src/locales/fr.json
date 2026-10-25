@@ -3028,5 +3028,12 @@
   "Use these settings": "Utiliser ces réglages",
   "set up by hand": "à configurer à la main",
   "Effort {range}": "Effort {range}",
-  "Supports": "Prend en charge"
+  "Supports": "Prend en charge",
+  "Replying in “{title}”": "Réponse en cours dans « {title} »",
+  "Importing chats": "Importation des conversations",
+  "The reply in “{title}” stopped with an error.": "La réponse dans « {title} » s’est arrêtée sur une erreur.",
+  "Reply ready in “{title}”": "Réponse prête dans « {title} »",
+  "Replying in a new chat": "Réponse en cours dans une nouvelle conversation",
+  "The reply in a new chat stopped with an error.": "La réponse dans une nouvelle conversation s’est arrêtée sur une erreur.",
+  "Reply ready in a new chat": "Réponse prête dans une nouvelle conversation"
 }

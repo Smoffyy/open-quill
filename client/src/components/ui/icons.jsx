@@ -67,6 +67,7 @@ export const Brain = (p) => <I {...p}><path d="M12 5A2.6 2.6 0 0 0 7.5 6 2.6 2.6
 export const Calculator = (p) => <I {...p}><rect x="5" y="3" width="14" height="18" rx="2.5" /><path d="M8.5 7h7M8.5 11h.01M12 11h.01M15.5 11h.01M8.5 14.5h.01M12 14.5h.01M15.5 14.5v3M8.5 17.5h.01M12 17.5h.01" /></I>;
 export const ListChecks = (p) => <I {...p}><path d="m3.5 7 1.75 1.75L8.5 5.5M3.5 17l1.75 1.75 3.25-3.25M12 7h8.5M12 12h8.5M12 17h8.5" /></I>;
 export const Info = (p) => <I {...p}><circle cx="12" cy="12" r="9" /><path d="M12 11v5.5" /><circle cx="12" cy="7.75" r="1" fill="currentColor" stroke="none" /></I>;
+export const Alert = (p) => <I {...p}><path d="M10.3 4.3 3 17a2 2 0 0 0 1.7 3h14.6a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0z" /><path d="M12 9.5v4.5" /><circle cx="12" cy="17" r="1" fill="currentColor" stroke="none" /></I>;
 export const TextIcon = (p) => <I {...p}><path d="M5 7V5h14v2M12 5v14M9.5 19h5" /></I>;
 export const Bulb = (p) => <I {...p}><path d="M9.5 16c0-1.2-.6-2-1.6-2.8A5.9 5.9 0 1 1 16.1 13.2c-1 .8-1.6 1.6-1.6 2.8zM9.5 18.5h5M10.5 21h3" /></I>;
 export const Code = (p) => <I {...p}><path d="M8.5 7l-5 5 5 5M15.5 7l5 5-5 5" /></I>;

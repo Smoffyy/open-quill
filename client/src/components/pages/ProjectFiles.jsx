@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useId } from 'react';
 import { api } from '../../lib/api.js';
-import { toast } from '../../lib/toast.js';
+import { notify } from '../../lib/notify.js';
 import { askConfirm } from '../../lib/confirm.js';
 import { useDismiss } from '../../lib/dismiss.js';
 import { droppedFiles, pickedFiles } from '../../lib/dropfiles.js';
@@ -170,8 +170,8 @@ export default function ProjectFiles({ projectId }) {
       } catch { failed++; }
     }
     setBusy(false);
-    if (failed === 1) toast(firstError || t('Upload failed.'), { icon: 'info', kind: 'warn' });
-    else if (failed > 1) toast(t('{n} files could not be uploaded.', { n: failed }) + (firstError ? ' ' + firstError : ''), { icon: 'info', kind: 'warn' });
+    if (failed === 1) notify(firstError || t('Upload failed.'), { kind: 'warn' });
+    else if (failed > 1) notify(t('{n} files could not be uploaded.', { n: failed }) + (firstError ? ' ' + firstError : ''), { kind: 'warn' });
   }
 
   async function create(path) {

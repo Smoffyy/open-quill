@@ -4,7 +4,7 @@ import Message from '../chat/Message.jsx';
 import ToolCard from '../chat/ToolCard.jsx';
 import { ChatMenu, menuAtButton } from '../sidebar/ChatMenu.jsx';
 import { t, tk } from '../../i18n.jsx';
-import { toast } from '../../lib/toast.js';
+import { notify } from '../../lib/notify.js';
 import { MODEL_WEAVE } from '../../lib/brand.js';
 import { DotsV, Ghost, Info, Gauge, X } from '../ui/icons.jsx';
 
@@ -131,7 +131,7 @@ export function openStage(id) {
     return true;
   }
   if (passthroughClick(stage.click)) return true;
-  toast(t('That part of the interface is not on screen right now.'));
+  notify(t('That part of the interface is not on screen right now.'));
   return false;
 }
 
@@ -275,9 +275,11 @@ function SampleStates() {
           <span className="unavail-msg"><strong>{t('Sample model')}</strong> {t('is unavailable right now.')}</span>
         </div>
       </div>
-      <div className="toast">
-        <span className="toast-ico"><Info style={{ width: 15 }} /></span>
-        <span className="toast-msg">{t('Saved.')}</span>
+      <div className="island" data-kind="info">
+        <span className="island-body">
+          <span className="island-ico"><Info /></span>
+          <span className="island-text">{t('Saved.')}</span>
+        </span>
       </div>
       <div className="tip"><span className="tip-label">{t('A tooltip')}</span></div>
       <div className="btn-row">

@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { transcribeBlob } from './voice.js';
-import { toast } from './toast.js';
+import { notify } from './notify.js';
 import { t } from '../i18n.jsx';
 
-function warn(msg) { try { toast(msg, { icon: 'info', kind: 'warn', duration: 4200 }); } catch {} }
+function warn(msg) { try { notify(msg, { kind: 'warn', duration: 4200 }); } catch {} }
 
 export function useDictation({ sttEngine, valueRef, onChange }) {
   const [dictating, setDictating] = useState(false);

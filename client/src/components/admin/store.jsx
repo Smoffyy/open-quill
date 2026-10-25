@@ -8,7 +8,7 @@ import { isMacPlatform } from '../../lib/keybinds.js';
 import { isTypingTarget } from '../../lib/keyboard.js';
 import { usePresence } from './state/usePresence.js';
 import { useChanges } from '../../lib/useChanges.js';
-import { toast } from '../../lib/toast.js';
+import { notify } from '../../lib/notify.js';
 import { t } from '../../i18n.jsx';
 
 const Ctx = createContext(null);
@@ -80,11 +80,11 @@ export function AdminProvider({ user, onClose, fixedSection, children }) {
   const present = usePresence(user?.id, section, focusModel);
 
   const undo = useCallback(() => {
-    if (history.current.undo()) toast(t('Change undone'));
+    if (history.current.undo()) notify(t('Change undone'));
   }, []);
 
   const redo = useCallback(() => {
-    if (history.current.redo()) toast(t('Change redone'));
+    if (history.current.redo()) notify(t('Change redone'));
   }, []);
 
   // Opening a model is always "show the models page with this one open", so the

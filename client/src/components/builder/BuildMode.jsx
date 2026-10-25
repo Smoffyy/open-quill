@@ -9,7 +9,7 @@ import Inspector from './Inspector.jsx';
 import { LayersPanel, LibraryPanel, TokensPanel, ContentPanel } from './Panels.jsx';
 import ThemesPanel, { useThemes } from './ThemesPanel.jsx';
 import { Confirm } from './controls.jsx';
-import { toast } from '../../lib/toast.js';
+import { notify } from '../../lib/notify.js';
 import { useChanges } from '../../lib/useChanges.js';
 import ChangesPanel from '../admin/changes/ChangesPanel.jsx';
 import { Panel, Palette, Box, TextIcon, Sparkles, Retry, X, Eye, Check, Keyboard, Refresh, Download } from '../ui/icons.jsx';
@@ -156,7 +156,7 @@ export default function BuildMode({ user }) {
   const themesReload = themes.reload;
   useEffect(() => {
     if (saveState === 'saved') themesReload();
-    if (saveState === 'error' && lastSave.current !== 'error') toast(t('A design change could not be saved.'), { kind: 'error', icon: 'info' });
+    if (saveState === 'error' && lastSave.current !== 'error') notify(t('A design change could not be saved.'), { kind: 'error' });
     lastSave.current = saveState;
   }, [saveState, themesReload]);
 
@@ -184,7 +184,7 @@ export default function BuildMode({ user }) {
       replaceDoc(r.doc);
       markSessionBaseline();
       setSelection(null);
-      toast(t('Back to the published interface.'));
+      notify(t('Back to the published interface.'));
     }
   });
 
@@ -193,7 +193,7 @@ export default function BuildMode({ user }) {
     message: t('Every change you have made since opening build mode goes back to how it was. It lands as one undo step, so you can put it back.'),
     confirmLabel: t('Revert'),
     danger: true,
-    onConfirm: () => { revertSession(); setSelection(null); toast(t('Reverted to where this session started.')); }
+    onConfirm: () => { revertSession(); setSelection(null); notify(t('Reverted to where this session started.')); }
   });
 
   const showStage = (id) => {

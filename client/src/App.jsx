@@ -45,7 +45,7 @@ import ScheduledTasks from './components/pages/ScheduledTasks.jsx';
 import Tip from './components/ui/Tip.jsx';
 import ProjectsPanel from './components/pages/ProjectsPanel.jsx';
 import SearchModal from './components/dialogs/SearchModal.jsx';
-import Toaster from './components/ui/Toaster.jsx';
+import Island from './components/ui/Island.jsx';
 import ConfirmHost from './components/ui/ConfirmHost.jsx';
 import Lightbox from './components/dialogs/Lightbox.jsx';
 import FilePreview from './components/dialogs/FilePreview.jsx';
@@ -79,9 +79,8 @@ import { docsConfig, docsTree, docsPath, parseDocsPath } from './lib/modeldocs.j
 import { useDocsEdit } from './lib/docsedit.js';
 import { useSocket } from './lib/socket.js';
 import BranchTree from './components/chat/BranchTree.jsx';
-import { toast } from './lib/toast.js';
 import { collectTags } from './lib/chattags.js';
-import { readUnread, writeUnread, addUnread, removeUnread, shouldNotify, notifyPermission, showNotification, titleWithUnread } from './lib/notify.js';
+import { readUnread, writeUnread, addUnread, removeUnread, shouldNotify, notifyPermission, showNotification, titleWithUnread, notify, dismissNotice } from './lib/notify.js';
 import { askConfirm } from './lib/confirm.js';
 import { copyText } from './lib/clipboard.js';
 import { Down, Compact, Ghost, Search, Menu, Sliders, X, Fork, Panel, Copy, TextIcon, Expand } from './components/ui/icons.jsx';
@@ -99,7 +98,7 @@ const THREAD_SWAP_DELAY = 90;
 const THREAD_SWAP_MAX = 600;
 const HEAVY_THREAD_CHARS = 40000;
 function warn(message) {
-  toast(message || t('Could not save these changes.'), { icon: 'info', kind: 'warn' });
+  notify(message || t('Could not save these changes.'), { kind: 'warn' });
 }
 
 const DEFAULT_CFG = { appName: 'open-quill', disclaimer: tk('Assistants can make mistakes, double-check responses.'), greetings: [tk('How can I help you?')], appIcon: '', supportContact: '', quickPrompts: [], version: '' };
@@ -267,9 +266,9 @@ export default function App() {
   const [skills, setSkills] = useState([]);
   const loadSkills = useCallback(() => api.get('/api/skills').then(r => setSkills(r.skills || [])).catch(() => {}), []);
   const toggleSkill = useCallback(async (sk) => {
-    if (!sk.editable) { toast(t('Workspace skills are managed in the admin panel.')); return; }
+    if (!sk.editable) { notify(t('Workspace skills are managed in the admin panel.')); return; }
     try { await api.patch('/api/skills/' + sk.id, { enabled: !sk.enabled }); loadSkills(); }
-    catch { toast(t('Could not update the skill.')); }
+    catch { notify(t('Could not update the skill.')); }
   }, [loadSkills]);
   const onSettingsClosed = useCallback(() => { setSettings(null); loadSkills(); }, [loadSkills]);
   useEffect(() => { loadSkills(); }, [loadSkills]);
@@ -366,7 +365,7 @@ export default function App() {
       const r = await api.post('/api/tasks/' + task.id + '/run', {});
       setLibPage(null);
       await openChat(r.chatId);
-    } catch (e) { toast(e?.message || t('Could not run the task.')); }
+    } catch (e) { notify(e?.message || t('Could not run the task.')); }
   }, []);
   const sidebarCombo = React.useMemo(() => {
     const c = resolveKeybinds(user?.prefs).toggleSidebar;
@@ -445,6 +444,25 @@ export default function App() {
   useEffect(() => () => { clearTimeout(configTimer.current); clearTimeout(draftTimer.current); }, []);
   const getCurrentModelId = useCallback(() => currentIdRef.current, []);
   const { busyChats, syncBusy, peek, queueRec, dropRec, recFor, resumeRec } = useGenMirror(getCurrentModelId);
+  const replyActivity = useRef(new Map());
+  const replyFinished = useRef(new Set());
+  useEffect(() => {
+    const live = replyActivity.current;
+    const finished = replyFinished.current;
+    for (const id of finished) if (!busyChats.includes(id)) finished.delete(id);
+    for (const id of busyChats) {
+      const chat = id === activeId || finished.has(id) ? null : chats.find(c => c.id === id);
+      const text = chat ? replyNotice(chat, 'busy') : null;
+      if (!chat || live.get(id) === text) continue;
+      live.set(id, text);
+      notify(text, { key: 'reply:' + id, icon: 'chat', progress: true, onClick: () => sbOpenChat(id) });
+    }
+    for (const id of live.keys()) {
+      if (id !== activeId && busyChats.includes(id)) continue;
+      live.delete(id);
+      dismissNotice('reply:' + id);
+    }
+  }, [busyChats, activeId, chats]);
   const nextTurnPending = useRef(false);
   const selectingRef = useRef(false);
   const hasSelectionRef = useRef(false);
@@ -749,12 +767,13 @@ export default function App() {
   }, [activeId, chats, cfg.appName, incognito, notFound, showAdmin, showPlayground, docsTarget, showProjects, projectOpenId, projects, libPage, chatsOverview, codeMode, unreadChats.length]);
   function exportAllChats() { window.open('/api/chats/export-all', '_blank'); }
   async function importChatsFile(file) {
+    const job = notify(t('Importing chats'), { icon: 'upload', progress: true });
     try {
       const json = JSON.parse(await file.text());
       const r = await api.post('/api/chats/import', json);
       await loadChats();
-      toast(t('Imported {n} chat(s)', { n: r.imported }), { icon: 'check' });
-    } catch (e) { toast(e.message || t('Could not import that file.'), { icon: 'info', kind: 'warn' }); }
+      job.done(t('Imported {n} chat(s)', { n: r.imported }));
+    } catch (e) { job.fail(e.message || t('Could not import that file.')); }
   }
   function applyCfg(c) {
     setCfg(c);
@@ -802,9 +821,9 @@ export default function App() {
     },
     text: { modelError: t('The model returned an error.') },
     actions: {
-      notifyContextTrimmed: (limit) => toast(
+      notifyContextTrimmed: (limit) => notify(
         t('Context limit reached ({limit} tokens), trimming older messages so the chat can continue', { limit: limit.toLocaleString() }),
-        { icon: 'info', kind: 'warn', duration: 6000 }),
+        { kind: 'warn', duration: 6000 }),
       finalize: () => finalize(),
       finalizeBackground: (key) => finalizeBackground(key),
       settleStale: (key) => settleStale(key),
@@ -817,16 +836,31 @@ export default function App() {
       loadBudget: () => loadBudget(),
       setAsk: (chatId, q) => setAsk(chatId, q),
       contextChanged: () => setCtxTick(n => n + 1),
-      taskStarted: (m) => toast(t('Running scheduled task "{title}"', { title: m.title || t('New chat') }), { icon: 'info' }),
+      taskStarted: (m) => notify(t('Running scheduled task "{title}"', { title: m.title || t('New chat') }), { icon: 'clock' }),
       turnFinished: (chatId, failed) => turnFinished(chatId, failed)
     }
   };
+
+  function replyNotice(chat, state) {
+    const title = chat.title && chat.title !== 'New chat' ? chat.title : '';
+    if (state === 'busy') return title ? t('Replying in “{title}”', { title }) : t('Replying in a new chat');
+    if (state === 'failed') return title ? t('The reply in “{title}” stopped with an error.', { title }) : t('The reply in a new chat stopped with an error.');
+    return title ? t('Reply ready in “{title}”', { title }) : t('Reply ready in a new chat');
+  }
 
   function turnFinished(chatId, failed) {
     const chat = chats.find(c => c.id === chatId);
     if (!chat) return;
     const active = chatId === activeKey();
-    if (!active) changeUnread(list => addUnread(list, chatId));
+    if (!active) {
+      changeUnread(list => addUnread(list, chatId));
+      replyActivity.current.delete(chatId);
+      replyFinished.current.add(chatId);
+      notify(replyNotice(chat, failed ? 'failed' : 'ready'), {
+        key: 'reply:' + chatId, icon: failed ? 'alert' : 'check', kind: failed ? 'error' : 'success',
+        progress: null, sticky: false, onClick: () => sbOpenChat(chatId)
+      });
+    }
     const enabled = user?.prefs?.notifications === true;
     if (!shouldNotify({ enabled, permission: notifyPermission(), hidden: document.hidden, active })) return;
     showNotification(chat.title || t('New chat'), failed ? t('The reply stopped with an error.') : t('The reply is ready.'), chatId, () => sbOpenChat(chatId));
@@ -872,7 +906,7 @@ export default function App() {
         return;
       }
       compareRef.current = null;
-      toast(t('Model comparison ready, use the version arrows or right-click the response to compare.'), { duration: 6000 });
+      notify(t('Model comparison ready, use the version arrows or right-click the response to compare.'), { duration: 6000 });
     }
     const q = queuedListRef.current[0];
     if (!q) return;
@@ -938,7 +972,7 @@ export default function App() {
     try {
       const r = await api.post('/api/chats/' + activeId + '/fork', { messageId });
       await loadChats();
-      if (r?.id) { openChat(r.id); toast(t('Forked into a new chat'), { icon: 'fork' }); }
+      if (r?.id) { openChat(r.id); notify(t('Forked into a new chat'), { icon: 'fork' }); }
     } catch {}
   }, [streaming, activeId]);
   const togglePin = useCallback((messageId, pinned) => {
@@ -948,7 +982,7 @@ export default function App() {
       setMessages(ms => ms.map(m => m.id === messageId ? { ...m, pinned: !pinned } : m));
       warn();
     });
-    toast(pinned ? t('Message pinned, kept in context') : t('Message unpinned'), { icon: 'pin' });
+    notify(pinned ? t('Message pinned, kept in context') : t('Message unpinned'), { icon: 'pin' });
   }, [activeId]);
   const togglePinFile = useCallback(async (att) => {
     if (!activeId || !att?.url) return;
@@ -958,7 +992,7 @@ export default function App() {
         ? await api.del('/api/chats/' + activeId + '/pins', { url: att.url })
         : await api.post('/api/chats/' + activeId + '/pins', { name: att.name, url: att.url, type: att.type || '' });
       setChatPins(r.pins || []);
-      toast(isPinned ? t('File unpinned from chat') : t('File pinned, kept in context'), { icon: 'pin' });
+      notify(isPinned ? t('File unpinned from chat') : t('File pinned, kept in context'), { icon: 'pin' });
     } catch { warn(); }
   }, [activeId, chatPins]);
   function jumpToMessage(id, opts) {
@@ -987,7 +1021,7 @@ export default function App() {
   async function copyConversation() {
     const text = messages.filter(m => m.role === 'user' || m.role === 'assistant')
       .map(m => (m.role === 'user' ? t('You') : t('Assistant')) + ':\n' + (typeof m.content === 'string' ? m.content : '')).join('\n\n');
-    if (await copyText(text)) toast(t('Conversation copied'), { icon: 'copy' });
+    if (await copyText(text)) notify(t('Conversation copied'), { icon: 'copy' });
   }
   function renameChat(title) {
     const id = activeId;
@@ -1224,7 +1258,7 @@ export default function App() {
     const setArchived = (v) => setChats(cs => cs.map(c => c.id === id ? { ...c, archived: v } : c));
     setArchived(next);
     api.patch('/api/chats/' + id, { archived: next })
-      .then(() => toast(next ? t('Chat archived. Find it under All chats.') : t('Chat restored to the sidebar.')))
+      .then(() => notify(next ? t('Chat archived. Find it under All chats.') : t('Chat restored to the sidebar.')))
       .catch(() => { setArchived(!next); warn(); });
   }
 
@@ -1410,7 +1444,7 @@ export default function App() {
       await api.patch('/api/chats/' + activeId + '/messages/' + messageId, { content: newContent });
     } catch {
       if (before !== null) setMessages(ms => ms.map(m => m.id === messageId ? { ...m, content: before } : m));
-      toast(t('Could not save these changes.'));
+      notify(t('Could not save these changes.'));
     }
   }, [streaming, activeId]);
 
@@ -1556,7 +1590,7 @@ export default function App() {
       const m = focusedMsg();
       if (!m) return false;
       const clean = (m.content || '').replace(/\[\[OQ(?:R:[A-Za-z0-9+/=]+|T:\d+)\]\]/g, '').replace(/\n{3,}/g, '\n\n').trim();
-      copyText(clean).then(ok => ok && toast(t('Message copied')));
+      copyText(clean).then(ok => ok && notify(t('Message copied')));
     },
     msgEdit: () => {
       const m = focusedMsg();
@@ -1682,7 +1716,7 @@ export default function App() {
       {mobileDrawer && <div className="drawer-backdrop" onClick={() => setMobileDrawer(false)} />}
 
       <div className={'main' + (incognito ? ' incognito' : '')} data-incognito={incognito ? 'on' : undefined}>
-        <Toaster />
+        <Island />
         <ConfirmHost />
         <ThemeSlot name="main.top" />
         {notFound && (
@@ -1855,7 +1889,7 @@ export default function App() {
       )}
       {chordHint && <ChordHint hint={chordHint} />}
       {showShortcuts && <ShortcutsModal prefs={user?.prefs} onClose={() => setShowShortcuts(false)} onCustomize={() => { setShowShortcuts(false); openSettings('keybinds'); }} />}
-      {treeOpen && activeId && user?.prefs?.branchMap !== false && <BranchTree chatId={activeId} onSelect={selectBranch} onJump={jumpToMessage} onClose={() => setTreeOpen(false)} onChanged={async () => { await refreshMessages(activeId); setTimeout(() => scrollBottom(false), 20); toast(t('Message copied into this branch')); }} />}
+      {treeOpen && activeId && user?.prefs?.branchMap !== false && <BranchTree chatId={activeId} onSelect={selectBranch} onJump={jumpToMessage} onClose={() => setTreeOpen(false)} onChanged={async () => { await refreshMessages(activeId); setTimeout(() => scrollBottom(false), 20); notify(t('Message copied into this branch')); }} />}
       <Lightbox />
       <FilePreview />
       <Suspense fallback={null}>

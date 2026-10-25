@@ -3028,5 +3028,12 @@
   "Use these settings": "이 설정 사용",
   "set up by hand": "직접 설정",
   "Effort {range}": "노력 수준 {range}",
-  "Supports": "지원"
+  "Supports": "지원",
+  "Replying in “{title}”": "“{title}”에서 답변 중",
+  "Importing chats": "채팅 가져오는 중",
+  "The reply in “{title}” stopped with an error.": "“{title}”의 답변이 오류로 중단되었습니다.",
+  "Reply ready in “{title}”": "“{title}”의 답변이 준비되었습니다",
+  "Replying in a new chat": "새 채팅에서 답변 중",
+  "The reply in a new chat stopped with an error.": "새 채팅의 답변이 오류로 중단되었습니다.",
+  "Reply ready in a new chat": "새 채팅의 답변이 준비되었습니다"
 }

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../../lib/api.js';
-import { toast } from '../../lib/toast.js';
+import { notify } from '../../lib/notify.js';
 import Composer from '../composer/Composer.jsx';
 import { Box, Search, Plus, ChevDown, Star, Dots, Trash, Pencil } from '../ui/icons.jsx';
 import { t, fmtDate } from '../../i18n.jsx';
@@ -35,7 +35,7 @@ function CreateModal({ onClose, onCreate }) {
     if (busy) return;
     setBusy(true);
     try { const p = await api.post('/api/projects', { name: name.trim() || t('New project'), description: desc.trim() }); onCreate(p); }
-    catch (err) { setBusy(false); toast(err?.message || t('Could not save these changes.'), { icon: 'info', kind: 'warn' }); }
+    catch (err) { setBusy(false); notify(err?.message || t('Could not save these changes.'), { kind: 'warn' }); }
   }
   return (
     <Dialog className="pj-create" overlayClassName="pj-create-overlay" labelledBy="pj-create-title" onClose={onClose} initialFocus={ref}>

@@ -8,7 +8,7 @@ import ThreadSkeleton from '../chat/ThreadSkeleton.jsx';
 import Tip from '../ui/Tip.jsx';
 import { Laptop, ChevDown, PanelRight, Download, DotsV, Down, Menu, Pencil, Copy, Star, Trash } from '../ui/icons.jsx';
 import { copyText } from '../../lib/clipboard.js';
-import { toast } from '../../lib/toast.js';
+import { notify } from '../../lib/notify.js';
 import { pathForCode } from '../../lib/route.js';
 import { t, tk } from '../../i18n.jsx';
 
@@ -57,7 +57,7 @@ function SessionHeader({ chat, chatId, files, panelOpen, onTogglePanel, onRename
   const zipHref = '/api/chats/' + chatId + '/zip';
   const startRename = () => { setDraft(chat?.title && chat.title !== 'New chat' ? chat.title : ''); setEditing(true); };
   const commit = () => { setEditing(false); const v = draft.trim(); if (v && v !== chat?.title) onRename(v); };
-  const copyLink = async () => { if (await copyText(location.origin + pathForCode(chatId))) toast(t('Link copied'), { icon: 'copy' }); };
+  const copyLink = async () => { if (await copyText(location.origin + pathForCode(chatId))) notify(t('Link copied'), { icon: 'copy' }); };
   const menuProps = { chat, onRename: startRename, onCopyLink: copyLink, onToggleStar, onDelete, zipHref };
   return (
     <div className="cx-head">

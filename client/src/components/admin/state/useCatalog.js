@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api, TAB_ID } from '../../../lib/api.js';
-import { toast } from '../../../lib/toast.js';
+import { notify } from '../../../lib/notify.js';
 import { t } from '../../../i18n.jsx';
 import { touchesBlocks, syncModelPrompt } from '../../../lib/promptblocks.js';
 import { pick } from './history.js';
@@ -87,7 +87,7 @@ export function useCatalog({ confirm, features, history, changes }) {
       try {
         await api.patch('/api/admin/models', { rows });
       } catch (e) {
-        toast(e?.message || t('A model change could not be saved.'), { kind: 'error', icon: 'info' });
+        notify(e?.message || t('A model change could not be saved.'), { kind: 'error' });
         loadModels();
       } finally {
         for (const { id } of rows) inflight.current.delete(id);
@@ -126,7 +126,7 @@ export function useCatalog({ confirm, features, history, changes }) {
       const list = [...next.values()].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
       modelsRef.current = list;
       setModels(list);
-      if (clashes.length) toast(t('Another admin changed “{name}” while you were editing it. Your edit is kept.', { name: clashes[0] }), { icon: 'info' });
+      if (clashes.length) notify(t('Another admin changed “{name}” while you were editing it. Your edit is kept.', { name: clashes[0] }), { icon: 'info' });
     }
     function onDraft(e) {
       const f = e.detail || {};
@@ -223,7 +223,7 @@ export function useCatalog({ confirm, features, history, changes }) {
       if (r.ids?.length) history?.record({ undo: () => dropModels(r.ids) });
       await loadModels();
       setSelection(r.ids || []);
-    } catch (e) { toast(e?.message || t('The models could not be duplicated.'), { kind: 'error', icon: 'info' }); }
+    } catch (e) { notify(e?.message || t('The models could not be duplicated.'), { kind: 'error' }); }
   }, [flush, loadModels, history, dropModels]);
 
   const removeModels = useCallback((ids) => {

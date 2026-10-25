@@ -3028,5 +3028,12 @@
   "Use these settings": "この設定を使う",
   "set up by hand": "手動で設定",
   "Effort {range}": "努力度 {range}",
-  "Supports": "対応"
+  "Supports": "対応",
+  "Replying in “{title}”": "「{title}」で返信中",
+  "Importing chats": "チャットをインポート中",
+  "The reply in “{title}” stopped with an error.": "「{title}」の返信はエラーで停止しました。",
+  "Reply ready in “{title}”": "「{title}」の返信が完了しました",
+  "Replying in a new chat": "新しいチャットで返信中",
+  "The reply in a new chat stopped with an error.": "新しいチャットの返信はエラーで停止しました。",
+  "Reply ready in a new chat": "新しいチャットの返信が完了しました"
 }

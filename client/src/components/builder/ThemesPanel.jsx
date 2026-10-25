@@ -3,7 +3,7 @@ import { t } from '../../i18n.jsx';
 import { api } from '../../lib/api.js';
 import { useTheme } from '../../lib/theme/store.jsx';
 import { presetById } from '../../lib/presets.js';
-import { toast } from '../../lib/toast.js';
+import { notify } from '../../lib/notify.js';
 import { Dialog, Confirm, Text } from './controls.jsx';
 import { Copy, Trash, Download, Upload, Pencil, Check, Clock, Refresh } from '../ui/icons.jsx';
 import { Skel, SkelRows } from '../ui/Skeleton.jsx';
@@ -33,7 +33,7 @@ export function useThemes() {
       if (done) done(r);
       return r;
     } catch (e) {
-      toast(e?.message || t('That did not work.'));
+      notify(e?.message || t('That did not work.'));
       return null;
     } finally { setBusy(false); }
   }, [load]);
@@ -78,7 +78,7 @@ export default function ThemesPanel({ compact }) {
       a.download = (name || 'theme').replace(/[^\w-]+/g, '-').toLowerCase() + '.theme.json';
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch { toast(t('That theme could not be exported.')); }
+    } catch { notify(t('That theme could not be exported.')); }
   };
 
   const onImport = async (e) => {
@@ -88,8 +88,8 @@ export default function ThemesPanel({ compact }) {
     try {
       const body = JSON.parse(await f.text());
       const r = await themes.importTheme(body);
-      if (r) toast(t('Imported “{name}”.', { name: r.name }));
-    } catch { toast(t('That file is not a theme export.')); }
+      if (r) notify(t('Imported “{name}”.', { name: r.name }));
+    } catch { notify(t('That file is not a theme export.')); }
   };
 
   return (
@@ -228,13 +228,13 @@ export default function ThemesPanel({ compact }) {
                   <em>{fmt(h.ts)}</em>
                 </div>
                 <button type="button" className="bx-btn sm"
-                  onClick={() => { themes.restore(historyFor.id, i); setHistoryFor(null); toast(t('Restored.')); }}>
+                  onClick={() => { themes.restore(historyFor.id, i); setHistoryFor(null); notify(t('Restored.')); }}>
                   {t('Restore')}
                 </button>
               </li>
             ))}
           </ul>
-          <button type="button" className="bx-btn" onClick={() => { themes.snapshot(historyFor.id, t('manual save')); setHistoryFor(null); toast(t('Version saved.')); }}>
+          <button type="button" className="bx-btn" onClick={() => { themes.snapshot(historyFor.id, t('manual save')); setHistoryFor(null); notify(t('Version saved.')); }}>
             <Check /> {t('Save a version now')}
           </button>
         </Dialog>

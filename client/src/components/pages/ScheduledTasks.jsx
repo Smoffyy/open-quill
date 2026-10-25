@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import LibraryPage, { LibraryEmpty, LibraryListSkeleton } from './LibraryPage.jsx';
 import { ChevDown, Clock, Sun, Chat, Compact, Bulb, Telescope, Trash, Check } from '../ui/icons.jsx';
 import { api } from '../../lib/api.js';
-import { toast } from '../../lib/toast.js';
+import { notify } from '../../lib/notify.js';
 import { t, tk } from '../../i18n.jsx';
 import { useSkeleton } from '../../lib/skeleton.js';
 
@@ -41,17 +41,17 @@ export default function ScheduledTasks({ onSearch, onRunTask }) {
         title: t(starter.title), prompt: t(starter.desc), schedule: starter.schedule
       });
       load();
-    } catch { toast(t('Could not create the task.')); }
+    } catch { notify(t('Could not create the task.')); }
   }
 
   async function toggle(task) {
     try { await api.patch('/api/tasks/' + task.id, { enabled: !task.enabled }); load(); }
-    catch { toast(t('Could not update the task.')); }
+    catch { notify(t('Could not update the task.')); }
   }
 
   async function remove(task) {
     try { await api.del('/api/tasks/' + task.id); load(); }
-    catch { toast(t('Could not delete the task.')); }
+    catch { notify(t('Could not delete the task.')); }
   }
 
   const shown = [...tasks].sort((a, b) => (sort === 'next'

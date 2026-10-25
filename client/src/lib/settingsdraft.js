@@ -3,7 +3,7 @@ import { api } from './api.js';
 import { applyPrefs, currentPreset } from './prefs.js';
 import { layoutOf } from './layout.js';
 import { initialPrefs, presetDefaults, shownThemeFallback } from './settingsdefaults.js';
-import { toast } from './toast.js';
+import { notify } from './notify.js';
 import { t } from '../i18n.jsx';
 
 const TYPING_SAVE_MS = 450;
@@ -37,7 +37,7 @@ export function useSettingsDraft(user, onUpdated) {
       });
       updatedRef.current?.(u);
     } catch {
-      toast(t('Could not save these changes.'), { icon: 'info', kind: 'warn' });
+      notify(t('Could not save these changes.'), { kind: 'warn' });
     }
     saving.current = false;
     if (pending.current) flush();

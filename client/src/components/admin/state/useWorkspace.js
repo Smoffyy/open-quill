@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api, TAB_ID } from '../../../lib/api.js';
 import { appFontId } from '../../../lib/prefs.js';
-import { toast } from '../../../lib/toast.js';
+import { notify } from '../../../lib/notify.js';
 import { t } from '../../../i18n.jsx';
 import { changedKeys, pick } from './history.js';
 
@@ -138,7 +138,7 @@ export function useWorkspace({ history } = {}) {
         await api.patch(URLS[lane], wire(lane, patch));
         saved.current[lane] = { ...saved.current[lane], ...patch };
       } catch (e) {
-        toast(e?.message || t('Your last change could not be saved. Edit the field again to retry.'), { kind: 'error', icon: 'info' });
+        notify(e?.message || t('Your last change could not be saved. Edit the field again to retry.'), { kind: 'error' });
       } finally { inflight.current--; }
     }, SAVE_DELAY);
   }, []);
@@ -161,7 +161,7 @@ export function useWorkspace({ history } = {}) {
       saved.current[lane] = nextSaved;
       quiet.current[lane] = next;
       (lane === 'settings' ? setSettings : setConfig)(next);
-      if (clash && !own) toast(t('Another admin changed a setting you are editing. Your edit is kept.'), { icon: 'info' });
+      if (clash && !own) notify(t('Another admin changed a setting you are editing. Your edit is kept.'), { icon: 'info' });
     }
     function onDraft(e) {
       const f = e.detail || {};

@@ -10,7 +10,7 @@ import Inspector from '../admin/models/Inspector.jsx';
 import BrandMark from '../ui/BrandMark.jsx';
 import { X, Panel, Trash, Cube } from '../ui/icons.jsx';
 import { api } from '../../lib/api.js';
-import { toast } from '../../lib/toast.js';
+import { notify } from '../../lib/notify.js';
 import { useFocusTrap } from '../../lib/focus.js';
 import { t, tk } from '../../i18n.jsx';
 import {
@@ -130,7 +130,7 @@ function Workbench() {
     saveTimer.current = setTimeout(async () => {
       saveTimer.current = null;
       try { await api.put('/api/admin/playground/suites', { suites: suitesRef.current }); }
-      catch (e) { toast(e?.message || t('The test sets could not be saved.'), { kind: 'error', icon: 'info' }); }
+      catch (e) { notify(e?.message || t('The test sets could not be saved.'), { kind: 'error' }); }
     }, SAVE_DELAY);
   }, []);
 

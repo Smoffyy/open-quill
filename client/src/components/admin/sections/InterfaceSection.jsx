@@ -6,7 +6,7 @@ import { ImagePicker } from '../media.jsx';
 import { t, tk } from '../../../i18n.jsx';
 import { MODEL_WEAVE } from '../../../lib/brand.js';
 import { Palette, Sparkles } from '../../ui/icons.jsx';
-import { toast } from '../../../lib/toast.js';
+import { notify } from '../../../lib/notify.js';
 import { presetById } from '../../../lib/presets.js';
 
 const FONTS = [['literata', tk('Literata')], ['newsreader', tk('Newsreader')], ['sans', tk('Open Sans')]];
@@ -45,8 +45,8 @@ export default function InterfaceSection() {
 
   const run = async (fn, msg) => {
     setBusy(true);
-    try { await fn(); await load(); if (msg) toast(msg); }
-    catch (e) { toast(e?.message || t('That did not work.')); }
+    try { await fn(); await load(); if (msg) notify(msg); }
+    catch (e) { notify(e?.message || t('That did not work.')); }
     finally { setBusy(false); }
   };
 

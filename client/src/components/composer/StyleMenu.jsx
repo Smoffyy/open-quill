@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { api } from '../../lib/api.js';
-import { toast } from '../../lib/toast.js';
+import { notify } from '../../lib/notify.js';
 import { Check, Trash, Sparkles } from '../ui/icons.jsx';
 import { t } from '../../i18n.jsx';
 import { tk } from '../../i18n.jsx';
@@ -32,8 +32,8 @@ export default function StyleSubmenu({ styles = [], stylesReady = true, styleId 
     try {
       const r = await api.post('/api/styles/generate', { sample, modelId: currentId });
       setPrompt(r.prompt || '');
-      toast(t('Style generated from your sample, review and save.'));
-    } catch (e) { toast(e.message || t('Could not generate the style.')); }
+      notify(t('Style generated from your sample, review and save.'));
+    } catch (e) { notify(e.message || t('Could not generate the style.')); }
     setGenBusy(false);
   }
 
@@ -47,8 +47,8 @@ export default function StyleSubmenu({ styles = [], stylesReady = true, styleId 
       onSelect?.(id);
       setCreating(false);
       setName(''); setPrompt(''); setSample('');
-      toast(t('Style saved and selected.'));
-    } catch (e) { toast(e.message || t('Could not save the style.')); }
+      notify(t('Style saved and selected.'));
+    } catch (e) { notify(e.message || t('Could not save the style.')); }
     setSaveBusy(false);
   }
 
@@ -57,7 +57,7 @@ export default function StyleSubmenu({ styles = [], stylesReady = true, styleId 
     try {
       await onSaveStyles?.(styles.filter(x => x.id !== id));
       if (styleId === id) onSelect?.('normal', true);
-    } catch (err) { toast(err.message || t('Could not delete the style.')); }
+    } catch (err) { notify(err.message || t('Could not delete the style.')); }
   }
 
   if (creating) {

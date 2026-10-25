@@ -7,7 +7,7 @@ import { parseVersion } from '../../lib/appversion.js';
 import { channelLabel } from '../../lib/channel.js';
 import { copyText } from '../../lib/clipboard.js';
 import { Skel, SkelLines } from '../ui/Skeleton.jsx';
-import { toast } from '../../lib/toast.js';
+import { notify } from '../../lib/notify.js';
 import BrandMark from '../ui/BrandMark.jsx';
 
 // The server hands back a plain YYYY-MM-DD. Splitting it by hand rather than passing it to
@@ -72,7 +72,7 @@ export default function VersionTab({ cfg, onChangelog }) {
     setCopied(true);
     clearTimeout(copyTimer.current);
     copyTimer.current = setTimeout(() => setCopied(false), 1400);
-    toast(t('Version details copied'), { icon: 'copy' });
+    notify(t('Version details copied'), { icon: 'copy' });
   }
 
   return (

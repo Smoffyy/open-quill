@@ -348,11 +348,11 @@ export const ELEMENTS = [
   { id: 'btnRow', label: tk('Button row'), cat: 'controls', sel: '.btn-row', caps: ALL },
 
   /* feedback */
-  { id: 'toast', label: tk('Notification'), cat: 'feedback', sel: '.toast', caps: ALL },
-  { id: 'toaster', label: tk('Notification stack'), cat: 'feedback', sel: '.toaster', caps: ['layout', 'spacing', 'responsive'] },
-  { id: 'toastMsg', label: tk('Notification text'), cat: 'feedback', sel: '.toast-msg', parent: 'toast', caps: TEXTY },
+  { id: 'toast', label: tk('Notification'), cat: 'feedback', sel: '.island', caps: ALL },
+  { id: 'toaster', label: tk('Notification stack'), cat: 'feedback', sel: '.island-host', caps: ['layout', 'spacing', 'responsive'] },
+  { id: 'toastMsg', label: tk('Notification text'), cat: 'feedback', sel: '.island-text', parent: 'toast', caps: TEXTY },
   { id: 'skeleton', label: tk('Loading placeholder'), cat: 'feedback', sel: '.skeleton', caps: BOX },
-  { id: 'toastIcon', label: tk('Notification icon'), cat: 'feedback', sel: '.toast-ico', parent: 'toast', caps: BOX },
+  { id: 'toastIcon', label: tk('Notification icon'), cat: 'feedback', sel: '.island-ico', parent: 'toast', caps: BOX },
   { id: 'skeleton', label: tk('Loading skeleton'), cat: 'feedback', sel: '.skeleton', caps: BOX },
   { id: 'contextRing', label: tk('Context ring'), cat: 'feedback', sel: '.cx-ring', caps: BOX },
   { id: 'engineStrip', label: tk('Engine telemetry'), cat: 'feedback', sel: '.engine-strip', caps: ALL },

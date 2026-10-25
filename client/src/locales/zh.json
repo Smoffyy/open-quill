@@ -3028,5 +3028,12 @@
   "Use these settings": "使用这些设置",
   "set up by hand": "需手动设置",
   "Effort {range}": "投入程度 {range}",
-  "Supports": "支持"
+  "Supports": "支持",
+  "Replying in “{title}”": "正在“{title}”中回复",
+  "Importing chats": "正在导入聊天",
+  "The reply in “{title}” stopped with an error.": "“{title}”中的回复因错误而停止。",
+  "Reply ready in “{title}”": "“{title}”中的回复已就绪",
+  "Replying in a new chat": "正在新聊天中回复",
+  "The reply in a new chat stopped with an error.": "新聊天中的回复因错误而停止。",
+  "Reply ready in a new chat": "新聊天中的回复已就绪"
 }
