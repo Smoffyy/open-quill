@@ -125,7 +125,7 @@
   :root:root .sidebar.collapsed { width: min(86vw, 288px); }
 }
 .side-resize {
-  position: absolute; top: 0; bottom: 0; right: -7px; width: 12px; z-index: 6;
+  position: absolute; top: 0; bottom: 0; right: 0; width: 12px; z-index: 6;
   cursor: col-resize; display: grid; place-items: center; touch-action: none;
 }
 .side-resize-grip {

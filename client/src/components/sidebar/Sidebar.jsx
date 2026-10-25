@@ -67,6 +67,9 @@ export function storedSidebarWidth() {
 
 function SideResize({ targetRef, onCommit, onHide }) {
   const drag = useRef(null);
+  const tap = useRef(0);
+
+  useEffect(() => () => clearTimeout(tap.current), []);
 
   useEffect(() => {
     const move = (e) => {
@@ -83,7 +86,7 @@ function SideResize({ targetRef, onCommit, onHide }) {
       el.style.transition = '';
       document.body.classList.remove('resizing-x');
       if (e.type === 'pointerup' && Math.abs(e.clientX - d.x) < 3) {
-        if (onHide) onHide();
+        if (onHide && !tap.current) tap.current = setTimeout(() => { tap.current = 0; onHide(); }, 260);
         return;
       }
       const w = Math.round(el.getBoundingClientRect().width);
@@ -122,6 +125,12 @@ function SideResize({ targetRef, onCommit, onHide }) {
     if (onCommit) onCommit(w);
   };
 
+  const reset = () => {
+    clearTimeout(tap.current);
+    tap.current = 0;
+    setWidth(null);
+  };
+
   const nudge = (e) => {
     const el = targetRef.current;
     if (e.key === 'Enter' && onHide) { e.preventDefault(); onHide(); return; }
@@ -135,7 +144,7 @@ function SideResize({ targetRef, onCommit, onHide }) {
   return (
     <Tip label={t('Hide sidebar')} keys={t('Drag to resize')}>
       <div className="side-resize" role="separator" aria-orientation="vertical" aria-label={t('Resize sidebar')}
-        tabIndex={0} onPointerDown={start} onKeyDown={nudge}>
+        tabIndex={0} onPointerDown={start} onDoubleClick={reset} onKeyDown={nudge}>
         <span className="side-resize-grip" aria-hidden="true" />
       </div>
     </Tip>

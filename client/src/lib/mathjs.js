@@ -171,8 +171,7 @@ export function normalizeMathDelims(text) {
   return parts.join('');
 }
 
-const MATH_SPAN = /(\$\$[\s\S]*?\$\$|\$[^$\n]+\$|\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\])/;
-const BARE_POWER = /(^|[\s(|,;:])([A-Za-z0-9]+\^(?:\d+|[A-Za-z]|\{[^{}\n]+\}))(?=$|[\s).,;:!?|])/gm;
+const BARE_POWER = /(^|[\s(|,;:])([A-Za-z0-9]+\^(?:\d+|[A-Za-z]|\{[^{}\n]+\}))(?=$|[\s).,;:!?|])/g;
 
 export function wrapBarePowers(text) {
   if (typeof text !== 'string' || text.indexOf('^') === -1) return text;
@@ -180,11 +179,11 @@ export function wrapBarePowers(text) {
   for (let p = 0; p < parts.length; p++) {
     const seg = parts[p];
     if (!seg || isCode(seg) || seg.indexOf('^') === -1) continue;
-    const spans = seg.split(MATH_SPAN);
-    for (let s = 0; s < spans.length; s += 2) {
-      spans[s] = spans[s].replace(BARE_POWER, (m, lead, power) => lead + '$' + power + '$');
-    }
-    parts[p] = spans.join('');
+    parts[p] = seg.split('\n').map(line => (
+      line.indexOf('^') === -1 || /\$|\\\(|\\\[|\\begin\{/.test(line)
+        ? line
+        : line.replace(BARE_POWER, (m, lead, power) => lead + '$' + power + '$')
+    )).join('\n');
   }
   return parts.join('');
 }
