@@ -12,7 +12,7 @@
 .bc-x { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 7px; color: var(--text-muted); }
 .bc-x:hover { background: var(--surface-hover); color: var(--text); }
 .bc-x svg { width: 14px; height: 14px; }
-.bc-overlay { position: fixed; inset: 0; background: var(--scrim, #00000077); backdrop-filter: blur(2px); display: grid; place-items: center; z-index: 220; }
+.bc-overlay { position: fixed; inset: 0; background: var(--scrim, #00000077); display: grid; place-items: center; z-index: 220; }
 .bc-modal { width: min(1100px, 94vw); max-height: 86vh; background: var(--menu-bg); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 8px 32px rgba(0,0,0,.28); display: flex; flex-direction: column; overflow: hidden; }
 .bc-head { display: flex; align-items: center; justify-content: space-between; padding: 13px 16px; border-bottom: 1px solid var(--border-soft); font-family: var(--font-sans); font-weight: 600; }
 .bc-empty { padding: 30px 16px; text-align: center; color: var(--text-muted); font-family: var(--font-sans); }

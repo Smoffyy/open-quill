@@ -64,8 +64,6 @@
   place-items: center;
   padding: var(--cp-5, 20px);
   background: rgba(0, 0, 0, .5);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
 }
 
 .cp {
@@ -802,8 +800,6 @@ code.cp-code {
   place-items: center;
   padding: var(--cp-5);
   background: rgba(0, 0, 0, .5);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
   font-family: var(--cp-ui);
   font-size: 13px;
   line-height: 1.5;

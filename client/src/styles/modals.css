@@ -1,12 +1,7 @@
 /* ---------- modal / admin ---------- */
-/* One backdrop for every overlay: flat tint plus an even blur, no shadow halo
-   around the panel. The old look came from the modal's 70px drop shadow
-   darkening the backdrop right where it met the edges. */
 .overlay,
 .bc-overlay {
   background: var(--scrim, rgba(0, 0, 0, .5));
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
 }
 .cmdk-overlay, .search-overlay {
   background: rgba(0, 0, 0, .05);
