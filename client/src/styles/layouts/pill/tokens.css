@@ -18,4 +18,6 @@
   --menu-item-gap: 10px;
   --menu-item-size: 14.5px;
   --menu-item-weight: 500;
+  --frame-gap: 8px;
+  --frame-radius: 12px;
 }

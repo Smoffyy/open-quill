@@ -62,6 +62,7 @@
   color-scheme: light;
   --bg: #f8f8f6;
   --sidebar: #f7f7f4;
+  --frame-edge: rgba(0, 0, 0, .09);
   --surface: #ffffff;
   --surface-2: #efeee7;
   --modal-line: rgba(0, 0, 0, .07);

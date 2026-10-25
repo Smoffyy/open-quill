@@ -14,6 +14,10 @@
   [data-layout="pill"] .app.sb-collapsed .home-topbar { left: 56px; }
   [data-layout="pill"] .app.sb-collapsed .incognito-bar { padding-left: 56px; }
 }
+@media (min-width: 769px) {
+  [data-layout="pill"] .chat-name-wrap { transition: opacity .2s ease; }
+  [data-layout="pill"] .app:has(.island) .chat-name-wrap { opacity: 0; pointer-events: none; }
+}
 [data-layout="pill"] .chat-name { font-family: var(--font-sans); font-size: 13.5px; color: var(--text-muted); }
 [data-layout="pill"] .topbar .chat-name { height: auto; padding: 5px 9px; border-radius: 9px; font-size: 15px; line-height: normal; color: var(--text-muted); }
 [data-layout="pill"] .topbar .ct-name { padding-right: 5px; }

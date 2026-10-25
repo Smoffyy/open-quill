@@ -1,0 +1,19 @@
+@media (min-width: 769px) {
+  .app { background: var(--sidebar); }
+  .main {
+    margin: var(--frame-gap) var(--frame-gap) var(--frame-gap) 0;
+    border-radius: var(--frame-radius); overflow: hidden; background: var(--bg);
+    box-shadow: 0 0 0 1px var(--frame-edge, var(--border-soft));
+    transition: background-color var(--fx-t, .45s) ease, margin .22s cubic-bezier(.4, 0, .2, 1);
+  }
+  .app.sb-collapsed .main, :root[data-oq-focus] .main { margin-left: var(--frame-gap); }
+  :root .app-incognito .main { margin: 0; border-radius: 0; box-shadow: none; }
+  .app:has(.sidebar.docs-mode) { background: var(--dk-page); }
+  :root:root .sidebar { border-right: 0; }
+  .rail-open { top: calc(8px + var(--frame-gap)); left: calc(8px + var(--frame-gap)); }
+  :root:root .pj-overview {
+    top: var(--frame-gap); right: var(--frame-gap); bottom: var(--frame-gap); left: max(var(--frame-gap), var(--sb-w, 288px));
+    border-radius: var(--frame-radius); overflow: hidden;
+    box-shadow: 0 0 0 1px var(--frame-edge, var(--border-soft));
+  }
+}

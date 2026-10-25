@@ -1716,7 +1716,6 @@ export default function App() {
       {mobileDrawer && <div className="drawer-backdrop" onClick={() => setMobileDrawer(false)} />}
 
       <div className={'main' + (incognito ? ' incognito' : '')} data-incognito={incognito ? 'on' : undefined}>
-        <Island />
         <ConfirmHost />
         <ThemeSlot name="main.top" />
         {notFound && (
@@ -1865,6 +1864,7 @@ export default function App() {
           </>
         )}
       </div>
+      <Island />
 
       {ctlOpen && user?.isAdmin && !incognito && (
         <ChatControls chatId={activeId || null} initialParams={chatGenParams} initialOverride={chatSysOverride} onChange={(p, o) => { setChatGenParams(p && Object.keys(p).length ? p : null); setChatSysOverride(o || ''); }} onClose={() => setCtlOpen(false)} />

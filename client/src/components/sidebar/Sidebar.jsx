@@ -276,6 +276,16 @@ function Sidebar({
   const chatsRef = useRef(null);
   const sideRef = useRef(null);
   const [width, setWidth] = useState(() => storedSidebarWidth());
+  useEffect(() => {
+    const el = sideRef.current;
+    if (!el) return;
+    const root = document.documentElement;
+    const sync = () => root.style.setProperty('--sb-w', el.getBoundingClientRect().width + 'px');
+    sync();
+    const observer = new ResizeObserver(sync);
+    observer.observe(el);
+    return () => { observer.disconnect(); root.style.removeProperty('--sb-w'); };
+  }, []);
   const [scrolled, setScrolled] = useState(false);
   const profileBtnRef = useRef(null);
   const [groupBy, setGroupBy] = useState(() => { try { return localStorage.getItem('oq-group-by') || 'date'; } catch { return 'date'; } });
