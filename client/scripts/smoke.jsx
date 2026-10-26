@@ -21,6 +21,8 @@ import ShortcutsModal from '../src/components/dialogs/ShortcutsModal.jsx';
 import KeybindsPanel from '../src/components/settings/KeybindsPanel.jsx';
 import BranchTree from '../src/components/chat/BranchTree.jsx';
 import Login from '../src/components/pages/Login.jsx';
+import ScheduledTasks from '../src/components/pages/ScheduledTasks.jsx';
+import TaskEditor from '../src/components/pages/TaskEditor.jsx';
 import CodeView from '../src/components/code/CodeView.jsx';
 import CodeFiles from '../src/components/code/CodeFiles.jsx';
 import Sidebar from '../src/components/sidebar/Sidebar.jsx';
@@ -79,6 +81,21 @@ cases.push(['KeybindsPanel', () => React.createElement(KeybindsPanel, { prefs: {
 cases.push(['BranchTree', () => React.createElement(BranchTree, { chatId: 'c1', onSelect: noop, onJump: noop, onClose: noop, onChanged: noop })]);
 cases.push(['Login:signin', () => React.createElement(Login, { onLogin: noop, cfg: { allowSignups: true, firstRun: false } })]);
 cases.push(['Login:firstrun', () => React.createElement(Login, { onLogin: noop, cfg: { allowSignups: true, firstRun: true } })]);
+cases.push(['ScheduledTasks', () => React.createElement(ScheduledTasks, { onSearch: noop, onRunTask: noop, onOpenChat: noop, models: [], webSearchAvailable: true })]);
+const taskModels = [{ id: 'm1', displayName: 'Local', isDefault: true, webSearchAllowed: true }, { id: 'm2', displayName: 'Other', webSearchAllowed: false }];
+for (const schedule of [
+  { kind: 'daily', hour: 9, minute: 0 }, { kind: 'weekdays', hour: 8, minute: 30 }, { kind: 'weekly', days: [1, 3, 5], hour: 16, minute: 0 },
+  { kind: 'interval', everyMinutes: 180 }, { kind: 'once', at: Date.now() + 3600000 }
+]) {
+  cases.push(['TaskEditor:' + schedule.kind, () => React.createElement(TaskEditor, {
+    task: { id: 't1', title: 'Probe', prompt: 'Do it', modelId: 'm2', schedule, enabled: false, webSearch: true, reuseChat: true },
+    models: taskModels, webSearchAvailable: true, onClose: noop, onSaved: noop, onDelete: noop
+  })]);
+}
+cases.push(['TaskEditor:new', () => React.createElement(TaskEditor, {
+  task: { title: '', prompt: '', schedule: { kind: 'daily', hour: 9, minute: 0 }, enabled: true },
+  models: taskModels, webSearchAvailable: true, onClose: noop, onSaved: noop, onDelete: noop
+})]);
 
 // A model carrying every kwarg control shape, so the editor's range branch and the
 // user-facing slider are both actually rendered rather than only compiled.

@@ -1991,7 +1991,9 @@ test('normalizeSchedule clamps every field and falls back on nonsense', () => {
   assert.deepEqual(normalizeSchedule({ kind: 'nope' }), { kind: 'daily', hour: 9, minute: 0 });
   assert.deepEqual(normalizeSchedule({ kind: 'daily', hour: 99, minute: -4 }), { kind: 'daily', hour: 23, minute: 0 });
   assert.equal(normalizeSchedule({ kind: 'interval', everyMinutes: 1 }).everyMinutes, 5, 'a 1-minute interval is floored to 5');
-  assert.equal(normalizeSchedule({ kind: 'weekly', weekday: 12 }).weekday, 6);
+  assert.deepEqual(normalizeSchedule({ kind: 'weekly', weekday: 12 }).days, [6], 'a legacy single weekday becomes a day list');
+  assert.deepEqual(normalizeSchedule({ kind: 'weekly', days: [5, 1, 1, 'x', 9] }).days, [1, 5, 6], 'days are clamped, deduplicated and sorted');
+  assert.deepEqual(normalizeSchedule({ kind: 'weekly', days: [] }).days, [1], 'an empty day list falls back to Monday');
   assert.equal(normalizeSchedule({ kind: 'daily', hour: 'x' }).hour, 9);
   assert.equal(normalizeSchedule([]).kind, 'daily', 'an array is not a schedule object');
 });
@@ -2011,9 +2013,25 @@ test('nextRun always lands in the future and on an allowed day', () => {
   assert.equal(new Date(weekly).getDay(), 3);
   assert.ok(weekly > base);
 
+  const several = nextRun({ kind: 'weekly', days: [1, 3], hour: 16, minute: 0 }, base);
+  assert.equal(new Date(several).getDay(), 1, 'the nearest chosen day wins');
+  const today = nextRun({ kind: 'weekly', days: [5], hour: 16, minute: 0 }, base);
+  assert.equal(new Date(today).getDate(), new Date(base).getDate(), 'a chosen day later today runs today');
+
   assert.equal(nextRun({ kind: 'interval', everyMinutes: 60 }, base), base + 3600000);
   assert.equal(nextRun({ kind: 'once', at: base - 1000 }, base), 0, 'a past one-shot is not rescheduled');
   assert.equal(nextRun({ kind: 'once', at: base + 1000 }, base), base + 1000);
+});
+
+test('nextRun keeps the wall-clock time across a daylight saving change', () => {
+  for (let day = 0; day < 365; day += 7) {
+    const base = new Date(2026, 0, 1 + day, 10, 0, 0).getTime();
+    for (const schedule of [{ kind: 'daily', hour: 9, minute: 0 }, { kind: 'weekly', weekday: 1, hour: 9, minute: 0 }]) {
+      const next = new Date(nextRun(schedule, base));
+      assert.equal(next.getHours(), 9);
+      assert.equal(next.getMinutes(), 0);
+    }
+  }
 });
 
 test('isDue ignores disabled and unscheduled tasks', () => {

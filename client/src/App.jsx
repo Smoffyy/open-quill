@@ -1743,7 +1743,9 @@ export default function App() {
                     openChat(a.chatId);
                     if (a.mode === 'code') { setCodePanel(true); setArtifactFocus({ path: a.path, n: Date.now() }); }
                   }} />
-              : <ScheduledTasks onSearch={() => setShowSearch(true)} onRunTask={runTask} />}
+              : <ScheduledTasks onSearch={() => setShowSearch(true)} onRunTask={runTask}
+                  onOpenChat={(id) => { setLibPage(null); openChat(id); }}
+                  models={models} webSearchAvailable={!!cfg.webSearchAvailable} />}
           </div>
         )}
 

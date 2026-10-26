@@ -859,8 +859,29 @@ test('scheduled tasks round-trip and normalise a hostile schedule', async () => 
   assert.equal(junk.status, 200, 'a nonsense schedule is normalised rather than rejected with a 500');
   assert.equal(junk.json.schedule.kind, 'daily');
   assert.equal(junk.json.title, 'New task');
+  assert.equal(junk.json.webSearch, false, 'web search is off unless asked for');
+  assert.equal(junk.json.reuseChat, false);
 
-  assert.equal((await browser('POST', `/api/tasks/${id}/run`)).status, 200);
+  const opts = await browser('PATCH', `/api/tasks/${id}`, {
+    body: { webSearch: true, reuseChat: 'yes', enabled: true, schedule: { kind: 'weekly', days: [3, 1], hour: 7, minute: 15 } }
+  });
+  assert.equal(opts.json.webSearch, true);
+  assert.equal(opts.json.reuseChat, false, 'only a real true turns an option on');
+  assert.deepEqual(opts.json.schedule, { kind: 'weekly', hour: 7, minute: 15, days: [1, 3] });
+  assert.ok([1, 3].includes(new Date(opts.json.nextRun).getDay()), 'the next run lands on a chosen day');
+
+  const first = await browser('POST', `/api/tasks/${id}/run`);
+  assert.equal(first.status, 200, first.text);
+
+  await browser('PATCH', `/api/tasks/${id}`, { body: { reuseChat: true } });
+  let again;
+  for (let i = 0; i < 50; i++) {
+    again = await browser('POST', `/api/tasks/${id}/run`);
+    if (again.status === 200) break;
+    await new Promise(r => setTimeout(r, 100));
+  }
+  assert.equal(again.status, 200, again.text);
+  assert.equal(again.json.chatId, first.json.chatId, 'a task that keeps one chat runs in its last chat again');
   assert.equal((await browser('DELETE', `/api/tasks/${id}`)).status, 200);
   assert.equal((await browser('GET', '/api/tasks')).json.tasks.length, 0);
   assert.equal((await browser('PATCH', '/api/tasks/nope', { body: {} })).status, 404, 'an unknown id is a miss, not a crash');
