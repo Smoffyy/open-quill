@@ -82,6 +82,20 @@
 .pj-card-add { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; color: var(--text-muted); transition: background var(--fx-t, .12s), color var(--fx-t, .12s); }
 .pj-card-add:hover { background: var(--surface-hover); color: var(--text); }
 .pj-card-sub { margin-top: 4px; font-size: 13px; line-height: 17px; color: var(--sidebar-label, var(--text-faint)); cursor: text; white-space: pre-wrap; }
+.pj-notes-body { margin-top: 6px; max-height: 320px; overflow: hidden auto; font-size: 13.5px; line-height: 1.55; color: var(--text); }
+.pj-notes-body > :first-child { margin-top: 0; }
+.pj-notes-body > :last-child { margin-bottom: 0; }
+.pj-notes-edit { min-height: 200px; }
+.pj-notes-when { margin-top: 8px; font-size: 12px; line-height: 16px; color: var(--text-faint); }
+.pj-code-btn {
+  display: flex; align-items: flex-start; gap: 12px; width: 100%; padding: 14px 22px; border-radius: 12px; text-align: left;
+  color: var(--text-muted); transition: background var(--fx-t, .12s), color var(--fx-t, .12s);
+}
+.pj-code-btn:hover { background: var(--surface-hover); color: var(--text); }
+.pj-code-btn svg { flex-shrink: 0; margin-top: 2px; }
+.pj-code-btn > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pj-code-title { font-size: 14px; font-weight: 500; line-height: 20px; color: var(--text); }
+.pj-code-sub { font-size: 13px; line-height: 17px; color: var(--text-faint); }
 .pj-instr-edit { width: 100%; margin-top: 10px; min-height: 110px; resize: vertical; padding: 8px 12px; background: color-mix(in srgb, var(--text) 5%, transparent); border: 0; border-radius: 8px; color: var(--text); font-size: 14px; line-height: 20px; font-family: var(--font-sans); outline: none; }
 .pj-cap { margin-top: 8px; font-size: 12px; line-height: 17px; color: var(--sidebar-label, var(--text-faint)); }
 .pj-file-tree { margin-top: 12px; display: flex; flex-direction: column; }

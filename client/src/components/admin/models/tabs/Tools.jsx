@@ -16,6 +16,7 @@ export default function Tools() {
     { value: 'auto', label: t('On by default') }
   ];
   const extras = [
+    ['artifacts_allowed', t('Artifacts'), t('Lets the model write documents, pages, diagrams and scripts that open in a panel beside the chat, with versions the member can edit and download.')],
     ['skills_allowed', t('Skills'), t('Offers the skills defined under Tools.')],
     ['mcp_allowed', t('MCP tools'), t('Exposes tools from every enabled MCP server.')],
     ...(chatSearch ? [['chat_search_allowed', t('Past-chat search'), t('Lets the model search the member’s own earlier chats.')]] : []),

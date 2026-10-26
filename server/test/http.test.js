@@ -593,7 +593,7 @@ test('the catalog edits, copies and removes models in batches', async () => {
 
   const state = (await browser('GET', '/api/admin/changes')).json.models;
   assert.deepEqual([...state.changed].sort(), [a, b].sort(), 'only the edited rows are reported as unpublished');
-  assert.match(state.live[a].system_prompt, /^<context>\n[\s\S]*<tools>\n<tool name="sandbox">/, 'the published copy of each changed row comes along for diffing, with the blocks a new model starts with');
+  assert.match(state.live[a].system_prompt, /^<context>\n[\s\S]*<tools>\n<tool name="project">[\s\S]*<tool name="artifacts">/, 'the published copy of each changed row comes along for diffing, with the blocks a new model starts with');
   assert.ok(state.order.indexOf(a) < state.order.indexOf(b), 'and so does the published order');
 
   const missing = await browser('PATCH', '/api/admin/models', { body: { rows: [{ id: a, description: 'x' }, { id: 'nope' }] } });
@@ -1052,7 +1052,7 @@ test('memories round-trip and reject bad input', async () => {
 
 test('the prompt a chat sends is the model prompt with its blocks filled in', async () => {
   const id = (await browser('POST', '/api/admin/models', { body: { display_name: 'Blocks', internal_name: 'blocks', system_prompt: 'Base for {{currentUser}}.' } })).json.id;
-  await browser('PATCH', '/api/admin/models', { body: { rows: [{ id, sandbox_allowed: false, memory_allowed: true, calculator_allowed: true }] } });
+  await browser('PATCH', '/api/admin/models', { body: { rows: [{ id, artifacts_allowed: false, memory_allowed: true, calculator_allowed: true }] } });
   await browser('PATCH', '/api/me', { body: { instructions: 'Answer tersely.', prefs: { memoryEnabled: true } } });
   await browser('POST', '/api/me/memories', { body: { text: 'Uses Rust' } });
   const chat = (await browser('POST', '/api/chats', { body: {} })).json;
@@ -1157,7 +1157,7 @@ test('a Claude model runs a full chat turn with thinking and a tool round trip',
     const provider_id = await connection('anthropic', mock.url, 'sk-ant-e2e');
     const found = (await browser('GET', `/api/admin/discover-models?provider=${provider_id}`)).json;
     assert.deepEqual(found.models.map(m => m.id), ['claude-opus-5-5']);
-    const model = (await browser('POST', '/api/admin/models', { body: { display_name: 'Claude', internal_name: 'claude-opus-5-5', provider_id, has_reasoning: true, calculator_allowed: true } })).json.id;
+    const model = (await browser('POST', '/api/admin/models', { body: { display_name: 'Claude', internal_name: 'claude-opus-5-5', provider_id, has_reasoning: true, calculator_allowed: true, artifacts_allowed: false } })).json.id;
     const chat = (await browser('POST', '/api/chats', { body: {} })).json;
     const frames = await chatTurn({ type: 'chat', chatId: chat.id, modelId: model, content: 'What is 17*23?' });
     assert.equal(frames.find(f => f.type === 'error'), undefined, JSON.stringify(frames.find(f => f.type === 'error')));
@@ -1176,6 +1176,84 @@ test('a Claude model runs a full chat turn with thinking and a tool round trip',
     assert.equal(pg.status, 200);
     assert.match(pg.text, /"type":"start"/);
     assert.doesNotMatch(pg.text, /"type":"error"/, pg.text);
+    await browser('POST', '/api/admin/models/remove', { body: { ids: [model] } });
+    await browser('DELETE', `/api/admin/providers/${provider_id}`);
+  } finally {
+    await mock.close();
+  }
+});
+
+test('a project chat reads its knowledge, keeps notes and writes an artifact that can be saved back', async () => {
+  const { mockAnthropic } = await import('./mockapis.js');
+  const steps = [
+    { name: 'project_search', input: { query: 'budget' } },
+    { name: 'project_notes', input: { action: 'append', text: 'The trip budget is 400 euros.' } },
+    { name: 'artifact', input: { name: 'trip plan', content: '# Trip\n\nBudget: 400 euros.' } }
+  ];
+  const mock = await mockAnthropic({
+    key: 'sk-ant-proj',
+    models: [{ id: 'claude-opus-5-5', max_input_tokens: 1000000, max_tokens: 128000 }],
+    respond: (body) => {
+      if (!body.stream) return { text: 'Trip planning' };
+      const done = body.messages.flatMap(m => (Array.isArray(m.content) ? m.content : [])).filter(b => b.type === 'tool_result').length;
+      const step = steps[done];
+      return step ? { text: 'Working.', tools: [{ id: 'toolu_p' + done, ...step }] } : { text: 'The plan is in the panel.' };
+    }
+  });
+  try {
+    const provider_id = await connection('anthropic', mock.url, 'sk-ant-proj');
+    const model = (await browser('POST', '/api/admin/models', { body: { display_name: 'Planner', internal_name: 'claude-opus-5-5', provider_id } })).json.id;
+    const project = (await browser('POST', '/api/projects', { body: { name: 'Lisbon trip' } })).json;
+    const boundary = 'oqknow' + Date.now();
+    const raw = Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="brief.md"\r\nContent-Type: text/markdown\r\n\r\nThe budget is 400 euros.\r\n--${boundary}--\r\n`);
+    assert.equal((await browser('POST', `/api/projects/${project.id}/files`, { raw, headers: { 'Content-Type': 'multipart/form-data; boundary=' + boundary } })).status, 200);
+    const chat = (await browser('POST', '/api/chats', { body: { projectId: project.id } })).json;
+
+    const frames = await chatTurn({ type: 'chat', chatId: chat.id, modelId: model, content: 'Plan the trip from the brief.' });
+    assert.equal(frames.find(f => f.type === 'error'), undefined, JSON.stringify(frames.find(f => f.type === 'error')));
+    const turns = mock.requests.filter(r => r.body.stream);
+    const offered = turns[0].body.tools.map(t => t.name);
+    for (const n of ['project_search', 'project_read', 'project_chats', 'project_notes', 'artifact']) assert.ok(offered.includes(n), n);
+    for (const n of ['bash', 'create_file', 'str_replace', 'delete_file']) assert.ok(!offered.includes(n), 'a project chat cannot ' + n);
+    assert.match(turns[0].body.system.map(b => b.text).join('\n'), /<tool name="project">[\s\S]*Lisbon trip[\s\S]*- brief\.md/);
+    const results = turns.at(-1).body.messages.flatMap(m => (Array.isArray(m.content) ? m.content : [])).filter(b => b.type === 'tool_result');
+    assert.match(results[0].content, /brief\.md:1: The budget is 400 euros\./, 'knowledge search finds the document');
+    assert.ok(frames.some(f => f.type === 'files' && f.files.some(x => x.path === 'trip-plan.md')), 'the panel hears about the new artifact');
+
+    const notes = (await browser('GET', `/api/projects/${project.id}`)).json.notes;
+    assert.equal(notes, 'The trip budget is 400 euros.');
+    const prompt = (await browser('GET', `/api/chats/${chat.id}/prompt?modelId=${model}`)).json.raw.find(m => m.role === 'system').content;
+    assert.match(prompt, /<section name="project_notes">\n[^\n]+\nThe trip budget is 400 euros\.\n<\/section>/, 'the next turn sees the notes');
+    assert.match(prompt, /### trip-plan\.md \(v1\)\n```md\n# Trip/, 'and the current artifact');
+
+    const base = `/api/chats/${chat.id}/artifacts`;
+    assert.deepEqual((await browser('GET', base)).json.files.map(f => f.path), ['trip-plan.md']);
+    const opened = (await browser('GET', base + '/file?path=trip-plan.md')).json;
+    assert.equal(opened.text, '# Trip\n\nBudget: 400 euros.');
+    const edited = await browser('PUT', base + '/file', { body: { path: 'trip-plan.md', text: '# Trip\n\nBudget: 450 euros.', v: opened.v } });
+    assert.equal(edited.json.v, 2, 'an edit by the member is a new version');
+    const saved = (await browser('POST', base + '/save', { body: { path: 'trip-plan.md' } })).json;
+    assert.deepEqual([saved.projectId, saved.path], [project.id, 'trip-plan.md']);
+    const again = (await browser('POST', base + '/save', { body: { path: 'trip-plan.md' } })).json;
+    assert.equal(again.path, 'trip-plan-2.md', 'saving twice never overwrites knowledge');
+    const knowledge = (await browser('GET', `/api/projects/${project.id}/files`)).json.files.map(f => f.name).sort();
+    assert.deepEqual(knowledge, ['brief.md', 'trip-plan-2.md', 'trip-plan.md']);
+
+    const library = (await browser('GET', '/api/artifacts')).json.artifacts;
+    assert.ok(library.some(a => a.source === 'chat' && a.chatId === chat.id && a.path === 'trip-plan.md'));
+    assert.ok(library.some(a => a.source === 'project' && a.projectId === project.id && a.path === 'brief.md'));
+
+    const code = (await browser('POST', `/api/projects/${project.id}/code`)).json;
+    assert.equal(code.mode, 'code');
+    assert.equal(code.copied, 3);
+    assert.deepEqual((await browser('GET', `/api/chats/${code.id}/files`)).json.files.map(f => f.path).sort(), knowledge, 'Open in Code starts from a copy of the knowledge');
+
+    const fork = (await browser('POST', `/api/chats/${chat.id}/fork`, { body: {} })).json;
+    assert.deepEqual((await browser('GET', `/api/chats/${fork.id}/artifacts`)).json.files.map(f => f.path), ['trip-plan.md'], 'a fork keeps its artifacts');
+
+    for (const id of [chat.id, fork.id, code.id]) await browser('DELETE', `/api/chats/${id}`);
+    assert.equal((await browser('GET', base)).status, 404);
+    await browser('DELETE', `/api/projects/${project.id}`);
     await browser('POST', '/api/admin/models/remove', { body: { ids: [model] } });
     await browser('DELETE', `/api/admin/providers/${provider_id}`);
   } finally {
@@ -1205,7 +1283,7 @@ test('an OpenAI model is added with its reasoning control and runs a tool round 
     assert.equal(astra.caps.vision, true);
     assert.equal(found.models.find(m => m.id === 'gpt-4o').caps.reasoning, false);
 
-    const id = (await browser('POST', '/api/admin/models', { body: { display_name: 'Astra', internal_name: 'gpt-6-astra', provider_id, calculator_allowed: true } })).json.id;
+    const id = (await browser('POST', '/api/admin/models', { body: { display_name: 'Astra', internal_name: 'gpt-6-astra', provider_id, calculator_allowed: true, artifacts_allowed: false } })).json.id;
     const row = (await browser('GET', '/api/admin/models')).json.find(m => m.id === id);
     assert.equal(row.has_vision, 1);
     assert.equal(row.has_reasoning, 0, 'no prompt-token switch for a model whose effort is a request field');

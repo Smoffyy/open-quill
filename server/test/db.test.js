@@ -152,6 +152,28 @@ test('the usage report is empty rather than broken with nothing in range', () =>
   assert.deepEqual(none.byDay, []);
 });
 
+test('the prompt block migration moves chat models off the sandbox and onto projects and artifacts', async () => {
+  const { setSetting, getSetting } = await import('../db.js');
+  const { migratePromptBlocks } = await import('../lib/systemprompt.js');
+  const { blockId, setBlockBody } = await import('../lib/promptblocks.js');
+  const old = 'Be kind.\n\n<context>\n<section name="user_instructions">\n{{userInstructions}}\n</section>\n</context>\n\n<tools>\n<tool name="sandbox">\nWorkspace text\n</tool>\n\n<tool name="calculator">\nMy own calculator words.\n</tool>\n</tools>';
+  const m = db.models.insert({ id: uid(), display_name: 'Old', enabled: 1, sort_order: 0, calculator_allowed: 1, system_prompt: old });
+  const off = db.models.insert({ id: uid(), display_name: 'No artifacts', enabled: 1, sort_order: 1, artifacts_allowed: 0, system_prompt: old });
+  setSetting('prompt_blocks_version', 1);
+  migratePromptBlocks();
+  const text = db.models.byId(m.id).system_prompt;
+  assert.doesNotMatch(text, /name="sandbox"/, 'chats no longer carry the workspace block');
+  assert.match(text, /<tool name="project">[\s\S]*<tool name="artifacts">[\s\S]*<tool name="calculator">\nMy own calculator words\.\n<\/tool>/, 'new blocks arrive in registry order and edits are kept');
+  assert.match(text, /<section name="project_notes">/);
+  assert.doesNotMatch(db.models.byId(off.id).system_prompt, /name="artifacts"/, 'a model with artifacts off does not get the block');
+  assert.equal(getSetting('prompt_blocks_version', 0), 2);
+  const removed = setBlockBody(text, blockId('tool', 'project'), 'x').replace(/<tool name="project">[\s\S]*?<\/tool>\n*/, '');
+  db.models.update(m.id, { system_prompt: removed });
+  migratePromptBlocks();
+  assert.equal(db.models.byId(m.id).system_prompt, removed, 'it runs once, so a block the admin deletes stays deleted');
+  for (const x of [m, off]) db.models.removeById(x.id);
+});
+
 test('resolveModelOrDefault falls back to the default model, never to a disabled one', async () => {
   const { resolveModelOrDefault } = await import('../lib/models.js');
   const first = db.models.insert({ id: uid(), display_name: 'First', enabled: 1, sort_order: 0, is_default: 0 });

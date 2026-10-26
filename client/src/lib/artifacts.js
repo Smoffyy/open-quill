@@ -1,5 +1,8 @@
 export const PREVIEW_HTML = new Set(['html', 'htm', 'svg']);
 export const PREVIEW_MD = new Set(['md', 'markdown']);
+export const PREVIEW_MERMAID = new Set(['mmd', 'mermaid']);
+export const canPreviewExt = (ext) => PREVIEW_HTML.has(ext) || PREVIEW_MD.has(ext) || PREVIEW_MERMAID.has(ext);
+export const mermaidSource = (text) => '```mermaid\n' + String(text || '') + '\n```';
 export const IMAGE_EXT = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'avif']);
 
 export const EXT_LANG = { __proto__: null, rs: 'rust', py: 'python', js: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript', html: 'xml', htm: 'xml', css: 'css', scss: 'scss', json: 'json', md: 'markdown', markdown: 'markdown', sh: 'bash', bash: 'bash', c: 'c', cpp: 'cpp', h: 'cpp', java: 'java', rb: 'ruby', go: 'go', php: 'php', sql: 'sql', yml: 'yaml', yaml: 'yaml', toml: 'ini', ini: 'ini', lua: 'lua', glsl: 'glsl', vert: 'glsl', frag: 'glsl', xml: 'xml', svg: 'xml', kt: 'kotlin', swift: 'swift', vue: 'xml' };

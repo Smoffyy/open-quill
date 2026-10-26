@@ -7,7 +7,7 @@
 - [The composer](composer.md): attachments, response styles, dictation and voice calls
 - [Models and reasoning](models.md): the model picker, badges and extended thinking
 - [Organizing your chats](organizing-chats.md): projects, search, scheduled tasks and export
-- [Code sessions and the sandbox](artifacts-sandbox.md): the files and workspace a Code session uses
+- [Artifacts and Code sessions](artifacts-sandbox.md): documents the assistant writes in a chat, and the files and workspace a Code session uses
 - [Settings](settings.md): every tab in the Settings window
 - [Keyboard shortcuts](keyboard-shortcuts.md): the default keys and how to change them
 - [Privacy and security](privacy-security.md): incognito chats, two-factor sign-in and what leaves your machine

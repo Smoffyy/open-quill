@@ -26,6 +26,23 @@
 .file-chip { flex-shrink: 0; display: inline-grid; place-items: center; font-family: var(--font-sans); font-weight: 600; letter-spacing: .02em; border-radius: 6px; }
 .file-chip.sm { min-width: 30px; height: 22px; padding: 0 5px; font-size: 9.5px; }
 .file-chip.lg { min-width: 64px; height: 48px; padding: 0 10px; font-size: 16px; border-radius: 12px; }
+.file-chip.md { min-width: 40px; height: 40px; padding: 0 6px; font-size: 11px; border-radius: 9px; }
+
+/* an artifact in the transcript */
+.tool-artifact {
+  display: flex; align-items: center; gap: 12px; width: min(100%, 420px); margin: 6px 0; padding: 10px 14px 10px 10px;
+  border-radius: 12px; text-align: left; color: var(--text);
+  background: var(--surface); box-shadow: inset 0 0 0 1px var(--border-soft);
+  transition: background var(--fx-t, .15s) ease;
+}
+.tool-artifact:hover:not(:disabled) { background: var(--surface-hover); }
+.tool-artifact:disabled { cursor: default; }
+.tool-artifact .ta-body { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.tool-artifact .ta-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-sans); font-size: 14px; font-weight: 500; line-height: 20px; }
+.tool-artifact .ta-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-sans); font-size: 12.5px; line-height: 17px; color: var(--text-muted); }
+.tool-artifact.err .ta-sub { color: var(--danger); white-space: normal; }
+.tool-artifact .ta-open { flex-shrink: 0; padding: 4px 10px; border-radius: 7px; font-family: var(--font-sans); font-size: 13px; color: var(--text-muted); background: var(--hover-soft); }
+.tool-artifact:hover .ta-open { color: var(--text); }
 
 /* file list */
 .art-list { flex: 1; overflow: hidden auto; padding: 10px; display: flex; flex-direction: column; gap: 3px; }
@@ -56,6 +73,11 @@
 .art-card-dl { flex-shrink: 0; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 7px; color: var(--text-muted); transition: background var(--fx-t, .12s), color var(--fx-t, .12s); }
 .art-card-dl:hover { background: var(--hover-mid); color: var(--text); }
 .art-card.writing .art-card-sub { color: var(--text); }
+.art-card-open { display: flex; align-items: center; flex: 1; min-width: 0; align-self: stretch; color: inherit; text-align: left; }
+.art-card-open .art-card-title, .art-card-open .art-card-sub { display: block; }
+.art-card:has(.art-card-open:focus-visible) { box-shadow: 0 0 0 1.6px var(--focus-ring); }
+.art-card-open:focus-visible { outline: none; }
+.art-card-dl:disabled { opacity: .4; pointer-events: none; }
 /* folder tree
    Nesting is drawn by the containers rather than by a computed depth, so a
    folder ten levels down needs no arithmetic and the guide rail lines up with

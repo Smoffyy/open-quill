@@ -1,6 +1,7 @@
 export {
   sandboxToolSchemas, webSearchSchema, membankSchemas, chatSearchSchemas, recallSchema,
-  skillSchema, endConversationSchema, memorySchema, calculatorSchema, todoSchema, askUserSchema, consultModelSchema, buildTools
+  skillSchema, endConversationSchema, memorySchema, calculatorSchema, todoSchema, askUserSchema, consultModelSchema,
+  projectSchemas, artifactSchemas, buildTools
 } from './schemas.js';
 export { parseArgs, toCall, cutOffOf, RAW_ARGS } from './args.js';
 export { parseTextToolCalls } from './textcalls.js';

@@ -9,7 +9,7 @@ import { activePath } from '../../lib/tree.js';
 const PART_LABEL = { base: () => 'Model system prompt', tool: (p) => `Tool: ${p.name}`, section: (p) => `Context: ${p.name}` };
 
 function promptOf(c, model) {
-  const flags = toolState(c, model, { sandboxOn: !!c.sandbox || !!c.project_id, canAsk: true });
+  const flags = toolState(c, model, { sandboxOn: c.mode === 'code', canAsk: true });
   return { flags, ...systemPrompt(c, model, flags) };
 }
 

@@ -16,19 +16,22 @@ Each chat's menu (the **⋯** on hover, or the title in the top bar) has **Star*
 
 ## Projects
 
-A project groups chats around shared context. Open **Projects** in the sidebar to see, search, sort or create them.
+A project is a topic you keep coming back to, such as a trip, a course, a client or a piece of writing. Every chat in it shares the same context. Open **Projects** in the sidebar to see, search, sort or create them.
 
 Inside a project you get:
 
 - **Instructions** that apply to every chat in the project.
-- **Files**: one shared workspace for the whole project. Upload files or folders, drag them in, create files and edit them in place. Every chat in the project can read, edit and run them. A bar shows how much of the storage is used, and **Download all** saves everything as a zip.
+- **Knowledge**: documents for the assistant to work from. Upload files or folders, drag them in, or create and edit text files in place. Every chat in the project can search and read them, PDFs and Office documents included, and says which document it used. Only you change them. A bar shows how much of the storage is used, and **Download all** saves everything as a zip.
+- **Notes**: a shared document every chat in the project reads. The assistant adds decisions, facts and open questions here as you work, so a new chat knows what earlier ones settled, and you can edit the notes yourself.
+- **Earlier chats**: the assistant can search the project's other chats and read one when you refer back to it.
+- **Build in Code**: when a project turns into building something, this starts a Code session with a copy of the project's files, where the assistant can edit and run them. The project itself is not changed.
 - A composer for starting a new chat in the project, and the list of chats already in it.
 
-Move a chat in or out with **Add to project** in its menu or in the composer's **+** menu. Deleting a project deletes its files but keeps its chats.
+Move a chat in or out with **Add to project** in its menu or in the composer's **+** menu. Deleting a project deletes its knowledge and notes but keeps its chats.
 
 ## Artifacts
 
-**Artifacts** in the sidebar lists every file the assistant has created across all your chats. Filter by file type, and click one to open the chat it came from. See [Artifacts and sandbox](artifacts-sandbox.md).
+**Artifacts** in the sidebar lists the artifacts from your chats, your projects' knowledge and the files in your Code sessions, each marked with where it lives. Filter by file type, and click one to open it where it came from. See [Artifacts and Code sessions](artifacts-sandbox.md).
 
 ## Scheduled tasks
 

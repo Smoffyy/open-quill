@@ -4,6 +4,7 @@ import * as sandbox from '../../sandbox.js';
 import { attachmentUrlsOf, purgeUnreferencedUploads } from '../../lib/uploads.js';
 import { stopTurn } from '../../lib/ws/index.js';
 import { cleanTags } from '../../lib/chattags.js';
+import { removeArtifacts } from '../../lib/artifacts.js';
 
 const MAX_PINS = 40;
 
@@ -25,6 +26,7 @@ export default function registerCrudRoutes(app) {
       db.messages.removeWhere('chat_id', c.id);
       db.chats.removeById(c.id);
       if (!c.project_id) sandbox.remove(c.id);
+      removeArtifacts(c.id);
       purgeUnreferencedUploads(urls);
     }
     res.json({ ok: true });

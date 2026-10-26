@@ -9,7 +9,7 @@ import { t } from '../../i18n.jsx';
 import { buildPreviewDoc } from '../../lib/preview.js';
 import { SegSlide } from '../ui/controls.jsx';
 import {
-  PREVIEW_HTML, PREVIEW_MD, IMAGE_EXT, EXT_LANG, baseName, extOf, escHtml,
+  PREVIEW_HTML, PREVIEW_MD, PREVIEW_MERMAID, IMAGE_EXT, EXT_LANG, baseName, extOf, escHtml, canPreviewExt, mermaidSource,
   diffLines, stableLineDiff, collapseRuns, splitHighlightedLines, markLine, findMatches
 } from '../../lib/artifacts.js';
 import { Skel, SkelLines } from '../ui/Skeleton.jsx';
@@ -83,7 +83,13 @@ function HtmlPreview({ base, path, html }) {
   return <iframe className="art-preview-frame" sandbox={PREVIEW_SANDBOX} srcDoc={doc} data-tip={baseName(path)} aria-label={baseName(path)} referrerPolicy="no-referrer" />;
 }
 
-export default function Viewer({ chatId, apiBase, path, onBack, canBack, liveText, liveInfo = null, committed = true, pendingText = null, fileV = 0, headerExtra = null, onFocusPane, editable = false, onSaved, onDirtyChange }) {
+function DocPreview({ base, path, ext, text }) {
+  if (PREVIEW_MD.has(ext)) return <div className="art-md"><Markdown>{text}</Markdown></div>;
+  if (PREVIEW_MERMAID.has(ext)) return <div className="art-md"><Markdown>{mermaidSource(text)}</Markdown></div>;
+  return <HtmlPreview base={base} path={path} html={text} />;
+}
+
+export default function Viewer({ chatId, apiBase, path, onBack, canBack, liveText, liveInfo = null, committed = true, pendingText = null, fileV = 0, headerExtra = null, onFocusPane, editable = false, onSaved, onDirtyChange, preferPreview = false }) {
   const base = apiBase || '/api/chats/' + chatId;
   const [data, setData] = useState(null);
   const [draft, setDraft] = useState(null);
@@ -110,11 +116,12 @@ export default function Viewer({ chatId, apiBase, path, onBack, canBack, liveTex
 
   const ext = extOf(path);
   const isLive = liveText != null;
-  const canPreview = PREVIEW_HTML.has(ext) || PREVIEW_MD.has(ext);
-  const [mode, setMode] = useState(() => (PREVIEW_HTML.has(ext) ? 'preview' : 'code'));
-  useEffect(() => { setMode(PREVIEW_HTML.has(extOf(path)) ? 'preview' : 'code'); }, [path]);
+  const canPreview = canPreviewExt(ext);
+  const startMode = (e) => ((preferPreview ? canPreviewExt(e) : PREVIEW_HTML.has(e)) ? 'preview' : 'code');
+  const [mode, setMode] = useState(() => startMode(ext));
+  useEffect(() => { setMode(startMode(extOf(path))); }, [path]);
   const previewOn = canPreview && mode === 'preview' && !isLive && !diff && !editing;
-  const liveEdit = isLive && liveInfo && liveInfo.tool === 'str_replace';
+  const liveEdit = isLive && liveInfo && (liveInfo.tool === 'str_replace' || liveInfo.tool === 'artifact_edit');
   const liveActive = isLive || liveEdit;
   const rawStream = isLive ? liveText : (!committed && pendingText != null ? pendingText : null);
   const fromStream = rawStream != null;
@@ -418,11 +425,7 @@ export default function Viewer({ chatId, apiBase, path, onBack, canBack, liveTex
             ? <Skel when><SkelLines className="art-skel" count={14} /></Skel>
             : renderDiffRows(liveRows, true)
         )}
-        {!liveEdit && showText && !diff && previewOn && (
-          PREVIEW_MD.has(ext)
-            ? <div className="art-md"><Markdown>{shownText || ''}</Markdown></div>
-            : <HtmlPreview base={base} path={path} html={shownText || ''} />
-        )}
+        {!liveEdit && showText && !diff && previewOn && <DocPreview base={base} path={path} ext={ext} text={shownText || ''} />}
         {editing && (
           <div className={'art-edit' + (splitPreview ? ' split' : '')}>
             <div className="art-edit-main">
@@ -433,9 +436,7 @@ export default function Viewer({ chatId, apiBase, path, onBack, canBack, liveTex
             </div>
             {splitPreview && (
               <div className="art-edit-preview" aria-label={t('Preview')} role="region">
-                {PREVIEW_MD.has(ext)
-                  ? <div className="art-md"><Markdown>{previewText}</Markdown></div>
-                  : <HtmlPreview base={base} path={path} html={previewText} />}
+                <DocPreview base={base} path={path} ext={ext} text={previewText} />
               </div>
             )}
           </div>

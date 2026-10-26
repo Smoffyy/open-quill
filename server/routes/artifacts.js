@@ -4,10 +4,13 @@ import { db, now } from '../db.js';
 import { authMiddleware } from '../auth.js';
 import * as sandbox from '../sandbox.js';
 import { workspaceFor } from '../lib/projectfiles.js';
-import { sandboxCap, attachName, cleanPath, createEmpty, renameTo, fileInfo, sendDownload, restoreVersion, saveText } from '../lib/workspacefiles.js';
+import { sandboxCap, attachName, cleanPath, createEmpty, renameTo, fileInfo, sendDownload, restoreVersion, saveText, freePath } from '../lib/workspacefiles.js';
+import { workspaceOfProject } from '../lib/projectfiles.js';
+import { listArtifacts } from '../lib/artifacts.js';
 import { activeTurn } from '../lib/ws/live.js';
 
 const wsOf = (c) => workspaceFor(c);
+const artOf = (c) => sandbox.artifactKey(c.id);
 const fileUpload = multer({ storage: multer.memoryStorage(), defParamCharset: 'utf8', limits: { fileSize: 100 * 1024 * 1024 } });
 const BUSY = 'Wait for the reply to finish before changing files.';
 
@@ -31,17 +34,15 @@ export default function registerArtifactRoutes(app) {
     const items = [];
     const seen = new Set();
     let scanned = 0;
-    for (const c of chats) {
-      if (items.length >= limit) break;
-      scanned++;
-      const key = wsOf(c);
-      if (seen.has(key)) continue;
-      seen.add(key);
+    const projects = new Map(db.projects.byUser(req.user.id).map(p => [p.id, p.name]));
+    const collect = (key, c, source) => {
       let files;
-      try { files = sandbox.list(key); } catch { continue; }
-      if (!Array.isArray(files)) continue;
+      try { files = sandbox.list(key); } catch { return; }
+      if (!Array.isArray(files)) return;
+      const label = source === 'project' ? (projects.get(c.project_id) || '') : (c.title || '');
       for (const f of files) {
-        if (q && f.path.toLowerCase().indexOf(q) === -1 && String(c.title || '').toLowerCase().indexOf(q) === -1) continue;
+        if (items.length >= limit) return;
+        if (q && f.path.toLowerCase().indexOf(q) === -1 && label.toLowerCase().indexOf(q) === -1) continue;
         let preview = '';
         if (f.size > 0 && f.size < 512 * 1024) {
           try {
@@ -50,10 +51,11 @@ export default function registerArtifactRoutes(app) {
         }
         items.push({
           preview,
-          id: c.id + ':' + f.path,
+          id: key + ':' + f.path,
           chatId: c.id,
-          chatTitle: c.title || '',
-          mode: c.mode === 'code' ? 'code' : 'chat',
+          chatTitle: label,
+          source,
+          projectId: c.project_id || null,
           path: f.path,
           name: f.path.split('/').pop(),
           ext: f.ext || '',
@@ -61,10 +63,82 @@ export default function registerArtifactRoutes(app) {
           v: f.v || 1,
           updated_at: c.updated_at || 0
         });
-        if (items.length >= limit) break;
+      }
+    };
+    for (const c of chats) {
+      if (items.length >= limit) break;
+      scanned++;
+      if (c.mode === 'code') {
+        collect(wsOf(c), c, 'code');
+        continue;
+      }
+      collect(artOf(c), c, 'chat');
+      if (c.project_id && !seen.has(c.project_id)) {
+        seen.add(c.project_id);
+        collect(workspaceOfProject(c.project_id), c, 'project');
       }
     }
     res.json({ artifacts: items, scanned, more: chats.length > scanned });
+  });
+
+  app.get('/api/chats/:id/artifacts', authMiddleware, (req, res) => {
+    const c = ownChat(req, res); if (!c) return;
+    res.json({ files: listArtifacts(c.id) });
+  });
+
+  app.get('/api/chats/:id/artifacts/file', authMiddleware, (req, res) => {
+    const c = ownChat(req, res); if (!c) return;
+    const r = fileInfo(artOf(c), String(req.query.path || ''), parseInt(req.query.v), `/api/chats/${c.id}/artifacts`);
+    res.status(r.status).json(r.body);
+  });
+
+  app.get('/api/chats/:id/artifacts/download', authMiddleware, (req, res) => {
+    const c = ownChat(req, res); if (!c) return;
+    sendDownload(res, artOf(c), String(req.query.path || ''), parseInt(req.query.v));
+  });
+
+  app.get('/api/chats/:id/artifacts/zip', authMiddleware, (req, res) => {
+    const c = ownChat(req, res); if (!c) return;
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${attachName((c.title || 'artifacts').replace(/[^a-zA-Z0-9_-]/g, '_'))}.zip"`);
+    res.send(sandbox.zipAll(artOf(c)));
+  });
+
+  app.put('/api/chats/:id/artifacts/file', authMiddleware, (req, res) => {
+    const c = ownChat(req, res); if (!c) return;
+    if (activeTurn(c.id)) return res.status(409).json({ error: 'Wait for the reply to finish before editing artifacts.' });
+    const r = saveText(artOf(c), String(req.body?.path || ''), req.body?.text, req.body?.v, sandboxCap(req.user));
+    res.status(r.status).json(r.body);
+  });
+
+  app.post('/api/chats/:id/artifacts/restore', authMiddleware, (req, res) => {
+    const c = ownChat(req, res); if (!c) return;
+    if (activeTurn(c.id)) return res.status(409).json({ error: BUSY });
+    const r = restoreVersion(artOf(c), String(req.body?.path || ''), parseInt(req.body?.v));
+    res.status(r.status).json(r.body);
+  });
+
+  app.delete('/api/chats/:id/artifacts', authMiddleware, (req, res) => {
+    const c = ownChat(req, res); if (!c) return;
+    if (activeTurn(c.id)) return res.status(409).json({ error: BUSY });
+    const rel = String(req.query.path || '');
+    if (rel && listArtifacts(c.id).some(f => f.path === rel)) sandbox.deleteFile(artOf(c), rel);
+    res.json({ files: listArtifacts(c.id) });
+  });
+
+  app.post('/api/chats/:id/artifacts/save', authMiddleware, (req, res) => {
+    const c = ownChat(req, res); if (!c) return;
+    const projectId = String(req.body?.projectId || c.project_id || '');
+    const p = projectId ? db.projects.byId(projectId) : null;
+    if (!p || p.user_id !== req.user.id) return res.status(400).json({ error: 'Choose a project to save it to.' });
+    const rel = String(req.body?.path || '');
+    if (!listArtifacts(c.id).some(f => f.path === rel)) return res.status(404).json({ error: 'not found' });
+    const ws = workspaceOfProject(p.id);
+    const dest = freePath(ws, rel);
+    const r = sandbox.importBuffer(ws, dest, sandbox.readBuffer(artOf(c), rel), sandboxCap(req.user));
+    if (!r.ok) return res.status(400).json({ error: r.error });
+    db.projects.update(p.id, { updated_at: now() });
+    res.json({ ok: true, projectId: p.id, projectName: p.name, path: dest });
   });
 
   app.get('/api/chats/:id/files', authMiddleware, (req, res) => {

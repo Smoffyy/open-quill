@@ -108,6 +108,48 @@ export function sandboxToolSchemas(env = null) {
   ];
 }
 
+export function projectSchemas() {
+  return [
+    fn('project_files', 'List the documents in this project\'s knowledge, with their sizes.', {}),
+    fn('project_read', 'Read one document from the project\'s knowledge as numbered lines. PDFs and Office documents are read as text. Long documents are cut off: page through them with start and end.', {
+      path: str('The document\'s path exactly as project_files lists it.'),
+      start: int('Optional first line to read (1-indexed).'),
+      end: int('Optional last line to read (inclusive).')
+    }, ['path']),
+    fn('project_search', 'Search inside every document in the project\'s knowledge, PDFs and Office documents included, and return the matching lines with their document and line number. Case-insensitive.', {
+      query: str('The words to look for.')
+    }, ['query']),
+    fn('project_chats', 'Search the other conversations in this project, or read one of them. Pass query to search, or chat_id (from a search result) to read that chat.', {
+      query: str('Words to search for across the project\'s other chats.'),
+      chat_id: str('The id of a chat to read, as returned by a search.'),
+      limit: int('Optional number of most recent messages to read (default 20, max 60).')
+    }),
+    fn('project_notes', 'Change the project\'s shared notes, which every chat in this project sees. append adds an entry to the end; replace rewrites the whole document, for reorganizing or condensing it.', {
+      action: { type: 'string', enum: ['append', 'replace'], description: 'append to add an entry, replace to rewrite all of the notes.' },
+      text: str('The entry to add, or with replace the complete new notes in Markdown.')
+    }, ['action', 'text'])
+  ];
+}
+
+const ARTIFACT_NAME = str('The artifact\'s file name, with an extension that says what it is: "trip-plan.md", "budget.csv", "landing.html", "flow.mmd", "logo.svg", "scraper.py". No folders. Reuse the same name to change that artifact.');
+
+export function artifactSchemas() {
+  return [
+    fn('artifact', 'Create an artifact, a document the user sees in a panel beside the chat, or replace one completely. Use it for substantial, self-contained content the user will want to keep, reuse, download or keep refining: a document, report, plan, letter, a program or script, a web page (.html, shown rendered), an SVG image or a Mermaid diagram (.mmd). Keep short answers, explanations and snippets under about 15 lines in the reply instead. Every write is a new version the user can compare and restore.', {
+      name: ARTIFACT_NAME,
+      content: str('The COMPLETE content of the artifact. Never truncate it or write placeholders such as "rest unchanged".')
+    }, ['name', 'content']),
+    fn('artifact_edit', 'Change part of an existing artifact by replacing one exact passage, instead of rewriting all of it with artifact. old_str must match the artifact exactly, whitespace included, and appear once.', {
+      name: ARTIFACT_NAME,
+      old_str: str('The exact existing text to replace, copied from the artifact.'),
+      new_str: str('The replacement text. Pass "" to delete old_str.')
+    }, ['name', 'old_str', 'new_str']),
+    fn('artifact_read', 'Read the current content of an artifact in this chat. The user may have edited it since you wrote it.', {
+      name: ARTIFACT_NAME
+    }, ['name'])
+  ];
+}
+
 export function webSearchSchema() {
   return fn('web_search', 'Search the live web and read the top result pages. Use it when the answer needs current or niche information that may not be in your training data. Keep queries focused; call it again to refine or follow up.', {
     query: str('The search query.'),
@@ -206,9 +248,11 @@ export function recallSchema() {
   }, ['query']);
 }
 
-export function buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, memoryOn = false, calculatorOn = false, todoOn = false, askUserOn = false, recallOn = false, consultNames = [], hostEnv = null, readOnly = false }) {
+export function buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, memoryOn = false, calculatorOn = false, todoOn = false, askUserOn = false, recallOn = false, projectOn = false, artifactsOn = false, consultNames = [], hostEnv = null, readOnly = false }) {
   const out = [];
   if (sandboxOn) out.push(...sandboxToolSchemas(hostEnv).filter(s => !readOnly || SANDBOX_READONLY.has(s.function.name)));
+  if (projectOn) out.push(...projectSchemas());
+  if (artifactsOn) out.push(...artifactSchemas());
   if (webSearchOn) out.push(webSearchSchema());
   if (membankOn) out.push(...membankSchemas());
   if (chatSearchOn) out.push(...chatSearchSchemas());

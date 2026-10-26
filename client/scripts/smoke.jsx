@@ -22,6 +22,8 @@ import KeybindsPanel from '../src/components/settings/KeybindsPanel.jsx';
 import BranchTree from '../src/components/chat/BranchTree.jsx';
 import Login from '../src/components/pages/Login.jsx';
 import ScheduledTasks from '../src/components/pages/ScheduledTasks.jsx';
+import ChatArtifacts from '../src/components/artifacts/ChatArtifacts.jsx';
+import ToolCard from '../src/components/chat/ToolCard.jsx';
 import TaskEditor from '../src/components/pages/TaskEditor.jsx';
 import CodeView from '../src/components/code/CodeView.jsx';
 import CodeFiles from '../src/components/code/CodeFiles.jsx';
@@ -81,6 +83,23 @@ cases.push(['KeybindsPanel', () => React.createElement(KeybindsPanel, { prefs: {
 cases.push(['BranchTree', () => React.createElement(BranchTree, { chatId: 'c1', onSelect: noop, onJump: noop, onClose: noop, onChanged: noop })]);
 cases.push(['Login:signin', () => React.createElement(Login, { onLogin: noop, cfg: { allowSignups: true, firstRun: false } })]);
 cases.push(['Login:firstrun', () => React.createElement(Login, { onLogin: noop, cfg: { allowSignups: true, firstRun: true } })]);
+const chatArts = [{ path: 'trip-plan.md', ext: 'md', size: 1200, v: 2 }, { path: 'flow.mmd', ext: 'mmd', size: 80, v: 1 }];
+cases.push(['ChatArtifacts:empty', () => React.createElement(ChatArtifacts, { chatId: 'c1', files: [], onFilesChanged: noop, onClose: noop })]);
+cases.push(['ChatArtifacts:list', () => React.createElement(ChatArtifacts, { chatId: 'c1', files: chatArts, projects: [{ id: 'p1', name: 'Trip' }], onFilesChanged: noop, onClose: noop })]);
+cases.push(['ChatArtifacts:writing', () => React.createElement(ChatArtifacts, {
+  chatId: 'c1', files: chatArts, live: { tool: 'artifact', path: 'notes.md', content: '# Notes' }, busy: true, onFilesChanged: noop, onClose: noop
+})]);
+cases.push(['ChatArtifacts:project', () => React.createElement(ChatArtifacts, {
+  chatId: 'c1', files: [chatArts[0]], projectId: 'p1', projects: [{ id: 'p1', name: 'Trip' }], onFilesChanged: noop, onClose: noop
+})]);
+for (const [tool, result] of [
+  ['artifact', null], ['artifact', { ok: true, name: 'trip-plan.md', v: 1 }], ['artifact_edit', { ok: true, name: 'trip-plan.md', v: 3 }],
+  ['artifact', { ok: false, error: 'Bad name' }], ['project_search', { ok: true, count: 2 }], ['project_notes', { ok: true }], ['project_chats', { ok: true, count: 1 }]
+]) {
+  cases.push(['ToolCard:' + tool + (result ? (result.ok ? ':ok' : ':err') : ':live'), () => React.createElement(ToolCard, {
+    call: { tool, name: 'trip plan', path: 'trip-plan.md', query: 'budget', text: 'Budget is 400.' }, result
+  })]);
+}
 cases.push(['ScheduledTasks', () => React.createElement(ScheduledTasks, { onSearch: noop, onRunTask: noop, onOpenChat: noop, models: [], webSearchAvailable: true })]);
 const taskModels = [{ id: 'm1', displayName: 'Local', isDefault: true, webSearchAllowed: true }, { id: 'm2', displayName: 'Other', webSearchAllowed: false }];
 for (const schedule of [

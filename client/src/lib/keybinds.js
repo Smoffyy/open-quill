@@ -22,7 +22,7 @@ export const KEYBIND_ACTIONS = [
   { id: 'msgPrev', group: 'In this conversation', label: 'Previous message', def: 'k', pref: 'msgKeys', typing: false, overlay: false },
   { id: 'scrollBottom', group: 'In this conversation', label: 'Jump to latest', def: 'alt+ArrowDown', typing: true, overlay: false },
   { id: 'promptLedger', group: 'In this conversation', label: 'What gets sent', def: 'alt+p', typing: true, overlay: false },
-  { id: 'toggleArtifacts', group: 'In this conversation', label: 'Files panel (Code)', def: 'alt+a', typing: true, overlay: false },
+  { id: 'toggleArtifacts', group: 'In this conversation', label: 'Artifacts panel, or files in Code', def: 'alt+a', typing: true, overlay: false },
   { id: 'toggleOutline', group: 'In this conversation', label: 'Contents', def: 'alt+o', pref: 'threadOutline', typing: true, overlay: false },
   { id: 'focusMode', group: 'In this conversation', label: 'Focus mode', def: 'alt+f', typing: true, overlay: false },
   { id: 'nextChat', group: 'In this conversation', label: 'Next chat in sidebar', def: 'alt+j', typing: true, overlay: false },

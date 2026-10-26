@@ -4,7 +4,8 @@ import { db, uid, now } from '../db.js';
 import { authMiddleware } from '../auth.js';
 import * as sandbox from '../sandbox.js';
 import * as projectfiles from '../lib/projectfiles.js';
-import { sandboxCap, attachName, cleanPath, createEmpty, renameTo, fileInfo, sendDownload, restoreVersion, saveText } from '../lib/workspacefiles.js';
+import { sandboxCap, attachName, cleanPath, createEmpty, renameTo, fileInfo, sendDownload, restoreVersion, saveText, copyFiles } from '../lib/workspacefiles.js';
+import { NOTES_MAX } from '../lib/projecttools.js';
 
 function ownProject(req, res) {
   const p = db.projects.byId(req.params.id);
@@ -15,7 +16,10 @@ function ownProject(req, res) {
 const capFor = sandboxCap;
 
 function projectView(p, counts = db.chats.projectCounts(p.user_id)) {
-  return { id: p.id, name: p.name, description: p.description || '', instructions: p.instructions || '', starred: !!p.starred, updated_at: p.updated_at, created_at: p.created_at, chatCount: counts.get(p.id) || 0 };
+  return {
+    id: p.id, name: p.name, description: p.description || '', instructions: p.instructions || '', notes: p.notes || '',
+    notesUpdatedAt: p.notes_updated_at || 0, starred: !!p.starred, updated_at: p.updated_at, created_at: p.created_at, chatCount: counts.get(p.id) || 0
+  };
 }
 
 const PROJECT_LIMIT = 500;
@@ -51,6 +55,7 @@ export default function registerProjectRoutes(app) {
     if ('name' in req.body) patch.name = String(req.body.name || '').slice(0, 120).trim() || 'New project';
     if ('description' in req.body) patch.description = String(req.body.description || '').slice(0, 2000);
     if ('instructions' in req.body) patch.instructions = String(req.body.instructions || '').slice(0, 8000);
+    if ('notes' in req.body) { patch.notes = String(req.body.notes || '').slice(0, NOTES_MAX); patch.notes_updated_at = patch.updated_at; }
     if ('starred' in req.body) patch.starred = req.body.starred ? 1 : 0;
     db.projects.update(p.id, patch);
     res.json(projectView(db.projects.byId(p.id)));
@@ -127,6 +132,14 @@ export default function registerProjectRoutes(app) {
     const ws = projectfiles.workspaceOfProject(pr.id);
     const r = restoreVersion(ws, String(req.body?.path || ''), parseInt(req.body?.v));
     res.status(r.status).json(r.status === 200 ? { ...r.body, files: fileView(ws), cap: capFor(req.user) } : r.body);
+  });
+
+  app.post('/api/projects/:id/code', authMiddleware, (req, res) => {
+    const pr = ownProject(req, res); if (!pr) return;
+    const t = now();
+    const chat = db.chats.insert({ id: uid(), user_id: req.user.id, project_id: null, title: String(pr.name || 'Project').slice(0, 120), starred: 0, sandbox: 0, mode: 'code', created_at: t, updated_at: t });
+    const copied = copyFiles(projectfiles.workspaceOfProject(pr.id), sandbox.wsKey(chat), capFor(req.user));
+    res.json({ id: chat.id, title: chat.title, mode: 'code', updated_at: t, copied });
   });
 
   app.delete('/api/projects/:id', authMiddleware, (req, res) => {

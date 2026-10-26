@@ -9,8 +9,11 @@ export const safeId = (chatId) => String(chatId).replace(/[^a-zA-Z0-9_-]/g, '');
 
 const PROJECT_PREFIX = 'p-';
 
+const ARTIFACT_PREFIX = 'a-';
+
 export function projectKey(projectId) { return PROJECT_PREFIX + safeId(projectId); }
 export function isProjectKey(key) { return String(key || '').startsWith(PROJECT_PREFIX); }
+export function artifactKey(chatId) { return ARTIFACT_PREFIX + safeId(chatId); }
 
 export function wsKey(chat) {
   if (!chat) return '';

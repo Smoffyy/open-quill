@@ -9,8 +9,8 @@ import { buildTools, SANDBOX_READONLY } from '../tools/index.js';
 
 const TOOL = (n) => blockId('tool', n);
 const SECTION = (n) => blockId('section', n);
-const names = (text) => parsePrompt(text).wrappers.flatMap(w => w.items.map(it => it.id));
-const base = { system_prompt: 'You are helpful.', sandbox_allowed: 0, web_search_allowed: 0 };
+const names = (text) => parsePrompt(text).wrappers.flatMap(w => w.items.map(it => it.id)).filter(id => id !== TOOL('project'));
+const base = { system_prompt: 'You are helpful.', artifacts_allowed: 0, web_search_allowed: 0 };
 
 test('every block has a unique id and non-empty default text', () => {
   assert.equal(new Set(BLOCKS.map(b => b.id)).size, BLOCKS.length);
@@ -26,21 +26,26 @@ test('eligibility follows model flags and workspace features', () => {
   assert.ok(on.has(SECTION('user_instructions')));
   assert.ok(!on.has(SECTION('conversation_time')));
   assert.ok(eligibleBlocks({ ...base, chat_search_allowed: 1 }, { chatSearch: true }).has(TOOL('chat_search')));
-  assert.ok(eligibleBlocks({}, {}).has(TOOL('sandbox')), 'sandbox is allowed unless switched off');
+  assert.ok(!eligibleBlocks({}, {}).has(TOOL('sandbox')), 'the workspace block belongs to Code sessions, which render it themselves');
+  assert.ok(eligibleBlocks({}, {}).has(TOOL('artifacts')), 'artifacts are allowed unless switched off');
+  assert.ok(eligibleBlocks(base, {}).has(TOOL('project')), 'every model can work inside a project');
+  assert.ok(eligibleBlocks(base, {}).has(SECTION('project_notes')));
   assert.equal(eligibleBlocks({ kind: 'router', calculator_allowed: 1 }, {}).size, 0, 'routers carry no blocks');
 });
 
 test('turning a tool on appends its block inside <tools>, and off removes it', () => {
   const withCalc = syncModelPrompt({ kind: 'router' }, { ...base, calculator_allowed: 1 }, {});
   assert.match(withCalc, /^You are helpful\.\n\n<context>/);
-  assert.match(withCalc, /<tools>\n<tool name="calculator">\n[\s\S]+\n<\/tool>\n<\/tools>$/);
+  assert.match(withCalc, /<tools>\n<tool name="project">\n[\s\S]+\n<\/tool>\n\n<tool name="calculator">\n[\s\S]+\n<\/tool>\n<\/tools>$/);
   const both = syncModelPrompt({ ...base, calculator_allowed: 1 }, { ...base, calculator_allowed: 1, memory_allowed: 1, system_prompt: withCalc }, {});
   assert.deepEqual(names(both).filter(id => id.startsWith('tool:')), [TOOL('memory'), TOOL('calculator')], 'blocks keep registry order');
   const off = syncModelPrompt({ ...base, calculator_allowed: 1, memory_allowed: 1 }, { ...base, memory_allowed: 1, system_prompt: both }, {});
   assert.deepEqual(names(off).filter(id => id.startsWith('tool:')), [TOOL('memory')]);
   const none = syncModelPrompt({ ...base, memory_allowed: 1 }, { ...base, system_prompt: off }, {});
-  assert.ok(!none.includes('<tools>'), 'an empty wrapper is removed');
+  assert.deepEqual(names(none).filter(id => id.startsWith('tool:')), [], 'only the project block is left');
   assert.ok(none.startsWith('You are helpful.\n\n<context>'));
+  const bare = syncPrompt(none, new Set([TOOL('project')]), new Set());
+  assert.ok(!bare.includes('<tools>'), 'an empty wrapper is removed');
   assert.equal(syncModelPrompt(base, { kind: 'router', system_prompt: none }, {}), 'You are helpful.', 'a model turned router loses every block');
 });
 
@@ -52,7 +57,7 @@ test('sync keeps edits to existing blocks and never re-adds a deleted one', () =
   const deleted = again.replace(/<tool name="calculator">[\s\S]*?<\/tool>/, '');
   const unchanged = syncModelPrompt({ ...base, calculator_allowed: 1, memory_allowed: 1 }, { ...base, calculator_allowed: 1, memory_allowed: 1, mcp_allowed: 0, system_prompt: deleted }, {});
   assert.ok(!unchanged.includes('name="calculator"'));
-  assert.deepEqual(missingBlocks(unchanged, { ...base, calculator_allowed: 1, memory_allowed: 1 }, {}).filter(id => id.startsWith('tool:')), [TOOL('calculator')]);
+  assert.deepEqual(missingBlocks(unchanged, { ...base, calculator_allowed: 1, memory_allowed: 1 }, {}).filter(id => id.startsWith('tool:') && id !== TOOL('project')), [TOOL('calculator')]);
   assert.match(addBlocks(unchanged, new Set([TOOL('calculator')])), /name="calculator"/);
 });
 

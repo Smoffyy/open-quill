@@ -3,6 +3,8 @@ import { highlight } from '../../lib/hljs.js';
 import { copyText } from '../../lib/clipboard.js';
 import { Wrench, FileText, Trash, Folder, Download, Search, Copy, Check, Terminal, Pencil, Plus, Chevron, Brain, Calculator, ListChecks, Users, Chat } from '../ui/icons.jsx';
 import { baseName, dirOf } from '../../lib/files.js';
+import { extOf } from '../../lib/artifacts.js';
+import FileChip from '../artifacts/FileChip.jsx';
 import { t, tk } from '../../i18n.jsx';
 import { safeUrl } from '../../lib/safeurl.js';
 
@@ -39,11 +41,19 @@ const VERBS = {
   'memory:update': [tk('Updating a memory'), tk('Updated a memory')],
   'memory:delete': [tk('Forgetting a memory'), tk('Forgot a memory')],
   todo: [tk('Updating the plan'), tk('Updated the plan')],
-  ask_user: [tk('Asking you'), tk('Asked you')]
+  ask_user: [tk('Asking you'), tk('Asked you')],
+  artifact_read: [tk('Reading'), tk('Read')],
+  project_files: [tk('Listing project documents'), tk('Listed project documents')],
+  project_read: [tk('Reading'), tk('Read')],
+  project_search: [tk('Searching the project'), tk('Searched the project')],
+  project_chats: [tk('Searching project chats'), tk('Searched project chats')],
+  'project_chats:view': [tk('Reading a project chat'), tk('Read a project chat')],
+  project_notes: [tk('Updating project notes'), tk('Updated project notes')]
 };
 function verbsFor(call) {
   const tool = call.tool;
-  const key = tool === 'memory' && VERBS['memory:' + call.action] ? 'memory:' + call.action : tool;
+  const key = tool === 'memory' && VERBS['memory:' + call.action] ? 'memory:' + call.action
+    : tool === 'project_chats' && call.chat_id ? 'project_chats:view' : tool;
   if (VERBS[key]) return VERBS[key].map(v => t(v));
   if (String(tool || '').startsWith('mcp_')) {
     const short = String(tool).split('_').slice(2).join(' ') || t('connector');
@@ -86,6 +96,11 @@ function iconFor(tool) {
   if (tool === 'consult_model') return Users;
   if (tool === 'create_file') return Plus;
   if (tool === 'copy_file') return Copy;
+  if (tool === 'project_search') return Search;
+  if (tool === 'project_read' || tool === 'artifact_read') return FileText;
+  if (tool === 'project_files') return Folder;
+  if (tool === 'project_chats') return Chat;
+  if (tool === 'project_notes') return Pencil;
   if (tool === 'str_replace' || tool === 'rename_file' || tool === 'move_file') return Pencil;
   return Wrench;
 }
@@ -114,7 +129,11 @@ function targetOf(call) {
       return call.path && call.new_path
         ? { kind: 'move', from: call.path, to: call.new_path }
         : (call.path || call.new_path ? { kind: 'path', path: call.path || call.new_path } : null);
-    case 'search': case 'mb_search': case 'chat_search': case 'recall': return q(call.query);
+    case 'search': case 'mb_search': case 'chat_search': case 'recall': case 'project_search': return q(call.query);
+    case 'project_chats': return call.chat_id ? null : q(call.query);
+    case 'project_notes': return q(call.text);
+    case 'project_files': return null;
+    case 'artifact_read': return call.name ? { kind: 'path', path: call.name } : null;
     case 'find': return q(call.pattern || call.query);
     case 'skill_view': return call.name ? { kind: 'text', text: call.name } : null;
     case 'memory': return q(call.text);
@@ -151,7 +170,10 @@ function resultNote(call, res) {
     case 'list_files': return res.files ? plural(res.files.length, '{n} file', '{n} files') : null;
     case 'find': return res.count != null ? plural(res.count, '{n} file', '{n} files') : null;
     case 'search': return res.count != null ? plural(res.count, '{n} match', '{n} matches') : null;
-    case 'mb_search': return res.count != null ? plural(res.count, '{n} match', '{n} matches') : null;
+    case 'mb_search': case 'project_search': return res.count != null ? plural(res.count, '{n} match', '{n} matches') : null;
+    case 'project_files': return res.count != null ? plural(res.count, '{n} document', '{n} documents') : null;
+    case 'project_read': return res.lines ? plural(res.lines, '{n} line', '{n} lines') : null;
+    case 'project_chats': return res.title ? `"${res.title}"` : res.count != null ? plural(res.count, '{n} match', '{n} matches') : null;
     case 'mb_view': return res.total != null ? plural(res.total, '{n} line', '{n} lines') : null;
     case 'chat_search': case 'recall': return res.count != null ? plural(res.count, '{n} match', '{n} matches') : null;
     case 'chat_view': return res.title ? `"${res.title}"` : null;
@@ -270,6 +292,29 @@ function FileCard({ call, result }) {
   return <ToolLine call={call} result={result} diff={diff} note={unchanged ? t('unchanged') : null} />;
 }
 
+function ArtifactCard({ call, result }) {
+  const pending = !result;
+  const failed = result && !result.ok;
+  const name = (result && result.name) || call.path || call.partialPath || call.name || '';
+  const edit = call.tool === 'artifact_edit';
+  let status;
+  if (failed) status = result.error;
+  else if (pending) status = edit ? t('Editing…') : t('Writing…');
+  else if (result.unchanged) status = t('Unchanged');
+  else status = (edit ? t('Edited') : result.v > 1 ? t('Rewritten') : t('Created')) + (result.v ? ' · ' + t('version {v}', { v: result.v }) : '');
+  return (
+    <button type="button" className={'tool-artifact' + (pending ? ' pending' : '') + (failed ? ' err' : '')}
+      disabled={!name} onClick={() => openArtifact(name)} aria-label={name ? t('Open {name}', { name }) : undefined}>
+      <FileChip ext={extOf(name)} size="md" />
+      <span className="ta-body">
+        <span className="ta-name">{name ? baseName(name) : <NamePending />}</span>
+        <span className="ta-sub">{status}</span>
+      </span>
+      {pending ? <span className="tc-dots"><i /><i /><i /></span> : !failed && <span className="ta-open">{t('Open')}</span>}
+    </button>
+  );
+}
+
 function ChipCard({ call, result }) {
   return <ToolLine call={call} result={result} note={resultNote(call, result)} />;
 }
@@ -366,6 +411,7 @@ function ToolCard({ call, result }) {
   if (c.tool === 'web_search') return <WebSearchCard call={c} result={result} />;
   if (c.tool === 'bash') return <BashCard call={c} result={result} />;
   if (c.tool === 'consult_model') return <ConsultCard call={c} result={result} />;
+  if (c.tool === 'artifact' || c.tool === 'artifact_edit') return <ArtifactCard call={c} result={result} />;
   if (FILE_TOOLS.has(c.tool)) return <FileCard call={c} result={result} />;
   return <ChipCard call={c} result={result} />;
 }

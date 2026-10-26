@@ -76,9 +76,11 @@ test('revealSpeedMs clamps anything unreadable to the default interval', () => {
   assert.equal(revealSpeedMs(9999), 100);
 });
 
-test('isFileWrite only claims the two tools that actually write a file', () => {
+test('isFileWrite only claims the tools that actually write a file', () => {
   assert.equal(isFileWrite({ tool: 'create_file', path: 'a.py' }), true);
   assert.equal(isFileWrite({ tool: 'str_replace', path: 'a.py' }), true);
+  assert.equal(isFileWrite({ tool: 'artifact', path: 'plan.md' }), true, 'an artifact streams into its panel');
+  assert.equal(isFileWrite({ tool: 'artifact_read', path: 'plan.md' }), false);
   assert.equal(isFileWrite({ tool: 'bash', path: 'a.py' }), false);
   assert.equal(isFileWrite({ tool: 'create_file' }), false, 'no path yet, nothing to preview');
   assert.equal(isFileWrite(null), false);
@@ -111,6 +113,8 @@ test('supersededFile commits a finished create_file exactly once, and never a st
   assert.deepEqual(supersededFile(prev, null), { path: 'a.py', text: 'body' });
   assert.equal(supersededFile(prev, { tool: 'create_file', path: 'a.py', content: 'body+' }), null);
   assert.equal(supersededFile({ tool: 'str_replace', path: 'a.py', content: 'x' }, null), null);
+  assert.deepEqual(supersededFile({ tool: 'artifact', path: 'plan.md', content: '# Plan' }, null), { path: 'plan.md', text: '# Plan' });
+  assert.equal(supersededFile({ tool: 'artifact_edit', path: 'plan.md', content: 'x' }, null), null);
   assert.equal(supersededFile(null, null), null);
 });
 

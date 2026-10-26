@@ -2,6 +2,7 @@ import { db, uid, now, tx } from '../../db.js';
 import { authMiddleware } from '../../auth.js';
 import { stripToolSyntax } from '../../lib/history.js';
 import { ensureChain, childrenOf, activePath, leafUnder, sortedMsgs } from '../../lib/tree.js';
+import { copyArtifacts } from '../../lib/artifacts.js';
 
 const PREVIEW_MAX = 140;
 const CONTENT_MAX = 200000;
@@ -133,6 +134,7 @@ export default function registerMessageRoutes(app) {
       }
     });
     db.chats.update(nc.id, { active_leaf: leaf });
+    if (nc.mode !== 'code') copyArtifacts(c.id, nc.id);
     res.json({ id: nc.id, title: nc.title, mode: nc.mode });
   });
 

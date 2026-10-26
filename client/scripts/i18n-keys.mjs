@@ -51,6 +51,8 @@ const TABLE_SCANS = [
   { file: 'lib/keybinds.js', re: /\b(?:label|group):\s*'((?:[^'\\]|\\.)*)'/g },
   { file: 'lib/playground.js', re: /\b(?:label|hint):\s*'((?:[^'\\]|\\.)*)'/g },
   { file: 'lib/presets.js', re: /\blabel:\s*'((?:[^'\\]|\\.)*)'/g },
+  { file: 'components/chat/ToolCard.jsx', re: /\bplural\([^,]+,\s*'((?:[^'\\]|\\.)*)'/g },
+  { file: 'components/chat/ToolCard.jsx', re: /\bplural\([^,]+,\s*'(?:[^'\\]|\\.)*'\s*,\s*'((?:[^'\\]|\\.)*)'/g },
 ];
 
 function walk(dir, keys) {

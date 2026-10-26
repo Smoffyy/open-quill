@@ -233,7 +233,7 @@ export function initWs(server) {
 
         const sandboxLimit = sandboxCap(u);
         const codeMode = chat.mode === 'code';
-        const sandboxOn = codeMode || !!chat.project_id;
+        const sandboxOn = codeMode;
         const webSearchOn = (codeMode || !!msg.webSearch) && websearch.webSearchAvailable() && model.web_search_allowed !== 0;
         ensureChain(chat.id);
 

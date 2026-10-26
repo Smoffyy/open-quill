@@ -31,6 +31,8 @@ import { recordUsage } from '../budget.js';
 import { ensureChatSidecars } from '../uploads.js';
 import { forceAnswer, answerNudge, REASONING_CUT_NOTE } from '../forceanswer.js';
 import { runRecall, formatRecallResult, recallPayload } from '../recall.js';
+import { ARTIFACT_TOOLS, runArtifactTool, artifactPayload, formatArtifactResult, listArtifacts } from '../artifacts.js';
+import { PROJECT_TOOLS, runProjectTool, projectPayload, formatProjectResult } from '../projecttools.js';
 
 const MAX_STEERS = 6;
 const SAVE_EVERY_MS = 2000;
@@ -175,6 +177,17 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       if (!chatSearchOn) return null;
       const r = runChatSearchTool(chat.user_id, chat.id, call);
       return { payload: chatSearchPayload(call, r), formatted: formatChatSearchResult(call, r), hide: false };
+    }
+    if (ARTIFACT_TOOLS.has(call.tool)) {
+      if (!flags.artifactsOn) return null;
+      const r = runArtifactTool(chat.id, call);
+      if (r.ok && call.tool !== 'artifact_read') safeSend(JSON.stringify({ type: 'files', chatId: chat.id, files: listArtifacts(chat.id) }));
+      return { payload: artifactPayload(call, r), formatted: formatArtifactResult(call, r), hide: false };
+    }
+    if (PROJECT_TOOLS.has(call.tool)) {
+      if (!flags.projectOn) return null;
+      const r = await runProjectTool(chat, call);
+      return { payload: projectPayload(call, r), formatted: formatProjectResult(call, r), hide: false };
     }
     if (call.tool === 'recall') {
       if (!flags.recallOn) return null;
@@ -577,7 +590,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
               previewAt = at;
               const live = livePreview(e.name, e.argsText);
               if (!live || !live.tool) return;
-              const isFile = (live.tool === 'create_file' || live.tool === 'str_replace') && live.path;
+              const isFile = (live.tool === 'create_file' || live.tool === 'str_replace' || live.tool === 'artifact' || live.tool === 'artifact_edit') && live.path;
               if (isFile) {
                 const key = e.index + ':' + live.tool + ':' + live.path + ':' + (live.oldStr || '');
                 if (key !== liveState.key) {

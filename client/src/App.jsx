@@ -41,6 +41,7 @@ import ModelPickerSlot from './components/composer/ModelPickerSlot.jsx';
 import CallPanel from './components/chat/CallPanel.jsx';
 import ChatsOverview from './components/pages/ChatsOverview.jsx';
 import ArtifactsLibrary from './components/artifacts/ArtifactsLibrary.jsx';
+import ChatArtifacts from './components/artifacts/ChatArtifacts.jsx';
 import ScheduledTasks from './components/pages/ScheduledTasks.jsx';
 import Tip from './components/ui/Tip.jsx';
 import ProjectsPanel from './components/pages/ProjectsPanel.jsx';
@@ -83,7 +84,7 @@ import { collectTags } from './lib/chattags.js';
 import { readUnread, writeUnread, addUnread, removeUnread, shouldNotify, notifyPermission, showNotification, titleWithUnread, notify, dismissNotice } from './lib/notify.js';
 import { askConfirm } from './lib/confirm.js';
 import { copyText } from './lib/clipboard.js';
-import { Down, Compact, Ghost, Search, Menu, Sliders, X, Fork, Panel, Copy, TextIcon, Expand } from './components/ui/icons.jsx';
+import { Down, Compact, Ghost, Search, Menu, Sliders, X, Fork, Panel, Copy, TextIcon, Expand, Artifact } from './components/ui/icons.jsx';
 import { setCustomFavicon } from './lib/favicon.js';
 import BrandMark from './components/ui/BrandMark.jsx';
 import { SKELETON_DELAY } from './lib/skeleton.js';
@@ -356,6 +357,7 @@ export default function App() {
     return () => clearTimeout(id);
   }, [callOpen, callRender]);
   const [artifactFocus, setArtifactFocus] = useState(null);
+  const [artPanel, setArtPanel] = useState(false);
   const [incognito, setIncognito] = useState(false);
   const [incognitoGreeting, setIncognitoGreeting] = useState(tk('Greetings, whoever you are'));
   const [chatsOverview, setChatsOverview] = useState(false);
@@ -657,11 +659,17 @@ export default function App() {
     setCodePanel(true);
     setArtifactFocus(f => ({ path: p, n: (f?.n || 0) + 1 }));
   }, []);
+  const openChatArtifact = useCallback((p) => {
+    if (!activeIdRef.current) return;
+    setArtPanel(true);
+    if (p) setArtifactFocus(f => ({ path: p, n: (f?.n || 0) + 1 }));
+  }, []);
   useEffect(() => {
-    const h = (e) => { if (codeModeRef.current) openCodeFile(e.detail?.path); };
+    const h = (e) => { if (codeModeRef.current) openCodeFile(e.detail?.path); else openChatArtifact(e.detail?.path); };
     window.addEventListener('oq-open-file', h);
     return () => window.removeEventListener('oq-open-file', h);
-  }, [openCodeFile]);
+  }, [openCodeFile, openChatArtifact]);
+  useEffect(() => { if (!codeMode && liveFile?.path) setArtPanel(true); }, [codeMode, liveFile?.path]);
   useKeybinds(user, kbHandlers, setChordHint);
   useEffect(() => {
     const m = models.find(x => x.id === currentId);
@@ -1061,7 +1069,7 @@ export default function App() {
   function resetChatView() {
     setPlanDismissed(null);
     setFiles([]); setPendingFiles({}); setHasSummary(false);
-    clearLive(); setArtifactFocus(null);
+    clearLive(); setArtifactFocus(null); setArtPanel(false);
     turnMeta.reset();
   }
 
@@ -1117,7 +1125,7 @@ export default function App() {
     setMobileDrawer(false);
     if (incognito) setIncognito(false);
     setShowProjects(false);
-    if (id !== activeIdRef.current) { clearLive(); setArtifactFocus(null); turnMeta.reset(); }
+    if (id !== activeIdRef.current) { clearLive(); setArtifactFocus(null); setArtPanel(false); turnMeta.reset(); }
     const known = chats.find(c => c.id === id);
     const isCode = known ? known.mode === 'code' : codeModeRef.current;
     setCodeMode(isCode);
@@ -1161,7 +1169,7 @@ export default function App() {
       applyLastModel(messages);
       cacheChat(id, { chat, messages });
       if (!cached) pinToBottom(false, 30);
-      try { const f = await api.get('/api/chats/' + id + '/files'); if (seq !== openSeq.current || activeIdRef.current !== id) { cacheChat(id, { files: f.files || [] }); return; } setFiles(f.files || []); cacheChat(id, { files: f.files || [] }); }
+      try { const f = await api.get('/api/chats/' + id + (isCode ? '/files' : '/artifacts')); if (seq !== openSeq.current || activeIdRef.current !== id) { cacheChat(id, { files: f.files || [] }); return; } setFiles(f.files || []); cacheChat(id, { files: f.files || [] }); }
       catch { if (seq === openSeq.current && activeIdRef.current === id && !cached) setFiles([]); }
     } catch { if (seq === openSeq.current) { armSkeleton(false); releaseThread(); if (!cached) { setActiveId(null); setMessages([]); history.replaceState({}, '', codeModeRef.current ? '/code' : '/'); } } }
   }
@@ -1379,6 +1387,20 @@ export default function App() {
     if (full && full.name !== currentProject.name) setCurrentProject(full);
   }, [projects, currentProject]);
 
+  async function openProjectInCode(project) {
+    const job = notify(t('Copying {name} into a Code session', { name: project.name }), { progress: true });
+    try {
+      const c = await api.post('/api/projects/' + project.id + '/code', {});
+      setChats(cs => [{ id: c.id, title: c.title, updated_at: c.updated_at, starred: false, mode: 'code' }, ...cs]);
+      setShowProjects(false); setProjectOpenId(null);
+      setLibPage(null); setChatsOverview(false); setCallOpen(false);
+      modeViews.current.chat = { path: '/', overview: false };
+      codeModeRef.current = true;
+      openChat(c.id);
+      job.done(c.copied ? t('Opened in Code with a copy of the project files') : t('Opened in Code. The project has no files to copy yet.'));
+    } catch (e) { job.fail(e?.message || t('Could not open the project in Code.')); }
+  }
+
   function openProjectChat(chatId, project) {
     setShowProjects(false); setProjectOpenId(null);
     if (project) setCurrentProject(project);
@@ -1576,7 +1598,10 @@ export default function App() {
     stopGeneration: () => { if (!streaming && !queued) return false; stop(); },
     scrollBottom: () => pinToBottom(true),
     promptLedger: () => { if (!activeIdRef.current) return false; setLedgerPrompt(true); },
-    toggleArtifacts: () => { if (!codeMode || !activeId) return false; toggleCodePanel(); },
+    toggleArtifacts: () => {
+      if (!activeId || incognito) return false;
+      if (codeMode) toggleCodePanel(); else setArtPanel(o => !o);
+    },
     nextChat: () => stepChat(1),
     prevChat: () => stepChat(-1),
     findInChat: () => { if (!messagesRef.current.length) return false; setFindOpen(true); },
@@ -1740,8 +1765,10 @@ export default function App() {
               ? <ArtifactsLibrary onSearch={() => setShowSearch(true)} onNew={() => { setLibPage(null); newChat(); }}
                   onOpen={(a) => {
                     setLibPage(null);
+                    if (a.source === 'project') { openProjects(a.projectId); return; }
                     openChat(a.chatId);
-                    if (a.mode === 'code') { setCodePanel(true); setArtifactFocus({ path: a.path, n: Date.now() }); }
+                    if (a.source === 'code') setCodePanel(true); else setArtPanel(true);
+                    setArtifactFocus({ path: a.path, n: Date.now() });
                   }} />
               : <ScheduledTasks onSearch={() => setShowSearch(true)} onRunTask={runTask}
                   onOpenChat={(id) => { setLibPage(null); openChat(id); }}
@@ -1808,6 +1835,7 @@ export default function App() {
               actions={
               <TopbarActions
                 items={[
+                  activeId && (files.length > 0 || artPanel) && { id: 'artifacts', icon: <Artifact />, label: t('Artifacts'), active: artPanel, onClick: () => setArtPanel(o => !o) },
                   hasSummary && { id: 'summary', icon: <Compact />, label: t("Conversation memory"), onClick: () => setSummaryOpen(true) },
                   messages.length > 0 && { id: 'copyall', icon: <Copy />, label: t('Copy all'), onClick: () => copyConversation() },
                   user?.isAdmin && activeId && { id: 'ctl', icon: <Sliders />, label: t("Chat controls (admin)"), active: ctlOpen, onClick: () => setCtlOpen(o => !o) },
@@ -1868,6 +1896,11 @@ export default function App() {
         )}
       </div>
 
+      {!codeMode && artPanel && activeId && !incognito && !callOpen && (
+        <ChatArtifacts chatId={activeId} files={files} live={liveFile} pending={pendingFiles} focus={artifactFocus}
+          busy={streaming || queued} projectId={activeChat?.projectId || null} projects={projects}
+          onFilesChanged={setFiles} onClose={() => setArtPanel(false)} />
+      )}
       {ctlOpen && user?.isAdmin && !incognito && (
         <ChatControls chatId={activeId || null} initialParams={chatGenParams} initialOverride={chatSysOverride} onChange={(p, o) => { setChatGenParams(p && Object.keys(p).length ? p : null); setChatSysOverride(o || ''); }} onClose={() => setCtlOpen(false)} />
       )}
@@ -1901,7 +1934,7 @@ export default function App() {
       {showProjects && <ProjectsPanel openId={projectOpenId} composerProps={composerProps}
         startCreate={projectCreate} onCreateHandled={() => setProjectCreate(false)}
         onClose={() => { setShowProjects(false); setProjectOpenId(null); if (shouldResetPath('projects', location.pathname)) history.pushState({}, '', '/'); }}
-        onOpenChat={openProjectChat} onStartChat={startProjectChat}
+        onOpenChat={openProjectChat} onStartChat={startProjectChat} onOpenInCode={openProjectInCode}
         onOpenProject={(id) => { setProjectOpenId(id); history.replaceState({}, '', pathForProject(id)); loadProjects(); }} />}
       {showCredits && <DocModal title={t("Credits")} name="credits" serif onClose={() => setShowCredits(false)} />}
       {showLicense && <DocModal title={t("Licensing")} name="license" onClose={() => setShowLicense(false)} />}

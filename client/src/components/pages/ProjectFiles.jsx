@@ -214,7 +214,7 @@ export default function ProjectFiles({ projectId }) {
         onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDropping(false); }}
         onDrop={onDrop}>
         <div className="pj-card-head">
-          <span>{t('Files')}{files.length ? ` (${files.length})` : ''}</span>
+          <span>{t('Knowledge')}{files.length ? ` (${files.length})` : ''}</span>
           <span className="pj-card-tools">
             {files.length > 0 && (
               <a className="pj-card-add" href={base + '/zip'} data-tip={t('Download all')} aria-label={t('Download all')}><Download style={{ width: 15 }} /></a>
@@ -240,7 +240,7 @@ export default function ProjectFiles({ projectId }) {
         {files.length === 0 && !creating ? (
           <button type="button" className="pj-files-empty" onClick={() => fileInput.current?.click()}>
             <FileText style={{ width: 30 }} />
-            <span>{busy ? t('Uploading…') : t('Add any file. Every chat in this project shares this workspace and can read, edit and run what is in it.')}</span>
+            <span>{busy ? t('Uploading…') : t('Add documents, notes, PDFs or spreadsheets. Every chat in this project can search and read them, and only you can change them.')}</span>
             {!busy && <span className="pj-files-drop">{t('Or drop files and folders here.')}</span>}
           </button>
         ) : (

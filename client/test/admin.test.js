@@ -242,12 +242,13 @@ test('levels fold a pair of flags into one choice and back', () => {
 });
 
 test('usesTools only counts workspace features that are switched on', () => {
-  const none = { sandbox_allowed: 0, web_search_allowed: 1, chat_search_allowed: 1 };
+  const none = { artifacts_allowed: 0, web_search_allowed: 1, chat_search_allowed: 1 };
   assert.equal(usesTools(none), false);
   assert.equal(usesTools(none, { webSearch: true }), true);
   assert.equal(usesTools(none, { chatSearch: true }), true);
-  assert.equal(usesTools({}), true, 'the sandbox is on unless turned off');
-  assert.equal(usesTools({ sandbox_allowed: 0, end_chat_allowed: 1 }), true);
+  assert.equal(usesTools({}), true, 'artifacts are on unless turned off');
+  assert.equal(usesTools({ artifacts_allowed: 0, sandbox_allowed: 1 }), false, 'the sandbox belongs to Code, not to chats');
+  assert.equal(usesTools({ artifacts_allowed: 0, end_chat_allowed: 1 }), true);
 });
 
 const DOCS_MODELS = [
