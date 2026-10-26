@@ -151,3 +151,19 @@ test('the usage report is empty rather than broken with nothing in range', () =>
   assert.deepEqual(none.byModel, []);
   assert.deepEqual(none.byDay, []);
 });
+
+test('resolveModelOrDefault falls back to the default model, never to a disabled one', async () => {
+  const { resolveModelOrDefault } = await import('../lib/models.js');
+  const first = db.models.insert({ id: uid(), display_name: 'First', enabled: 1, sort_order: 0, is_default: 0 });
+  const chosen = db.models.insert({ id: uid(), display_name: 'Chosen default', enabled: 1, sort_order: 1, is_default: 1 });
+  const off = db.models.insert({ id: uid(), display_name: 'Switched off', enabled: 0, sort_order: 2, is_default: 0 });
+
+  assert.equal(resolveModelOrDefault('', true).id, chosen.id, 'no model picks the default, not the first in the list');
+  assert.equal(resolveModelOrDefault('gone', true).id, chosen.id, 'a deleted model falls back to the default');
+  assert.equal(resolveModelOrDefault(off.id, true).id, chosen.id, 'a disabled model is not used');
+  assert.equal(resolveModelOrDefault(first.id, true).id, first.id, 'an enabled model is used as asked');
+
+  db.models.update(chosen.id, { is_default: 0 });
+  assert.equal(resolveModelOrDefault('', true).id, first.id, 'with no default the first enabled model is used');
+  for (const m of [first, chosen, off]) db.models.removeById(m.id);
+});

@@ -3083,5 +3083,12 @@
   "Keep runs in one chat": "Garder les exécutions dans une conversation",
   "Each run continues the same chat, so the assistant can see what it said last time. Off, every run starts a new chat.": "Chaque exécution poursuit la même conversation, l'assistant voit donc ce qu'il a dit la dernière fois. Désactivé, chaque exécution démarre une nouvelle conversation.",
   "A paused task keeps its settings and only runs when you choose Run now.": "Une tâche en pause garde ses réglages et ne s'exécute que lorsque vous choisissez Exécuter maintenant.",
-  "Create task": "Créer la tâche"
+  "Create task": "Créer la tâche",
+  "The last scheduled run did not start: {reason}": "La dernière exécution planifiée n'a pas démarré : {reason}",
+  "This task is still running from last time.": "Cette tâche est encore en cours depuis la dernière fois.",
+  "No model is available to run this task.": "Aucun modèle n'est disponible pour exécuter cette tâche.",
+  "This router could not pick a model.": "Ce routeur n'a pas pu choisir de modèle.",
+  "This model is currently unavailable.": "Ce modèle est actuellement indisponible.",
+  "The monthly usage budget has been reached.": "Le budget d'utilisation mensuel est atteint.",
+  "The task could not start.": "La tâche n'a pas pu démarrer."
 }

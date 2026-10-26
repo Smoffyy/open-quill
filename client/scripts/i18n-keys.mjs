@@ -40,6 +40,9 @@ const EXTRA_KEYS = [
   'Frequency penalty', 'Max tokens', 'Context window', 'Seed', 'System prompt',
   'Extended-mode trigger', 'Standard-mode trigger',
   'Router', 'Unavailable',
+  'This task is still running from last time.', 'No model is available to run this task.',
+  'This router could not pick a model.', 'This model is currently unavailable.',
+  'The monthly usage budget has been reached.', 'The task could not start.',
 ];
 
 const TABLE_SCANS = [

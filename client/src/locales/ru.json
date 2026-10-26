@@ -3083,5 +3083,12 @@
   "Keep runs in one chat": "Все запуски в одном чате",
   "Each run continues the same chat, so the assistant can see what it said last time. Off, every run starts a new chat.": "Каждый запуск продолжает тот же чат, поэтому ассистент видит, что он сказал в прошлый раз. Если выключено, каждый запуск начинает новый чат.",
   "A paused task keeps its settings and only runs when you choose Run now.": "Приостановленная задача сохраняет настройки и запускается, только когда вы выбираете «Запустить сейчас».",
-  "Create task": "Создать задачу"
+  "Create task": "Создать задачу",
+  "The last scheduled run did not start: {reason}": "Последний запланированный запуск не начался: {reason}",
+  "This task is still running from last time.": "Эта задача ещё выполняется с прошлого раза.",
+  "No model is available to run this task.": "Нет доступной модели для запуска этой задачи.",
+  "This router could not pick a model.": "Этот маршрутизатор не смог выбрать модель.",
+  "This model is currently unavailable.": "Эта модель сейчас недоступна.",
+  "The monthly usage budget has been reached.": "Месячный бюджет использования исчерпан.",
+  "The task could not start.": "Не удалось запустить задачу."
 }

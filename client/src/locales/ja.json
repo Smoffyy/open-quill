@@ -3083,5 +3083,12 @@
   "Keep runs in one chat": "実行を1つのチャットにまとめる",
   "Each run continues the same chat, so the assistant can see what it said last time. Off, every run starts a new chat.": "実行のたびに同じチャットを続けるので、アシスタントは前回の内容を確認できます。オフの場合、毎回新しいチャットを開始します。",
   "A paused task keeps its settings and only runs when you choose Run now.": "一時停止したタスクは設定を保ち、「今すぐ実行」を選んだときだけ実行されます。",
-  "Create task": "タスクを作成"
+  "Create task": "タスクを作成",
+  "The last scheduled run did not start: {reason}": "前回の予定された実行は開始されませんでした：{reason}",
+  "This task is still running from last time.": "このタスクは前回の実行がまだ続いています。",
+  "No model is available to run this task.": "このタスクを実行できるモデルがありません。",
+  "This router could not pick a model.": "このルーターはモデルを選べませんでした。",
+  "This model is currently unavailable.": "このモデルは現在利用できません。",
+  "The monthly usage budget has been reached.": "月間の利用予算に達しました。",
+  "The task could not start.": "タスクを開始できませんでした。"
 }

@@ -41,7 +41,7 @@ Move a chat in or out with **Add to project** in its menu or in the composer's *
 - **Keep runs in one chat**: every run continues the same chat, so the assistant can see what it said last time, which suits a running journal or a lesson series that should not repeat. Off, every run starts a new chat.
 - **Active**: a paused task keeps its settings and only runs when you choose **Run now**.
 
-Each run's reply lands in a chat you can answer like any other. Each task in the list shows its schedule and its next and last run, and has buttons to open the latest result, **Run now**, pause or resume it, and delete it. Sort the list by next run or by creation date.
+Each run's reply lands in a chat you can answer like any other. Each task in the list shows its schedule, its next and last run and, when a scheduled run could not start (no model available, the budget reached, the previous run still going), the reason. It also has buttons to open the latest result, **Run now**, pause or resume it, and delete it. Sort the list by next run or by creation date.
 
 A task runs on the server, so it only fires while the server is running, at the server's local time; a run missed while it was off happens once when it starts again. Beyond web search, a run works from the model's own knowledge plus your memory, instructions and any tools or connectors you have set up. That suits routines such as a plan for the day, a short lesson, practice drills, meal plans, a weekly review or journaling prompts. A task that starts a new chat each time does not see earlier runs, so instructions that should vary from day to day can ask the model to use today's date.
 

@@ -3,6 +3,7 @@
   text-align: left; color: inherit; border-radius: 8px;
 }
 .sched-item-acts .switch { margin: 0 6px; }
+.sched-card-error { margin-top: 4px; font-size: 13px; line-height: 17px; color: var(--danger); font-family: var(--font-sans); }
 
 .task-ed { max-height: calc(100dvh - 40px); overflow: hidden auto; }
 .task-ed .set-row { padding: 10px 0; }

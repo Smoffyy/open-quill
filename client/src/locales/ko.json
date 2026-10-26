@@ -3083,5 +3083,12 @@
   "Keep runs in one chat": "실행을 한 채팅에 모으기",
   "Each run continues the same chat, so the assistant can see what it said last time. Off, every run starts a new chat.": "실행할 때마다 같은 채팅을 이어 가므로 어시스턴트가 지난번에 한 말을 볼 수 있습니다. 끄면 매번 새 채팅을 시작합니다.",
   "A paused task keeps its settings and only runs when you choose Run now.": "일시 중지된 작업은 설정을 유지하며 지금 실행을 선택할 때만 실행됩니다.",
-  "Create task": "작업 만들기"
+  "Create task": "작업 만들기",
+  "The last scheduled run did not start: {reason}": "마지막 예약 실행이 시작되지 않았습니다: {reason}",
+  "This task is still running from last time.": "이 작업은 지난번 실행이 아직 진행 중입니다.",
+  "No model is available to run this task.": "이 작업을 실행할 수 있는 모델이 없습니다.",
+  "This router could not pick a model.": "이 라우터가 모델을 고르지 못했습니다.",
+  "This model is currently unavailable.": "이 모델은 현재 사용할 수 없습니다.",
+  "The monthly usage budget has been reached.": "월간 사용 예산에 도달했습니다.",
+  "The task could not start.": "작업을 시작하지 못했습니다."
 }

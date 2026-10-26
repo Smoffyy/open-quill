@@ -365,7 +365,7 @@ export default function App() {
       const r = await api.post('/api/tasks/' + task.id + '/run', {});
       setLibPage(null);
       await openChat(r.chatId);
-    } catch (e) { notify(e?.message || t('Could not run the task.')); }
+    } catch (e) { notify(e?.message ? t(e.message) : t('Could not run the task.'), { kind: 'warn' }); }
   }, []);
   const sidebarCombo = React.useMemo(() => {
     const c = resolveKeybinds(user?.prefs).toggleSidebar;

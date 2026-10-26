@@ -3083,5 +3083,12 @@
   "Keep runs in one chat": "所有运行保留在同一个聊天中",
   "Each run continues the same chat, so the assistant can see what it said last time. Off, every run starts a new chat.": "每次运行都接着同一个聊天，助手可以看到上次说过的内容。关闭时，每次运行都会新建聊天。",
   "A paused task keeps its settings and only runs when you choose Run now.": "已暂停的任务会保留设置，只有在你选择“立即运行”时才会运行。",
-  "Create task": "创建任务"
+  "Create task": "创建任务",
+  "The last scheduled run did not start: {reason}": "上次计划运行未能开始：{reason}",
+  "This task is still running from last time.": "此任务上次的运行仍在进行中。",
+  "No model is available to run this task.": "没有可用于运行此任务的模型。",
+  "This router could not pick a model.": "此路由器无法选择模型。",
+  "This model is currently unavailable.": "此模型当前不可用。",
+  "The monthly usage budget has been reached.": "已达到每月使用预算。",
+  "The task could not start.": "任务无法启动。"
 }

@@ -169,10 +169,11 @@ export function resolveModel(modelId, isAdmin) {
 
 export function resolveModelOrDefault(modelId, isAdmin) {
   const m = resolveModel(modelId, isAdmin);
-  if (m) return m;
+  if (m && m.enabled) return m;
   const snap = getSetting('published_models', null);
   const pool = (!isAdmin && Array.isArray(snap)) ? snap : db.models.all();
-  return pool.filter(x => x.enabled).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))[0] || null;
+  const live = pool.filter(x => x.enabled).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+  return live.find(x => x.is_default) || live[0] || null;
 }
 
 export function roleLimit(key, isAdmin, fallback) {

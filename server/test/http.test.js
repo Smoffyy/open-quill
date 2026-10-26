@@ -869,6 +869,13 @@ test('scheduled tasks round-trip and normalise a hostile schedule', async () => 
   assert.equal(opts.json.reuseChat, false, 'only a real true turns an option on');
   assert.deepEqual(opts.json.schedule, { kind: 'weekly', hour: 7, minute: 15, days: [1, 3] });
   assert.ok([1, 3].includes(new Date(opts.json.nextRun).getDay()), 'the next run lands on a chosen day');
+  assert.equal(opts.json.lastError, '');
+
+  const interval = await browser('PATCH', `/api/tasks/${id}`, { body: { schedule: { kind: 'interval', everyMinutes: 120 } } });
+  const renamed = await browser('PATCH', `/api/tasks/${id}`, { body: { title: 'Renamed', schedule: { kind: 'interval', everyMinutes: 120 }, enabled: true } });
+  assert.equal(renamed.json.nextRun, interval.json.nextRun, 'saving without changing the schedule keeps the countdown');
+  const retimed = await browser('PATCH', `/api/tasks/${id}`, { body: { schedule: { kind: 'interval', everyMinutes: 60 } } });
+  assert.ok(retimed.json.nextRun < interval.json.nextRun, 'a new schedule moves the next run');
 
   const first = await browser('POST', `/api/tasks/${id}/run`);
   assert.equal(first.status, 200, first.text);
@@ -878,7 +885,7 @@ test('scheduled tasks round-trip and normalise a hostile schedule', async () => 
   for (let i = 0; i < 50; i++) {
     again = await browser('POST', `/api/tasks/${id}/run`);
     if (again.status === 200) break;
-    await new Promise(r => setTimeout(r, 100));
+    await new Promise(r => { setTimeout(r, 100); });
   }
   assert.equal(again.status, 200, again.text);
   assert.equal(again.json.chatId, first.json.chatId, 'a task that keeps one chat runs in its last chat again');

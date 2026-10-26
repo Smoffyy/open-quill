@@ -50,7 +50,7 @@ export function fireTask(task) {
 
   live.beginTurn(user.id, chat.id, model.id);
   const queueOn = getSetting('model_queue', '0') === '1';
-  runQueued(queueOn, model.id, () => {}, () => runCompletion(ws, state, send, chat, model, false, false, 0, webSearchOn, false))
+  runQueued(queueOn, model.id, () => send(JSON.stringify({ type: 'queued', chatId: chat.id })), () => runCompletion(ws, state, send, chat, model, false, false, 0, webSearchOn, false))
     .catch(err => console.error('[tasks] run failed for', task.id, err))
     .finally(() => live.endTurn(chat.id));
 
@@ -66,10 +66,12 @@ export function dueTasks(at = Date.now()) {
 export function runDueTasks() {
   const at = now();
   for (const task of dueTasks(at)) {
-    const r = fireTask(task);
+    let r;
+    try { r = fireTask(task); }
+    catch (err) { r = { error: err?.message || 'The task could not start.' }; }
+    const patch = { updated_at: at, next_run: nextRun(task.schedule, at), last_error: r.error || '' };
     if (r.error) console.warn('[tasks] could not run', task.id, '-', r.error);
-    const patch = { last_run: at, updated_at: at, next_run: nextRun(task.schedule, at) };
-    if (r.chatId) patch.last_chat_id = r.chatId;
+    else Object.assign(patch, { last_run: at, last_chat_id: r.chatId });
     db.tasks.update(task.id, patch);
   }
 }

@@ -20,6 +20,7 @@ function view(t) {
     nextRun: t.next_run || 0,
     lastRun: t.last_run || 0,
     lastChatId: t.last_chat_id || '',
+    lastError: t.last_error || '',
     created_at: t.created_at,
     updated_at: t.updated_at
   };
@@ -73,9 +74,10 @@ export default function registerTaskRoutes(app) {
   app.patch('/api/tasks/:id', authMiddleware, (req, res) => {
     const t = own(req, res); if (!t) return;
     const patch = { ...editable(req.body || {}), updated_at: now() };
-    const schedule = patch.schedule || t.schedule;
+    const schedule = patch.schedule || normalizeSchedule(t.schedule);
     const enabled = 'enabled' in patch ? patch.enabled : t.enabled;
-    patch.next_run = enabled ? nextRun(schedule, patch.updated_at) : 0;
+    const retimed = JSON.stringify(schedule) !== JSON.stringify(normalizeSchedule(t.schedule)) || enabled !== t.enabled;
+    if (retimed || !t.next_run) patch.next_run = enabled ? nextRun(schedule, patch.updated_at) : 0;
     res.json(view(db.tasks.update(t.id, patch)));
   });
 
@@ -90,7 +92,7 @@ export default function registerTaskRoutes(app) {
     const r = fireTask(t);
     if (r.error) return res.status(400).json({ error: r.error });
     const at = now();
-    const patch = { last_run: at, updated_at: at, next_run: t.enabled === 0 ? 0 : nextRun(t.schedule, at), last_chat_id: r.chatId };
+    const patch = { last_run: at, updated_at: at, next_run: t.enabled === 0 ? 0 : nextRun(t.schedule, at), last_chat_id: r.chatId, last_error: '' };
     res.json({ chatId: r.chatId, task: view(db.tasks.update(t.id, patch)) });
   });
 }

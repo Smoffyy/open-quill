@@ -126,6 +126,9 @@ export default function ScheduledTasks({ onSearch, onRunTask, onOpenChat, models
                   <span className="sched-card-title">{task.title}</span>
                   <span className="sched-card-desc">{task.prompt}</span>
                   <span className="sched-card-when"><Clock /> {runLine(task)}</span>
+                  {task.lastError && (
+                    <span className="sched-card-error">{t('The last scheduled run did not start: {reason}', { reason: t(task.lastError) })}</span>
+                  )}
                 </span>
               </button>
               <span className="sched-item-acts">
