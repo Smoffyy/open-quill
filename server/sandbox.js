@@ -7,16 +7,16 @@
 //   hostenv - what is actually installed on this host
 //   shell   - bash execution inside the workspace
 //   exec    - the model-facing tool dispatch table
-export { SANDBOX_ROOT, dirFor, wsKey, projectKey, isProjectKey } from './sandbox/paths.js';
+export { SANDBOX_ROOT, dirFor, wsKey, projectKey, isProjectKey, artifactKey } from './sandbox/paths.js';
 export { versionOf, listVersions, readVersion } from './sandbox/meta.js';
 export { extOf, isText, IGNORED_DIRS, isIgnoredDir, isIgnoredRel, isIgnoredPath } from './sandbox/ignore.js';
 export {
-  list, dirSize, remove, clearAll, readText, readBuffer, readHead, isViewableText, createFile, strReplace,
+  list, dirSize, remove, clearAll, readText, readBuffer, readHead, isViewableText, documentText, createFile, strReplace,
   insertLines, view, deleteFile, renameFile, copyFile, makeDir, search, findFiles,
   bundleZip, zipAll, extractZip, importBuffer
 } from './sandbox/files.js';
 export { zipBuffer } from './sandbox/zip.js';
-export { hostEnvInfo, primeHostEnv } from './sandbox/hostenv.js';
+export { hostEnvInfo, primeHostEnv, probeHostEnv } from './sandbox/hostenv.js';
 export { bash, winTranslate, childEnv } from './sandbox/shell.js';
 export { execTool, unknownToolError } from './sandbox/exec.js';
 export { screenCommand, normalizeRel } from './lib/sandboxguard.js';

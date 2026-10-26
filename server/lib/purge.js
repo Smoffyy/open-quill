@@ -2,6 +2,7 @@ import { db, tx } from '../db.js';
 import * as sandbox from '../sandbox.js';
 import { attachmentUrlsOf, purgeUnreferencedUploads } from './uploads.js';
 import { removeAll as removeProjectFiles } from './projectfiles.js';
+import { removeArtifacts } from './artifacts.js';
 import { killSessionSockets } from './ws/broadcast.js';
 import { stopTurn } from './ws/live.js';
 
@@ -12,6 +13,7 @@ export function purgeUserChats(userId) {
   for (const c of rows) {
     stopTurn(c.id);
     if (!c.project_id) { try { sandbox.remove(c.id); } catch {} }
+    removeArtifacts(c.id);
   }
   const urls = attachmentUrlsOf(chatIds);
   tx(() => {

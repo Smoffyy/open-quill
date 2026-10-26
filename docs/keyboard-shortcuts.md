@@ -1,6 +1,6 @@
-# Keyboard Shortcuts
+# Keyboard shortcuts
 
-These are the defaults. Every one except **Clear focus** can be changed under **Settings → Keybinds**. On macOS, `Ctrl` is `Cmd` and `Alt` is `Option`. Press `?` anywhere outside a text field to see the list in the app.
+These are the defaults. Change them under **Settings → Keybinds**. On macOS, `Ctrl` is `Cmd` and `Alt` is `Option`. Press `?` anywhere outside a text field to see the list in the app.
 
 ## General
 
@@ -12,17 +12,16 @@ These are the defaults. Every one except **Clear focus** can be changed under **
 | `Ctrl+Shift+S` | Toggle sidebar |
 | `Ctrl+,` | Open settings |
 | `Alt+I` | Toggle incognito |
-| `Alt+T` | Switch light / dark |
+| `Alt+T` | Switch light and dark |
 | `?` | Show shortcuts |
 
 ## Composer
 
 | Shortcut | Action |
 | --- | --- |
-| `/` | Focus the message bar |
+| `/` | Focus the message field |
 | `Ctrl+U` | Attach files |
 | `Alt+W` | Toggle web search |
-| `Alt+S` | Toggle sandbox |
 | `Ctrl+.` | Stop generating |
 
 ## In a conversation
@@ -33,9 +32,8 @@ These are the defaults. Every one except **Clear focus** can be changed under **
 | `B` | Branch map |
 | `J` / `K` | Next / previous message |
 | `Alt+↓` | Jump to latest |
-| `Alt+L` | Context ledger |
 | `Alt+P` | What gets sent |
-| `Alt+A` | Artifacts panel |
+| `Alt+A` | Files panel (Code sessions) |
 | `Alt+O` | Contents |
 | `Alt+F` | Focus mode |
 | `Alt+J` / `Alt+K` | Next / previous chat in the sidebar |
@@ -49,7 +47,7 @@ Move to a message with `J` or `K` first, then:
 | `C` | Copy |
 | `E` | Edit (your message) |
 | `R` | Retry (assistant) |
-| `Y` | Branch into new chat |
+| `Y` | Branch into a new chat |
 | `Esc` | Clear focus |
 
 Single-letter shortcuts never fire while you are typing in a field.
@@ -59,9 +57,10 @@ Single-letter shortcuts never fire while you are typing in a field.
 In **Settings → Keybinds**:
 
 - Press **Change** next to an action, then the keys you want. `Esc` cancels.
-- **Reset** one action, or **Reset all** to go back to the defaults.
-- **Preset** switches between the defaults and a **Vim flavoured** layout in one step. You can still change individual keys afterwards.
-- If two actions share keys, both are marked so you can fix it. Combinations the browser usually keeps for itself, such as `Ctrl+W`, are flagged too.
-- **Export** saves your changes as a file and **Import** loads them on another device or account.
+- **Reset** one action, or **Reset all** to return to the defaults.
+- **Preset** switches between the defaults and a Vim-style layout. You can still change single keys afterwards.
+- If two actions share a key, both are flagged. Keys the browser keeps for itself, such as `Ctrl+W`, are flagged too.
+- **Export** saves your changes to a file, and **Import** loads them on another device or account.
+- A shortcut can be two keys pressed one after the other. After the first key, a small menu lists what the second key does. The menu closes after about 1.6 seconds.
 
-Shortcuts that belong to a navigation feature (find, branch map, contents, message shortcuts) only work while that feature is on in **Settings → Interface → Navigation**. Turning the feature off removes its button and its shortcut together.
+Shortcuts for navigation features (find, branch map, contents and message shortcuts) work only while that feature is on under **Settings → Interface → Navigation**.

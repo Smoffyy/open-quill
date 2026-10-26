@@ -76,6 +76,23 @@ export function restoreVersion(ws, rel, v) {
   return { status: 200, body: { ok: true, v: sandbox.versionOf(ws, rel), restoredFrom: v, files: sandbox.list(ws) } };
 }
 
+export function freePath(ws, rel) {
+  const taken = new Set(sandbox.list(ws, { all: true }).map(f => f.path));
+  if (!taken.has(rel)) return rel;
+  const dot = rel.lastIndexOf('.');
+  const stem = dot > rel.lastIndexOf('/') ? rel.slice(0, dot) : rel;
+  const ext = stem === rel ? '' : rel.slice(dot);
+  for (let i = 2; ; i++) if (!taken.has(`${stem}-${i}${ext}`)) return `${stem}-${i}${ext}`;
+}
+
+export function copyFiles(from, to, cap = 0) {
+  let copied = 0;
+  for (const f of sandbox.list(from)) {
+    try { if (sandbox.importBuffer(to, f.path, sandbox.readBuffer(from, f.path), cap).ok) copied++; } catch {}
+  }
+  return copied;
+}
+
 export function saveText(ws, rel, text, baseV, cap) {
   if (typeof text !== 'string') return { status: 400, body: { error: 'text must be a string.' } };
   if (!exists(ws, rel)) return { status: 404, body: { error: 'not found' } };

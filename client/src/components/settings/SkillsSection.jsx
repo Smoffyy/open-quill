@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../../lib/api.js';
-import { toast } from '../../lib/toast.js';
+import { notify } from '../../lib/notify.js';
 import Markdown from '../chat/Markdown.jsx';
 import { Search, X, ChevDown, Chevron, Plus, Trash, Info, Wand, FileText, Upload, Eye, CodeTag, DotsV, Chat } from '../ui/icons.jsx';
 import { Switch } from '../ui/controls.jsx';
@@ -63,17 +63,17 @@ function SkillDetail({ skill, onBack, onChanged, onRemoved, onTry }) {
   const menuBtn = useRef(null);
 
   async function toggle(on) {
-    if (!skill.editable) { toast(t('Workspace skills are managed in the admin panel.')); return; }
+    if (!skill.editable) { notify(t('Workspace skills are managed in the admin panel.')); return; }
     setBusy(true);
     try { const s = await api.patch('/api/skills/' + skill.id, { enabled: on }); onChanged(s); }
-    catch { toast(t('Could not update the skill.')); }
+    catch { notify(t('Could not update the skill.')); }
     finally { setBusy(false); }
   }
 
   async function remove() {
     setMenu(false);
     try { await api.del('/api/skills/' + skill.id); onRemoved(skill); }
-    catch { toast(t('Could not remove the skill.')); }
+    catch { notify(t('Could not remove the skill.')); }
   }
 
   return (
@@ -86,7 +86,7 @@ function SkillDetail({ skill, onBack, onChanged, onRemoved, onTry }) {
           <div className="sk-detail-id">
             <div className="sk-detail-name">
               <span className="sk-detail-title">{skill.name}</span>
-              <span className="sk-detail-info" title={t('Details')} aria-label={t('Details')}><Info /></span>
+              <span className="sk-detail-info" data-tip={t('Details')} aria-label={t('Details')}><Info /></span>
             </div>
             <div className="sk-detail-by">{t('by {author}', { author: skill.author || t('You') })}</div>
           </div>
@@ -103,9 +103,9 @@ function SkillDetail({ skill, onBack, onChanged, onRemoved, onTry }) {
         <div className="sk-doc">
           <div className="sk-doc-toggle">
             <button className={'sk-doc-btn' + (view === 'preview' ? ' on' : '')} onClick={() => setView('preview')}
-              aria-label={t('Preview')} title={t('Preview')}><Eye /></button>
+              aria-label={t('Preview')} data-tip={t('Preview')}><Eye /></button>
             <button className={'sk-doc-btn' + (view === 'source' ? ' on' : '')} onClick={() => setView('source')}
-              aria-label={t('Source')} title={t('Source')}><CodeTag /></button>
+              aria-label={t('Source')} data-tip={t('Source')}><CodeTag /></button>
           </div>
           <div className="sk-doc-body">
             {view === 'preview'
@@ -196,7 +196,7 @@ function Directory({ installed, onClose, onInstall }) {
                   </div>
                   <button className="sk-card-add" disabled={have.has(s.name)}
                     aria-label={have.has(s.name) ? t('Already added') : t('Add skill')}
-                    title={have.has(s.name) ? t('Already added') : t('Add skill')}
+                    data-tip={have.has(s.name) ? t('Already added') : t('Add skill')}
                     onClick={() => onInstall(s)}>{have.has(s.name) ? <Chevron /> : <Plus />}</button>
                 </div>
               </li>
@@ -238,7 +238,7 @@ export default function SkillsSection({ onTrySkill, browse = false }) {
         : await api.patch('/api/skills/' + editing, draft);
       await load();
       setEditing(null); setOpenId(saved.id);
-    } catch (e) { toast(e?.message || t('Could not save the skill.')); }
+    } catch (e) { notify(e?.message || t('Could not save the skill.')); }
     finally { setSaving(false); }
   }
 
@@ -246,7 +246,7 @@ export default function SkillsSection({ onTrySkill, browse = false }) {
     try {
       await api.post('/api/skills', { name: starter.name, description: t(starter.description), body: starter.body, source: 'directory' });
       await load();
-    } catch (e) { toast(e?.message || t('Could not add the skill.')); }
+    } catch (e) { notify(e?.message || t('Could not add the skill.')); }
   }
 
   function pickAdd(kind) {
@@ -264,7 +264,7 @@ export default function SkillsSection({ onTrySkill, browse = false }) {
       const text = await f.text();
       await api.post('/api/skills', { file: text, name: f.name.replace(/\.(md|markdown|txt)$/i, '') });
       await load();
-    } catch (err) { toast(err?.message || t('Could not read that file.')); }
+    } catch (err) { notify(err?.message || t('Could not read that file.')); }
   }
 
   if (editing) {

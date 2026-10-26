@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../../../lib/api.js';
 import { t } from '../../../i18n.jsx';
-import { toast } from '../../../lib/toast.js';
+import { notify } from '../../../lib/notify.js';
 
 export function useMembers({ confirm }) {
   const [members, setMembers] = useState([]);
@@ -19,7 +19,7 @@ export function useMembers({ confirm }) {
       await api.patch('/api/admin/users/' + id, { role });
       setMembers(us => us.map(u => (u.id === id ? { ...u, role, isAdmin: role !== 'member' } : u)));
     } catch (e) {
-      toast(e?.message || t('The role could not be changed.'), { kind: 'error', icon: 'info' });
+      notify(e?.message || t('The role could not be changed.'), { kind: 'error' });
     }
   }, []);
 

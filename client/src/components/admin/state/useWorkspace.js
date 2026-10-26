@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api, TAB_ID } from '../../../lib/api.js';
 import { appFontId } from '../../../lib/prefs.js';
-import { toast } from '../../../lib/toast.js';
+import { notify } from '../../../lib/notify.js';
 import { t } from '../../../i18n.jsx';
 import { changedKeys, pick } from './history.js';
 
@@ -32,7 +32,7 @@ export function promptFeaturesOf(settings) {
 
 export const CONFIG_DEFAULTS = {
   appName: '', disclaimer: '', greetings: [''], appIcon: '', quickPrompts: [],
-  appFont: 'literata', uiPreset: 'anthropic', modelDocs: true, modelDocsConfig: null,
+  appFont: 'literata', modelDocs: true, modelDocsConfig: null,
   allowSignups: true, localOnly: true, egressLocalOnly: true, egressAllowWebSearch: true, egressAllowlist: []
 };
 
@@ -49,7 +49,6 @@ function configFrom(c) {
     appIcon: c.appIcon || '',
     quickPrompts: Array.isArray(c.quickPrompts) ? c.quickPrompts : [],
     appFont: appFontId(c.appFont),
-    uiPreset: c.uiPreset === 'openai' ? 'openai' : 'anthropic',
     modelDocs: c.modelDocs !== false,
     modelDocsConfig: c.modelDocsConfig || null,
     allowSignups: c.allowSignups !== false,
@@ -139,7 +138,7 @@ export function useWorkspace({ history } = {}) {
         await api.patch(URLS[lane], wire(lane, patch));
         saved.current[lane] = { ...saved.current[lane], ...patch };
       } catch (e) {
-        toast(e?.message || t('Your last change could not be saved. Edit the field again to retry.'), { kind: 'error', icon: 'info' });
+        notify(e?.message || t('Your last change could not be saved. Edit the field again to retry.'), { kind: 'error' });
       } finally { inflight.current--; }
     }, SAVE_DELAY);
   }, []);
@@ -162,7 +161,7 @@ export function useWorkspace({ history } = {}) {
       saved.current[lane] = nextSaved;
       quiet.current[lane] = next;
       (lane === 'settings' ? setSettings : setConfig)(next);
-      if (clash && !own) toast(t('Another admin changed a setting you are editing. Your edit is kept.'), { icon: 'info' });
+      if (clash && !own) notify(t('Another admin changed a setting you are editing. Your edit is kept.'), { icon: 'info' });
     }
     function onDraft(e) {
       const f = e.detail || {};
@@ -181,6 +180,12 @@ export function useWorkspace({ history } = {}) {
   }, [load]);
 
   const unsaved = useCallback(() => inflight.current > 0 || Object.values(timers.current).some(Boolean), []);
+
+  useEffect(() => {
+    const onHello = () => { if (!unsaved()) load(); };
+    window.addEventListener('oq-hello', onHello);
+    return () => window.removeEventListener('oq-hello', onHello);
+  }, [load, unsaved]);
 
   const set = useCallback((key, value) => setSettings(s => (s[key] === value ? s : { ...s, [key]: value })), []);
   const setCfg = useCallback((key, value) => setConfig(c => (c[key] === value ? c : { ...c, [key]: value })), []);

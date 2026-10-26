@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useId } from 'react';
 import { api } from '../../lib/api.js';
-import { toast } from '../../lib/toast.js';
+import { notify } from '../../lib/notify.js';
 import { askConfirm } from '../../lib/confirm.js';
 import { useDismiss } from '../../lib/dismiss.js';
 import { droppedFiles, pickedFiles } from '../../lib/dropfiles.js';
@@ -101,15 +101,15 @@ function FileTree({ node, prefix, depth, closed, renaming, onToggle, onOpen, onR
       continue;
     }
     rows.push(
-      <div key={'f:' + f.name} className="pj-row" style={{ paddingLeft: 8 + depth * 12 }} title={f.name}>
+      <div key={'f:' + f.name} className="pj-row" style={{ paddingLeft: 8 + depth * 12 }} data-tip={f.name}>
         <button type="button" className="pj-row-open" onClick={() => onOpen(f.name)}>
           <FileText className="pj-row-icon" style={{ width: 13 }} />
           <span className="pj-row-name">{f.base}</span>
           <span className="pj-row-meta">{fmtSize(f.size)}</span>
         </button>
         <span className="pj-row-actions">
-          <button type="button" className="ft-act" title={t('Rename')} aria-label={t('Rename {name}', { name: f.base })} onClick={() => onRename(f.name)}><Pencil /></button>
-          <button type="button" className="ft-act ft-del" title={t('Delete')} aria-label={t('Delete {name}', { name: f.base })} onClick={() => onRemove(f.name)}><X /></button>
+          <button type="button" className="ft-act" data-tip={t('Rename')} aria-label={t('Rename {name}', { name: f.base })} onClick={() => onRename(f.name)}><Pencil /></button>
+          <button type="button" className="ft-act ft-del" data-tip={t('Delete')} aria-label={t('Delete {name}', { name: f.base })} onClick={() => onRemove(f.name)}><X /></button>
         </span>
       </div>
     );
@@ -170,8 +170,8 @@ export default function ProjectFiles({ projectId }) {
       } catch { failed++; }
     }
     setBusy(false);
-    if (failed === 1) toast(firstError || t('Upload failed.'), { icon: 'info', kind: 'warn' });
-    else if (failed > 1) toast(t('{n} files could not be uploaded.', { n: failed }) + (firstError ? ' ' + firstError : ''), { icon: 'info', kind: 'warn' });
+    if (failed === 1) notify(firstError || t('Upload failed.'), { kind: 'warn' });
+    else if (failed > 1) notify(t('{n} files could not be uploaded.', { n: failed }) + (firstError ? ' ' + firstError : ''), { kind: 'warn' });
   }
 
   async function create(path) {
@@ -214,13 +214,13 @@ export default function ProjectFiles({ projectId }) {
         onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDropping(false); }}
         onDrop={onDrop}>
         <div className="pj-card-head">
-          <span>{t('Files')}{files.length ? ` (${files.length})` : ''}</span>
+          <span>{t('Knowledge')}{files.length ? ` (${files.length})` : ''}</span>
           <span className="pj-card-tools">
             {files.length > 0 && (
-              <a className="pj-card-add" href={base + '/zip'} title={t('Download all')} aria-label={t('Download all')}><Download style={{ width: 15 }} /></a>
+              <a className="pj-card-add" href={base + '/zip'} data-tip={t('Download all')} aria-label={t('Download all')}><Download style={{ width: 15 }} /></a>
             )}
             <span className="pj-menu-wrap" ref={menuRef}>
-              <button type="button" className="pj-card-add" disabled={busy} title={t('Add files')} aria-label={t('Add files')}
+              <button type="button" className="pj-card-add" disabled={busy} data-tip={t('Add files')} aria-label={t('Add files')}
                 aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(m => !m)}><Plus style={{ width: 16 }} /></button>
               {menu && (
                 <div className="pj-menu pj-files-menu" role="menu">
@@ -240,7 +240,7 @@ export default function ProjectFiles({ projectId }) {
         {files.length === 0 && !creating ? (
           <button type="button" className="pj-files-empty" onClick={() => fileInput.current?.click()}>
             <FileText style={{ width: 30 }} />
-            <span>{busy ? t('Uploading…') : t('Add any file. Every chat in this project shares this workspace and can read, edit and run what is in it.')}</span>
+            <span>{busy ? t('Uploading…') : t('Add documents, notes, PDFs or spreadsheets. Every chat in this project can search and read them, and only you can change them.')}</span>
             {!busy && <span className="pj-files-drop">{t('Or drop files and folders here.')}</span>}
           </button>
         ) : (

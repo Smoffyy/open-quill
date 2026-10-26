@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import { api } from '../../lib/api.js';
 import LibraryPage, { LibraryEmpty, LibraryGridSkeleton } from '../pages/LibraryPage.jsx';
 import { Plus, ChevDown, Paper } from '../ui/icons.jsx';
-import { t } from '../../i18n.jsx';
+import { t, tk } from '../../i18n.jsx';
 import { useSkeleton } from '../../lib/skeleton.js';
 
 const KB = 1024;
 const sizeLabel = (n) => (n >= KB * KB ? (n / (KB * KB)).toFixed(1) + ' MB' : n >= KB ? Math.round(n / KB) + ' KB' : n + ' B');
+const SOURCES = { chat: tk('Chat'), project: tk('Project'), code: tk('Code') };
 
 function ArtifactCard({ item, onOpen }) {
   return (
@@ -18,7 +19,7 @@ function ArtifactCard({ item, onOpen }) {
       </div>
       <div className="lib-card-foot">
         <span className="lib-card-title">{item.name}</span>
-        <span className="lib-card-meta">{item.chatTitle || t('Untitled')} · {sizeLabel(item.size)}</span>
+        <span className="lib-card-meta">{t(SOURCES[item.source] || SOURCES.chat)} · {item.chatTitle || t('Untitled')} · {sizeLabel(item.size)}</span>
       </div>
     </button>
   );

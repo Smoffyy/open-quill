@@ -16,6 +16,7 @@ export default function Tools() {
     { value: 'auto', label: t('On by default') }
   ];
   const extras = [
+    ['artifacts_allowed', t('Artifacts'), t('Lets the model write documents, pages, diagrams and scripts that open in a panel beside the chat, with versions the member can edit and download.')],
     ['skills_allowed', t('Skills'), t('Offers the skills defined under Tools.')],
     ['mcp_allowed', t('MCP tools'), t('Exposes tools from every enabled MCP server.')],
     ...(chatSearch ? [['chat_search_allowed', t('Past-chat search'), t('Lets the model search the member’s own earlier chats.')]] : []),
@@ -32,8 +33,7 @@ export default function Tools() {
       <Card title={t('Capabilities')} sub={t('What this model is allowed to do inside a chat.')}>
         <Rows>
           <Flag k="has_vision" label={t('Image input')} note={t('Off, image attachments are refused for this model.')} />
-          <Levels label={t('Sandbox tools')} level={LEVELS.sandbox} options={access}
-            note={t('Code execution and a per-chat filesystem.')} />
+          <Flag k="code_allowed" label={t('Available in Code')} note={t('Off, the model is greyed out in the Code model picker and cannot run Code sessions. Turn it off for models that are not reliable with tools.')} />
           {webSearch && (
             <Levels label={t('Web search')} level={LEVELS.web} options={access}
               note={t('Lets members search the web from this model.')} />

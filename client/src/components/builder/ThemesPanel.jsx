@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { t } from '../../i18n.jsx';
 import { api } from '../../lib/api.js';
 import { useTheme } from '../../lib/theme/store.jsx';
-import { toast } from '../../lib/toast.js';
+import { presetById } from '../../lib/presets.js';
+import { notify } from '../../lib/notify.js';
 import { Dialog, Confirm, Text } from './controls.jsx';
 import { Copy, Trash, Download, Upload, Pencil, Check, Clock, Refresh } from '../ui/icons.jsx';
 import { Skel, SkelRows } from '../ui/Skeleton.jsx';
@@ -32,7 +33,7 @@ export function useThemes() {
       if (done) done(r);
       return r;
     } catch (e) {
-      toast(e?.message || t('That did not work.'));
+      notify(e?.message || t('That did not work.'));
       return null;
     } finally { setBusy(false); }
   }, [load]);
@@ -77,7 +78,7 @@ export default function ThemesPanel({ compact }) {
       a.download = (name || 'theme').replace(/[^\w-]+/g, '-').toLowerCase() + '.theme.json';
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch { toast(t('That theme could not be exported.')); }
+    } catch { notify(t('That theme could not be exported.')); }
   };
 
   const onImport = async (e) => {
@@ -87,8 +88,8 @@ export default function ThemesPanel({ compact }) {
     try {
       const body = JSON.parse(await f.text());
       const r = await themes.importTheme(body);
-      if (r) toast(t('Imported “{name}”.', { name: r.name }));
-    } catch { toast(t('That file is not a theme export.')); }
+      if (r) notify(t('Imported “{name}”.', { name: r.name }));
+    } catch { notify(t('That file is not a theme export.')); }
   };
 
   return (
@@ -115,10 +116,10 @@ export default function ThemesPanel({ compact }) {
                   <b>{th.name}</b>
                   {th.builtin && <span className="bx-tag">{t('Preset')}</span>}
                   {active && <span className="bx-tag live">{t('Active')}</span>}
-                  {th.dirty && <span className="bx-tag" title={t('Changed since the last release')}>{t('edited')}</span>}
+                  {th.dirty && <span className="bx-tag" data-tip={t('Changed since the last release')}>{t('edited')}</span>}
                 </div>
                 <div className="bx-theme-meta">
-                  {th.note ? t(th.note) : t('Based on {preset}', { preset: th.basePreset === 'openai' ? 'OpenAI' : 'Anthropic' })}
+                  {th.note ? t(th.note) : t('Based on {preset}', { preset: t(presetById(th.basePreset).label) })}
                   {' · '}
                   {t('{n} customisations', { n: th.edits })}
                   {' · '}
@@ -129,26 +130,26 @@ export default function ThemesPanel({ compact }) {
                 {!active && (
                   <button type="button" className="bx-btn sm" onClick={() => themes.activate(th.id)}>{t('Use this')}</button>
                 )}
-                <button type="button" className="bx-icon" title={t('Rename')} aria-label={t('Rename')}
+                <button type="button" className="bx-icon" data-tip={t('Rename')} aria-label={t('Rename')}
                   onClick={() => setRenaming({ id: th.id, name: th.name })}><Pencil /></button>
-                <button type="button" className="bx-icon" title={t('Duplicate')} aria-label={t('Duplicate')}
+                <button type="button" className="bx-icon" data-tip={t('Duplicate')} aria-label={t('Duplicate')}
                   onClick={() => themes.create({ from: th.id, name: th.name + ' copy' })}><Copy /></button>
-                <button type="button" className="bx-icon" title={t('Version history')} aria-label={t('Version history')}
+                <button type="button" className="bx-icon" data-tip={t('Version history')} aria-label={t('Version history')}
                   onClick={() => setHistoryFor(th)}><Clock /></button>
-                <button type="button" className="bx-icon" title={t('Export')} aria-label={t('Export')}
+                <button type="button" className="bx-icon" data-tip={t('Export')} aria-label={t('Export')}
                   onClick={() => exportTheme(th.id, th.name)}><Download /></button>
-                <button type="button" className="bx-icon" title={t('Reset')} aria-label={t('Reset')}
+                <button type="button" className="bx-icon" data-tip={t('Reset')} aria-label={t('Reset')}
                   onClick={() => setAsk({
                     title: t('Reset “{name}”?', { name: th.name }),
                     message: th.builtin
                       ? t('This goes back to the {name} layout exactly as it ships. The current version is kept in history so you can undo this.', { name: th.name })
-                      : t('Every customisation in this theme goes back to the plain {preset} layout. The current version is kept in history so you can undo this.', { preset: th.basePreset === 'openai' ? 'OpenAI' : 'Anthropic' }),
+                      : t('Every customisation in this theme goes back to the plain {preset} layout. The current version is kept in history so you can undo this.', { preset: t(presetById(th.basePreset).label) }),
                     confirmLabel: t('Reset'),
                     danger: true,
                     onConfirm: () => themes.reset(th.id, 'preset')
                   })}><Refresh /></button>
                 {!th.builtin && (
-                  <button type="button" className="bx-icon danger" title={t('Delete')} aria-label={t('Delete')}
+                  <button type="button" className="bx-icon danger" data-tip={t('Delete')} aria-label={t('Delete')}
                     onClick={() => setAsk({
                       title: t('Delete “{name}”?', { name: th.name }),
                       message: t('This cannot be undone. Export it first if you might want it back.'),
@@ -227,13 +228,13 @@ export default function ThemesPanel({ compact }) {
                   <em>{fmt(h.ts)}</em>
                 </div>
                 <button type="button" className="bx-btn sm"
-                  onClick={() => { themes.restore(historyFor.id, i); setHistoryFor(null); toast(t('Restored.')); }}>
+                  onClick={() => { themes.restore(historyFor.id, i); setHistoryFor(null); notify(t('Restored.')); }}>
                   {t('Restore')}
                 </button>
               </li>
             ))}
           </ul>
-          <button type="button" className="bx-btn" onClick={() => { themes.snapshot(historyFor.id, t('manual save')); setHistoryFor(null); toast(t('Version saved.')); }}>
+          <button type="button" className="bx-btn" onClick={() => { themes.snapshot(historyFor.id, t('manual save')); setHistoryFor(null); notify(t('Version saved.')); }}>
             <Check /> {t('Save a version now')}
           </button>
         </Dialog>

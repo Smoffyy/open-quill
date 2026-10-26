@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../../lib/api.js';
-import { toast } from '../../lib/toast.js';
+import { notify } from '../../lib/notify.js';
 import { askConfirm } from '../../lib/confirm.js';
 import { t } from '../../i18n.jsx';
 import { useSkeleton } from '../../lib/skeleton.js';
 import { useFocusTrap } from '../../lib/focus.js';
 import CloseButton from '../ui/CloseButton.jsx';
+import { Check } from '../ui/icons.jsx';
 
 function timeAgo(ts) {
   const s = Math.floor((Date.now() - ts) / 1000);
@@ -101,7 +102,7 @@ export default function ChatsOverview({ onOpen, onClose, onChatsChanged }) {
     setSelected(new Set());
     setBusy(false);
     const n = ids.length;
-    toast(archived
+    notify(archived
       ? (n === 1 ? t('{n} chat archived.', { n }) : t('{n} chats archived.', { n }))
       : (n === 1 ? t('{n} chat restored.', { n }) : t('{n} chats restored.', { n })));
     onChatsChanged?.();
@@ -120,7 +121,7 @@ export default function ChatsOverview({ onOpen, onClose, onChatsChanged }) {
     setChats(cs => cs.filter(c => !selected.has(c.id)));
     setSelected(new Set());
     setBusy(false);
-    toast(ids.length === 1 ? t('{n} chat deleted.', { n: ids.length }) : t('{n} chats deleted.', { n: ids.length }));
+    notify(ids.length === 1 ? t('{n} chat deleted.', { n: ids.length }) : t('{n} chats deleted.', { n: ids.length }));
     onChatsChanged?.();
   }
 
@@ -161,7 +162,7 @@ export default function ChatsOverview({ onOpen, onClose, onChatsChanged }) {
           ))}
           {chats.map((c, i) => (
             <button key={c.id} className={'co-card' + (selecting && selected.has(c.id) ? ' selected' : '')} style={{ animationDelay: (i % 18) * 22 + 'ms' }} onClick={() => clickCard(c)}>
-              {selecting && <span className={'co-check' + (selected.has(c.id) ? ' on' : '')}>{selected.has(c.id) ? '✓' : ''}</span>}
+              {selecting && <span className={'co-check' + (selected.has(c.id) ? ' on' : '')}>{selected.has(c.id) && <Check strokeWidth="2.4" />}</span>}
               <div className="co-title">{c.starred ? '★ ' : ''}{c.ended ? '🔒 ' : ''}{c.title || t('New chat')}</div>
               {c.preview && <div className="co-preview">{c.preview}</div>}
               <div className="co-fade" />

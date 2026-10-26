@@ -64,8 +64,6 @@
   place-items: center;
   padding: var(--cp-5, 20px);
   background: rgba(0, 0, 0, .5);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
 }
 
 .cp {
@@ -441,6 +439,7 @@
   color: var(--cp-faint);
   margin-top: var(--cp-2);
 }
+.cp-logo-empty { margin: 0; font-size: 12px; line-height: 1; color: var(--cp-faint); }
 .cp-err { font-size: 12px; line-height: 1.5; color: var(--danger); margin-top: var(--cp-2); }
 
 /* A field whose control sits beside a button, e.g. an id with a copy action. */
@@ -801,8 +800,6 @@ code.cp-code {
   place-items: center;
   padding: var(--cp-5);
   background: rgba(0, 0, 0, .5);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
   font-family: var(--cp-ui);
   font-size: 13px;
   line-height: 1.5;

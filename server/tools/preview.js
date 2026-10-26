@@ -1,5 +1,6 @@
 import { extractPartial } from './partial.js';
 import { resolveToolName } from './aliases.js';
+import { artifactName } from '../lib/artifactname.js';
 
 const PREVIEW_TOOLS = new Set(['create_file', 'str_replace']);
 
@@ -13,6 +14,14 @@ export function livePreview(name, argsText) {
   // `path`: the UI can show what has arrived so far instead of a verb with no
   // object, while nothing downstream mistakes half a path for a real one.
   const partial = (v) => (v ? { partialPath: String(v).slice(0, 300) } : {});
+  if (tool === 'artifact' || tool === 'artifact_edit') {
+    const name = get('name');
+    if (!p.name || !p.name.closed || !name) return { tool, ...partial(name) };
+    const clean = artifactName(name);
+    const shown = clean.ok ? clean.name : String(name);
+    if (tool === 'artifact') return { tool, path: shown, content: String(get('content') ?? ''), oldStr: null };
+    return { tool, path: shown, content: String(get('new_str') ?? ''), oldStr: p.old_str && p.old_str.closed ? String(get('old_str')) : null };
+  }
   if (!PREVIEW_TOOLS.has(tool)) {
     const live = { tool };
     const path = get('path');

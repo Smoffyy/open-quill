@@ -10,7 +10,7 @@ import Inspector from '../admin/models/Inspector.jsx';
 import BrandMark from '../ui/BrandMark.jsx';
 import { X, Panel, Trash, Cube } from '../ui/icons.jsx';
 import { api } from '../../lib/api.js';
-import { toast } from '../../lib/toast.js';
+import { notify } from '../../lib/notify.js';
 import { useFocusTrap } from '../../lib/focus.js';
 import { t, tk } from '../../i18n.jsx';
 import {
@@ -73,7 +73,6 @@ function Workbench() {
   sessionRef.current = session;
 
   const running = busy.size > 0;
-  const preset = typeof document !== 'undefined' && document.documentElement.dataset.preset === 'openai' ? 'openai' : 'anthropic';
 
   useUndoKeys(scrimRef);
   useFocusTrap(scrimRef, (e) => {
@@ -131,7 +130,7 @@ function Workbench() {
     saveTimer.current = setTimeout(async () => {
       saveTimer.current = null;
       try { await api.put('/api/admin/playground/suites', { suites: suitesRef.current }); }
-      catch (e) { toast(e?.message || t('The test sets could not be saved.'), { kind: 'error', icon: 'info' }); }
+      catch (e) { notify(e?.message || t('The test sets could not be saved.'), { kind: 'error' }); }
     }, SAVE_DELAY);
   }, []);
 
@@ -328,7 +327,7 @@ function Workbench() {
             onAdd={(id, source) => patch(s => ({ lanes: addLane(s.lanes, id, source) }))}
             onReview={() => setReview(true)} />
           {mode === 'chat' ? (
-            <Conversation thread={session.thread} busy={busy} preset={preset} probes={PROBES}
+            <Conversation thread={session.thread} busy={busy} probes={PROBES}
               input={session.input} setInput={(input) => patch({ input })}
               role={session.role} setRole={(role) => patch({ role })}
               canRun={!!subjectRow && (!!session.input.trim() || session.thread.length > 0)}
@@ -342,7 +341,7 @@ function Workbench() {
               onEditReply={(id, i, text) => setTurn(id, x => ({ ...x, replies: x.replies.map((r, j) => (j === i ? { ...r, content: text } : r)) }))}
               onRequest={(replies, at) => setRequest({ replies, at })} />
           ) : (
-            <Suites suites={suites} suite={suite} rows={rows} lanes={session.lanes} busy={busy} preset={preset}
+            <Suites suites={suites} suite={suite} rows={rows} lanes={session.lanes} busy={busy}
               loaded={suitesLoaded} starter={PROBES}
               onPick={(id) => patch({ suiteId: id })}
               onCreate={createSuite}
@@ -390,7 +389,7 @@ function Frame({ scrimRef, workspace, center, acts, onClose, children }) {
           <div className="cp-top-spacer" />
           <div className="cp-top-acts">
             {acts}
-            <button type="button" className="cp-exit" onClick={onClose} title={t('Close')} aria-label={t('Close')}><X /></button>
+            <button type="button" className="cp-exit" onClick={onClose} data-tip={t('Close')} aria-label={t('Close')}><X /></button>
           </div>
         </header>
         {children}

@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { evaluate, runCalculator, formatNumber } from '../lib/calculator.js';
 import { applyMemoryOp, sanitizeMemories, legacyMemories, userMemoryOn, MEMORY_MAX_ITEMS, MEMORY_MAX_CHARS } from '../lib/memory.js';
-import { buildTools } from '../tools/index.js';
+import { buildTools, livePreview } from '../tools/index.js';
+import { artifactName } from '../lib/artifactname.js';
 
 test('calculator follows operator precedence and associativity', () => {
   assert.equal(evaluate('2 + 3 * 4'), 14);
@@ -214,4 +215,24 @@ test('a dismissed plan leaves the prompt, and a newer plan comes back', async ()
   assert.equal(latestTodos(thread).length, 2);
   assert.deepEqual(latestTodos(thread, { msg: 'a1', n: 1 }), []);
   assert.equal(latestTodos([...thread, { id: 'a2', role: 'assistant', content: rec(plan) }], { msg: 'a1', n: 1 }).length, 2);
+});
+
+test('artifact names are single files with a known type', () => {
+  assert.deepEqual(artifactName('trip plan'), { ok: true, name: 'trip-plan.md' }, 'spaces become dashes and a bare name is Markdown');
+  assert.equal(artifactName('Flow.MMD').name, 'Flow.MMD');
+  assert.equal(artifactName('café-menü.html').name, 'café-menü.html', 'letters outside ASCII are fine');
+  for (const bad of ['', 'notes/a.md', '..\\a.md', '.env', 'run.exe', 'a'.repeat(90) + '.md', 'what?.md']) assert.equal(artifactName(bad).ok, false, bad);
+});
+
+test('an artifact streams to the panel under the name it will be saved as', () => {
+  assert.deepEqual(livePreview('artifact', '{"name":"trip plan","content":"# Tr'), { tool: 'artifact', path: 'trip-plan.md', content: '# Tr', oldStr: null });
+  assert.deepEqual(livePreview('artifact', '{"name":"trip'), { tool: 'artifact', partialPath: 'trip' }, 'half a name is never a path');
+  assert.equal(livePreview('artifact_edit', '{"name":"a.md","old_str":"x","new_str":"y').oldStr, 'x');
+});
+
+test('project and artifact tools are offered only when their chat allows them', () => {
+  const names = (o) => buildTools(o).map(s => s.function.name);
+  assert.deepEqual(names({ projectOn: true }), ['project_files', 'project_read', 'project_search', 'project_chats', 'project_notes']);
+  assert.deepEqual(names({ artifactsOn: true }), ['artifact', 'artifact_edit', 'artifact_read']);
+  assert.deepEqual(names({}), []);
 });

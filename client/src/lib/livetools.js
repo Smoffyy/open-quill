@@ -14,9 +14,12 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 // and re-renders the whole thread for nothing.
 export const EMPTY_CALLS = Object.freeze([]);
 
-// Only two tools write a file, and only those get the live preview.
+const FILE_WRITES = new Set(['create_file', 'str_replace', 'artifact', 'artifact_edit']);
+const WHOLE_WRITES = new Set(['create_file', 'artifact']);
+
+// Only these tools write a file (an artifact is a file too), and only those get the live preview.
 export function isFileWrite(live) {
-  return !!(live && live.path && (live.tool === 'create_file' || live.tool === 'str_replace'));
+  return !!(live && live.path && FILE_WRITES.has(live.tool));
 }
 
 export function fileFrom(live) {
@@ -35,7 +38,7 @@ export function mergeCall(rows, index, call) {
 // Its text moves to the pending set so the artifacts list does not blink empty
 // between the last delta and the server's `files` frame.
 export function supersededFile(prev, live) {
-  if (!prev || !prev.path || prev.tool !== 'create_file') return null;
+  if (!prev || !prev.path || !WHOLE_WRITES.has(prev.tool)) return null;
   if (live && live.path === prev.path) return null;
   return { path: prev.path, text: prev.content || '' };
 }

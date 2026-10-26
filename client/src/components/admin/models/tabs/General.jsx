@@ -1,9 +1,63 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../../../lib/api.js';
 import { useAdmin } from '../../store.jsx';
-import { Card, Rows, Fields, Btn, Note } from '../../ui.jsx';
+import { Card, Rows, Fields, Btn, Note, KV } from '../../ui.jsx';
 import { useEditor, When, TextField, NumberField, Flag, Choice, LongText } from '../bind.jsx';
 import { t } from '../../../../i18n.jsx';
+import { presetPatch, presetApplied, reasoningSummary } from '../../../../lib/modelcatalog.js';
+import { fmtTokens } from '../../../../lib/modeldocs.js';
+
+function Capabilities() {
+  const { single, edit } = useEditor();
+  const [found, setFound] = useState(undefined);
+  const name = (single?.internal_name || '').trim();
+  const provider = single?.provider_id || '';
+
+  useEffect(() => {
+    let alive = true;
+    setFound(undefined);
+    if (!name) return undefined;
+    const q = '?provider_id=' + encodeURIComponent(provider) + '&internal_name=' + encodeURIComponent(name);
+    api.get('/api/admin/models/recommended' + q)
+      .then(r => { if (alive) setFound(r.preset || null); }).catch(() => { if (alive) setFound(null); });
+    return () => { alive = false; };
+  }, [name, provider]);
+
+  if (found === undefined || !name) return null;
+  if (!found) {
+    return (
+      <Card title={t('What this model supports')}>
+        <Note>{t('This model id is not in the built-in list, so nothing was set up for it. Add its controls under Request controls if it needs any.')}</Note>
+      </Card>
+    );
+  }
+  const s = found.summary;
+  const kind = reasoningSummary(s);
+  const reasoning = kind === 'switch' ? t('On/off switch for members')
+    : kind === 'builtin' ? t('Always on')
+      : kind ? t('Effort from {range}', { range: kind }) : t('No');
+  const applied = presetApplied(single, found);
+  return (
+    <Card title={t('What this model supports')}
+      sub={found.source === 'listing' ? t("Read from the provider's model list.") : t('Recognised from the model id.')}>
+      <KV items={[
+        [t('Reasoning'), reasoning],
+        [t('Image input'), s.vision ? t('yes') : t('no')],
+        [t('Context window'), s.ctx ? fmtTokens(s.ctx) + ' ' + t('tokens') : t('reported by the provider')]
+      ]} />
+      {applied
+        ? <p className="cp-note-line">{t('This model uses these settings. Members get the matching controls in the model picker.')}</p>
+        : (
+          <Note>
+            {t('Its current settings differ from what it supports. Applying replaces its request controls, image input and thinking setting.')}
+            <div className="cp-acts mc-note-acts">
+              <Btn size="sm" kind="primary" onClick={() => edit(presetPatch(found))}>{t('Use these settings')}</Btn>
+            </div>
+          </Note>
+        )}
+    </Card>
+  );
+}
 
 function Preset() {
   const { single, edit } = useEditor();
@@ -35,7 +89,7 @@ function Preset() {
 export default function General() {
   const { catalog } = useAdmin();
   const { providers, providerTypes } = catalog;
-  const { many, single, models } = useEditor();
+  const { many, single, models, simple } = useEditor();
   const answers = models.some(m => m.kind !== 'router');
 
   return (
@@ -58,6 +112,8 @@ export default function General() {
           <TextField k="description" label={t('Subtitle')} placeholder={t('For complex tasks')} hint={t('One line under the name in the picker.')} />
         </Fields>
       </Card>
+
+      {simple && single && !many && <Capabilities />}
 
       <Card title={t('Availability')}>
         <Rows>

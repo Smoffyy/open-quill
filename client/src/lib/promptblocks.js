@@ -7,6 +7,9 @@ const USER_MEMORY = `Things you remember about this user from earlier conversati
 const PROJECT_INSTRUCTIONS = `This conversation belongs to a project. Follow the project's instructions:
 {{projectInstructions}}`;
 
+const PROJECT_NOTES = `Shared notes for this project, kept across all of its chats and written by you and the user. Treat them as established context:
+{{projectNotes}}`;
+
 const CHAT_INSTRUCTIONS = `Instructions for this conversation:
 {{chatInstructions}}`;
 
@@ -117,6 +120,25 @@ If a task genuinely needs something outside the workspace, say so plainly in you
 ---
 REMINDER: the workspace listing above is the current truth. Edit those files with \`str_replace\`, using relative paths. Real tool calls only: no pasted files, no invented output. Keep going until the task is done.`;
 
+const PROJECT = `This conversation is part of the project "{{projectName}}". A project keeps shared context across many chats: its instructions, a knowledge base of documents, shared notes and the project's other conversations.
+
+- **Knowledge.** The user added the documents listed below to the project. Treat them as the main source for anything they cover: find the relevant part with \`project_search\` and read it with \`project_read\` before answering, and say which document you relied on. PDFs and Office documents are read as text. You can read these documents but never change them; the user manages them on the project page. \`project_files\` lists them again.
+- **Earlier chats.** \`project_chats\` searches this project's other conversations (pass \`query\`) or reads one (pass \`chat_id\`). Use it when the user refers to something discussed before instead of saying you do not remember.
+- **Notes.** \`project_notes\` edits a shared notes document that every chat in this project has in its context. When something is decided, learned or left open that a future chat should know, \`append\` one short entry: a decision and its reason, a fact about the work, an open question. Use \`replace\` only to reorganize or condense the whole document, keeping everything that still matters. Do not record small talk, and mention briefly when you change the notes.
+
+Documents in this project:
+{{projectFiles}}`;
+
+const ARTIFACTS = `You can create artifacts with the \`artifact\` tool: documents that open in a panel beside the chat, where the user can read, edit, download and compare versions of them. Write one when the user asks for something substantial and self-contained that they will want to keep or keep working on: a document, report, plan, letter or story, a program or script, a web page (\`.html\`, shown rendered), an SVG image or a Mermaid diagram (\`.mmd\`). Keep short answers, explanations and small snippets in the reply itself.
+
+- Give it a clear file name whose extension says what it is, such as \`trip-plan.md\` or \`budget.csv\`.
+- To change an artifact, use \`artifact_edit\` for a small change or write it again under the same name with \`artifact\`. Never start a near-duplicate under a new name.
+- Always write the complete content. Afterwards, say in a sentence or two what it contains; do not paste it into your reply, the user already sees it.
+- The user can edit artifacts too, so the contents below are the current state. Read a long one with \`artifact_read\` before editing it.
+
+Artifacts in this chat:
+{{artifactList}}`;
+
 const WEB_SEARCH = `You have access to a web_search tool that fetches live results from the internet. Only use it when the user explicitly asks you to look something up, or when answering accurately requires information that is not in your training data or may be out of date (for example recent events, current prices, release dates, or niche facts you are unsure about). Do not search for things you already know with confidence.
 
 Before each web_search call, first tell the user in one short natural sentence what you are about to look up. For example "I'll look for the latest iPhone release date." or "Let me search for current pricing on that." Then emit the tool call. You may call the tool more than once in a single response to follow up or refine a query, announcing each search the same way. After searching, base your answer on the retrieved pages and cite the source URLs you relied on.
@@ -168,9 +190,10 @@ Models you can consult:
 
 const END_CONVERSATION = `You have an \`end_conversation\` tool. Calling it PERMANENTLY closes this chat: the user cannot reply, edit, regenerate, or branch it afterwards. When you decide to end a conversation, first clearly explain to the user in your reply why the conversation is being ended, and only then call the tool with a short \`reason\`. Never call it silently or without explanation, and never mention it as a threat.`;
 
-const ON_BY_DEFAULT = new Set(['sandbox_allowed', 'web_search_allowed']);
+const ON_BY_DEFAULT = new Set(['web_search_allowed', 'artifacts_allowed']);
 const on = (m, k) => (ON_BY_DEFAULT.has(k) ? m?.[k] !== 0 && m?.[k] !== false : !!m?.[k]);
 const always = () => true;
+const codeOnly = () => false;
 
 export const WRAPPERS = {
   __proto__: null,
@@ -182,12 +205,15 @@ export const BLOCKS = [
   { kind: 'section', name: 'user_instructions', eligible: always, text: USER_INSTRUCTIONS },
   { kind: 'section', name: 'user_memory', eligible: always, text: USER_MEMORY },
   { kind: 'section', name: 'project_instructions', eligible: always, text: PROJECT_INSTRUCTIONS },
+  { kind: 'section', name: 'project_notes', eligible: always, text: PROJECT_NOTES },
   { kind: 'section', name: 'chat_instructions', eligible: always, text: CHAT_INSTRUCTIONS },
   { kind: 'section', name: 'pinned_files', eligible: always, text: PINNED_FILES },
   { kind: 'section', name: 'response_style', eligible: always, text: RESPONSE_STYLE },
   { kind: 'section', name: 'conversation_summary', eligible: always, text: CONVERSATION_SUMMARY },
   { kind: 'section', name: 'conversation_time', eligible: (m) => on(m, 'long_convo_reminder'), text: CONVERSATION_TIME },
-  { kind: 'tool', name: 'sandbox', eligible: (m) => on(m, 'sandbox_allowed'), text: SANDBOX },
+  { kind: 'tool', name: 'sandbox', eligible: codeOnly, text: SANDBOX },
+  { kind: 'tool', name: 'project', eligible: always, text: PROJECT },
+  { kind: 'tool', name: 'artifacts', eligible: (m) => on(m, 'artifacts_allowed'), text: ARTIFACTS },
   { kind: 'tool', name: 'web_search', eligible: (m, f) => !!f.webSearch && on(m, 'web_search_allowed'), text: WEB_SEARCH },
   { kind: 'tool', name: 'reference_files', eligible: (m, f) => !!f.referenceFiles, text: REFERENCE_FILES },
   { kind: 'tool', name: 'chat_search', eligible: (m, f) => !!f.chatSearch && on(m, 'chat_search_allowed'), text: CHAT_SEARCH },
@@ -203,7 +229,7 @@ export const BLOCKS = [
 
 const BY_ID = new Map(BLOCKS.map(b => [b.id, b]));
 
-export const BLOCK_KEYS = ['kind', 'sandbox_allowed', 'web_search_allowed', 'chat_search_allowed', 'skills_allowed',
+export const BLOCK_KEYS = ['kind', 'artifacts_allowed', 'web_search_allowed', 'chat_search_allowed', 'skills_allowed',
   'mcp_allowed', 'memory_allowed', 'calculator_allowed', 'todo_allowed', 'ask_user_allowed', 'consult_allowed', 'end_chat_allowed',
   'long_convo_reminder'];
 

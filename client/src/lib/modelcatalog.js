@@ -2,14 +2,14 @@ import { reasons } from './badges.js';
 
 export { reasons };
 
-const INVERTED = new Set(['sandbox_allowed', 'web_search_allowed', 'reasoning_collapsible', 'dropdown_icon']);
+const INVERTED = new Set(['sandbox_allowed', 'code_allowed', 'web_search_allowed', 'artifacts_allowed', 'reasoning_collapsible', 'dropdown_icon', 'show_icon']);
 
 export const FLAGS = new Set([
-  'has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'dropdown_icon',
-  'is_default', 'enable_summaries', 'unavailable',
+  'has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'code_allowed', 'dropdown_icon', 'show_icon',
+  'is_default', 'unavailable',
   'reasoning_collapsible', 'bg_enabled', 'web_search_auto', 'web_search_allowed', 'show_name', 'skills_allowed',
-  'mcp_allowed', 'chat_search_allowed', 'end_chat_allowed', 'memory_allowed', 'calculator_allowed', 'hide_tool_calls', 'todo_allowed', 'ask_user_allowed',
-  'consult_allowed', 'consult_images', 'long_convo_reminder', 'effort_enabled',
+  'mcp_allowed', 'chat_search_allowed', 'end_chat_allowed', 'memory_allowed', 'calculator_allowed', 'artifacts_allowed', 'hide_tool_calls', 'todo_allowed', 'ask_user_allowed',
+  'consult_allowed', 'consult_images', 'long_convo_reminder', 'parallel_requests', 'effort_enabled',
   'effort_admin_only', 'hide_thinking'
 ]);
 
@@ -145,15 +145,43 @@ export function approxTokens(text) {
   return Math.round(String(text || '').length / APPROX_CHARS_PER_TOKEN);
 }
 
-export function tabsFor(models) {
+export function isCloudModel(m, providers, providerTypes) {
+  if (!m || m.kind === 'router') return false;
+  const conn = (providers || []).find(p => p.id === m.provider_id) || (providers || [])[0];
+  const type = conn ? providerTypes?.[conn.type] : null;
+  return !!type && !type.local;
+}
+
+const controlSig = (list) => JSON.stringify((Array.isArray(list) ? list : []).map(k => [k.id, k.name, (k.values || []).join(','), k.parentId || '']));
+
+export function presetPatch(preset) {
+  return { has_reasoning: preset.reasoning ? 1 : 0, has_vision: preset.vision ? 1 : 0, kwargs: preset.kwargs || [], effort_enabled: 0 };
+}
+
+export function presetApplied(m, preset) {
+  if (!m || !preset) return false;
+  return !!m.has_vision === !!preset.vision && !!m.has_reasoning === !!preset.reasoning && controlSig(m.kwargs) === controlSig(preset.kwargs);
+}
+
+export function reasoningSummary(summary) {
+  if (!summary) return '';
+  if (summary.efforts?.length > 1) return summary.efforts[0] + ' → ' + summary.efforts[summary.efforts.length - 1];
+  if (summary.thinking) return 'switch';
+  return summary.reasoning ? 'builtin' : '';
+}
+
+const hasValue = (m, keys) => keys.some(k => m[k] != null && m[k] !== '');
+
+export function tabsFor(models, { simple = false } = {}) {
   const any = (fn) => models.some(fn);
   const answers = any(m => m.kind !== 'router');
   const shown = ['general'];
   const optional = [];
   if (answers) shown.push('prompts', 'tools');
-  if (answers) optional.push('reasoning', 'controls');
-  if (answers && any(reasons)) shown.push('reasoning');
-  if (answers) shown.push('context', 'sampling');
+  if (answers) optional.push('reasoning', 'controls', ...(simple ? ['context', 'sampling'] : []));
+  if (answers && !simple && any(reasons)) shown.push('reasoning');
+  if (answers && (!simple || any(m => Number(m.num_ctx) > 0))) shown.push('context');
+  if (answers && (!simple || any(m => hasValue(m, TAB_FIELDS.sampling)))) shown.push('sampling');
   if (answers && any(m => (Array.isArray(m.kwargs) && m.kwargs.length) || m.effort_enabled)) shown.push('controls');
   shown.push('appearance');
   if (any(m => m.kind === 'router')) shown.push('routing');
@@ -180,17 +208,17 @@ export const TAB_FIELDS = {
   general: ['display_name', 'internal_name', 'provider_id', 'description', 'kind', 'enabled', 'is_default',
     'unavailable', 'unavailable_reason', 'sunset_at', 'sunset_action', 'cost_in', 'cost_out'],
   prompts: ['system_prompt', 'call_prompt'],
-  tools: ['has_vision', 'sandbox_allowed', 'sandbox_auto', 'web_search_allowed', 'web_search_auto', 'skills_allowed',
-    'mcp_allowed', 'chat_search_allowed', 'end_chat_allowed', 'memory_allowed', 'calculator_allowed', 'todo_allowed', 'ask_user_allowed', 'consult_allowed',
+  tools: ['has_vision', 'code_allowed', 'sandbox_allowed', 'sandbox_auto', 'web_search_allowed', 'web_search_auto', 'skills_allowed',
+    'mcp_allowed', 'chat_search_allowed', 'end_chat_allowed', 'memory_allowed', 'calculator_allowed', 'artifacts_allowed', 'todo_allowed', 'ask_user_allowed', 'consult_allowed',
     'consult_models', 'consult_images', 'agent_steps', 'hide_tool_calls'],
   reasoning: ['reasoning_collapsible', 'hide_thinking', 'think_open', 'think_close', 'has_reasoning', 'reasoning_token', 'non_reasoning_token'],
-  context: ['num_ctx', 'summary_padding', 'recent_window', 'enable_summaries', 'ctx_trim_mode', 'long_convo_reminder'],
+  context: ['num_ctx', 'recent_window', 'long_convo_reminder', 'parallel_requests'],
   sampling: ['stop', 'temperature', 'top_p', 'top_k', 'min_p', 'max_tokens', 'seed', 'repetition_penalty', 'presence_penalty',
     'frequency_penalty', 'dry_multiplier', 'dry_base', 'dry_allowed_length', 'dry_penalty_last_n', 'xtc_probability',
     'xtc_threshold', 'mirostat', 'mirostat_tau', 'mirostat_eta'],
   controls: ['kwargs', 'effort_enabled'],
   appearance: ['static_icon', 'generating_icon', 'thinking_icon', 'generating_anim', 'thinking_anim', 'icon_size', 'icon_position',
-    'dropdown_icon', 'show_name', 'badges_off', 'bg_enabled', 'bg_image'],
+    'dropdown_icon', 'show_icon', 'show_name', 'badges_off', 'bg_enabled', 'bg_image'],
   routing: ['router_rules', 'router_default']
 };
 
@@ -247,7 +275,7 @@ export const LEVELS = {
 
 
 export function usesTools(m, { webSearch = false, chatSearch = false } = {}) {
-  return flagOn(m, 'sandbox_allowed') || (webSearch && flagOn(m, 'web_search_allowed'))
+  return flagOn(m, 'artifacts_allowed') || (webSearch && flagOn(m, 'web_search_allowed'))
     || flagOn(m, 'skills_allowed') || flagOn(m, 'mcp_allowed') || (chatSearch && flagOn(m, 'chat_search_allowed'))
     || flagOn(m, 'end_chat_allowed') || flagOn(m, 'memory_allowed') || flagOn(m, 'calculator_allowed') || flagOn(m, 'todo_allowed')
     || flagOn(m, 'ask_user_allowed') || flagOn(m, 'consult_allowed');

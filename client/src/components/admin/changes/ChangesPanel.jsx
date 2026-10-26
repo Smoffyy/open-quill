@@ -4,7 +4,7 @@ import { useMemo, useState, useId } from 'react';
 import { Dialog, Btn, Seg, Empty, fmtAgo } from '../ui.jsx';
 import { CheckCircle } from '../../ui/icons.jsx';
 import { t } from '../../../i18n.jsx';
-import { toast } from '../../../lib/toast.js';
+import { notify } from '../../../lib/notify.js';
 import { groupChanges, isMine, othersIn } from '../../../lib/changeset.js';
 import { sectionMeta } from '../nav.jsx';
 import { AREA_TITLES } from './labels.js';
@@ -48,7 +48,7 @@ export default function ChangesPanel({ changes, user, scope, layer, onPublished,
     setError('');
     try {
       const r = await changes.publish(picked.map(c => c.key), note);
-      toast(t('Published version {v}.', { v: r.version }));
+      notify(t('Published version {v}.', { v: r.version }));
       if (onPublished) onPublished(r);
       onClose();
     } catch (e) {
@@ -62,7 +62,7 @@ export default function ChangesPanel({ changes, user, scope, layer, onPublished,
       await changes.discard(picked.map(c => c.key));
       setConfirming(false);
       setSkip(new Set());
-      toast(t('Changes discarded.'));
+      notify(t('Changes discarded.'));
     } catch (e) {
       setError(e?.message || t('The changes could not be discarded.'));
     }
@@ -91,7 +91,7 @@ export default function ChangesPanel({ changes, user, scope, layer, onPublished,
         : <span className="ch-confirm"><span>{t('A publisher or the owner ships these to members.')}</span></span>}
       <span className="cp-spacer" />
       <Btn kind={publisher ? 'quiet' : undefined} disabled={busy || !canDiscard}
-        title={canDiscard || !picked.length ? undefined : t('Editors can only discard their own changes.')}
+        data-tip={canDiscard || !picked.length ? undefined : t('Editors can only discard their own changes.')}
         onClick={() => { setError(''); setConfirming(true); }}>{t('Discard')}</Btn>
       {publisher && (
         <Btn kind="primary" disabled={busy || !picked.length} onClick={publish}>

@@ -1,5 +1,6 @@
 import { getSetting, setSetting } from '../db.js';
 import { draftGet, draftSet } from './draft.js';
+import { PRESETS, DEFAULT_PRESET, presetId } from './presets.js';
 
 export const THEME_SCHEMA = 1;
 
@@ -40,7 +41,6 @@ export const STYLE_PROPS = new Set([
 
 export const STATE_KEYS = new Set(['hover', 'active', 'focus', 'disabled', 'selected']);
 export const BREAKPOINTS = new Set(['tablet', 'mobile']);
-export const PRESET_IDS = new Set(['anthropic', 'openai']);
 
 const str = (v, n) => (typeof v === 'string' ? v : '').slice(0, n);
 const clean = (v, n) => { const s = str(v, n).trim(); return !s || VALUE_BAD.test(s) ? '' : s; };
@@ -183,7 +183,7 @@ export function sanitizeDoc(raw) {
   const css = str(d.css, MAX_CSS).replace(/<\/?\s*(script|style)/gi, '');
   return {
     v: THEME_SCHEMA,
-    basePreset: PRESET_IDS.has(d.basePreset) ? d.basePreset : 'anthropic',
+    basePreset: presetId(d.basePreset),
     tokens: sanitizeTokens(d.tokens),
     content: sanitizeContent(d.content),
     elements,
@@ -192,8 +192,8 @@ export function sanitizeDoc(raw) {
   };
 }
 
-export function emptyDoc(basePreset = 'anthropic') {
-  return { v: THEME_SCHEMA, basePreset: PRESET_IDS.has(basePreset) ? basePreset : 'anthropic', tokens: {}, content: {}, elements: {}, slots: {}, css: '' };
+export function emptyDoc(basePreset) {
+  return { v: THEME_SCHEMA, basePreset: presetId(basePreset), tokens: {}, content: {}, elements: {}, slots: {}, css: '' };
 }
 
 /* The Blank layout: the plain preset with its decoration turned down. Square
@@ -223,7 +223,7 @@ const BLANK_STYLE = {
 
 export function blankLayoutDoc() {
   return sanitizeDoc({
-    basePreset: 'anthropic',
+    basePreset: DEFAULT_PRESET,
     tokens: {
       font: { display: 'var(--font-sans)' },
       radius: { base: '6px', sm: '4px', md: '6px', lg: '8px' },
@@ -278,7 +278,7 @@ function normalizeStore(raw) {
     themes.push({
       id,
       name: str(th.name, 80).trim() || 'Untitled theme',
-      basePreset: PRESET_IDS.has(th.basePreset) ? th.basePreset : 'anthropic',
+      basePreset: presetId(th.basePreset),
       // A builtin's blurb is shipped metadata, so it always comes from the seed
       // list rather than from whatever an older store happened to save.
       note: SEED_BY_ID[id]?.note || str(th.note, 120),
@@ -305,13 +305,8 @@ function normalizeStore(raw) {
 // first-run card has room for. Both ship with the seed so neither surface has to
 // keep its own copy of what a layout is.
 const SEEDS = [
-  { id: 'anthropic', name: 'Anthropic', basePreset: 'anthropic',
-    note: 'The native layout',
-    blurb: 'Warm serif type and the classic open-quill layout.' },
-  { id: 'openai', name: 'OpenAI', basePreset: 'openai',
-    note: 'Top-left model picker, pill composer, pitch-black palette',
-    blurb: 'Pitch-black, with a top model picker and a pill composer.' },
-  { id: 'blank', name: 'Blank', basePreset: 'anthropic',
+  ...PRESETS.map(p => ({ id: p.id, name: p.label, basePreset: p.id, note: p.note, blurb: p.blurb })),
+  { id: 'blank', name: 'Blank', basePreset: DEFAULT_PRESET,
     note: 'A plain, unstyled starting point',
     blurb: 'Plain and flat. A neutral base to build your own design on.' }
 ];

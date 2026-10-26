@@ -17,8 +17,9 @@ const EPHEMERAL = { type: 'ephemeral' };
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
 export function anthropicClient({ base, key }) {
   return new Anthropic({
-    apiKey: key || '',
+    apiKey: null,
     authToken: null,
+    defaultHeaders: key ? { 'x-api-key': key } : { authorization: null },
     baseURL: String(base || '').replace(ANTHROPIC_VERSIONED, '').replace(/\/+$/, ''),
     maxRetries: 2,
     fetch: (...args) => globalThis.fetch(...args)
@@ -423,15 +424,4 @@ export async function listAnthropicModels({ base, key }) {
 export async function anthropicModelInfo({ base, key }, id) {
   const m = await anthropicClient({ base, key }).models.retrieve(id);
   return { context: Number(m?.max_input_tokens) || 0, maxOutput: Number(m?.max_tokens) || 0 };
-}
-
-export async function countAnthropicTokens({ model, spec, base, key, messages, tools = [] }) {
-  const p = buildParams(model, spec, { messages, tools, memo: memoFor(base, model.internal_name) });
-  const body = { model: p.model, messages: p.messages };
-  if (Array.isArray(p.system)) body.system = p.system.map(b => b.text).join('\n\n');
-  else if (p.system) body.system = p.system;
-  if (p.tools) body.tools = p.tools.map(({ cache_control, eager_input_streaming, ...t }) => t);
-  if (p.thinking) body.thinking = p.thinking;
-  const res = await anthropicClient({ base, key }).messages.countTokens(body);
-  return Number(res?.input_tokens) || 0;
 }

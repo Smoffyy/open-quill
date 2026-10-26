@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../../lib/api.js';
-import { toast } from '../../lib/toast.js';
+import { notify } from '../../lib/notify.js';
 import Composer from '../composer/Composer.jsx';
-import { Box, Search, Plus, ChevDown, Star, Dots, Trash, Pencil } from '../ui/icons.jsx';
+import { Box, Search, Plus, ChevDown, Star, Dots, Trash, Pencil, Check, Code } from '../ui/icons.jsx';
+import Markdown from '../chat/Markdown.jsx';
 import { t, fmtDate } from '../../i18n.jsx';
 import { focusUnlessTouch } from '../../lib/touch.js';
 import Dialog from '../ui/Dialog.jsx';
@@ -35,7 +36,7 @@ function CreateModal({ onClose, onCreate }) {
     if (busy) return;
     setBusy(true);
     try { const p = await api.post('/api/projects', { name: name.trim() || t('New project'), description: desc.trim() }); onCreate(p); }
-    catch (err) { setBusy(false); toast(err?.message || t('Could not save these changes.'), { icon: 'info', kind: 'warn' }); }
+    catch (err) { setBusy(false); notify(err?.message || t('Could not save these changes.'), { kind: 'warn' }); }
   }
   return (
     <Dialog className="pj-create" overlayClassName="pj-create-overlay" labelledBy="pj-create-title" onClose={onClose} initialFocus={ref}>
@@ -65,7 +66,40 @@ function CreateModal({ onClose, onCreate }) {
   );
 }
 
-function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onChanged, onDeleted }) {
+function ProjectNotes({ project, onSave }) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(project.notes || '');
+  useEffect(() => { if (!editing) setText(project.notes || ''); }, [project.notes, editing]);
+  function save() {
+    setEditing(false);
+    if (text !== (project.notes || '')) onSave(text);
+  }
+  return (
+    <div className="pj-card pj-notes">
+      <div className="pj-card-head">
+        <span>{t('Notes')}</span>
+        <button type="button" className="pj-card-add" onClick={() => (editing ? save() : setEditing(true))}
+          data-tip={editing ? t('Done') : t('Edit notes')} aria-label={editing ? t('Done') : t('Edit notes')}>
+          {editing ? <Check style={{ width: 15 }} /> : <Pencil style={{ width: 15 }} />}
+        </button>
+      </div>
+      {editing ? (
+        <textarea className="pj-instr-edit pj-notes-edit" autoFocus value={text} rows={10} maxLength={20000}
+          aria-label={t('Notes')}
+          placeholder={t('Decisions, facts and open questions every chat in this project should know.')}
+          onChange={(e) => setText(e.target.value)} onBlur={save}
+          onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); setText(project.notes || ''); setEditing(false); } }} />
+      ) : project.notes ? (
+        <div className="pj-notes-body"><Markdown>{project.notes}</Markdown></div>
+      ) : (
+        <div className="pj-card-sub">{t('Shared memory for this project. The assistant adds decisions and open questions here as you work, and every chat in the project reads them.')}</div>
+      )}
+      {!editing && project.notesUpdatedAt > 0 && <div className="pj-notes-when">{updatedLabel(project.notesUpdatedAt)}</div>}
+    </div>
+  );
+}
+
+function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onOpenInCode, onChanged, onDeleted }) {
   const [project, setProject] = useState(null);
   const showSkeleton = useSkeleton(!project);
   const [editingInstr, setEditingInstr] = useState(false);
@@ -127,6 +161,7 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onC
                 {menu && (
                   <div className="pj-menu">
                     <button onClick={() => { setMenu(false); setRenaming(true); }}><Pencil style={{ width: 15 }} /> {t("Rename")}</button>
+                    {onOpenInCode && <button onClick={() => { setMenu(false); onOpenInCode(project); }}><Code style={{ width: 15 }} /> {t('Open in Code')}</button>}
                     <button className="danger" onClick={() => { setMenu(false); del(); }}><Trash style={{ width: 15 }} /> {t("Delete project")}</button>
                   </div>
                 )}
@@ -139,7 +174,7 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onC
           {project.description && <div className="pj-desc">{project.description}</div>}
 
           <div className="pj-composer">
-            <Composer {...composerProps} project={null} autoFocus enterSend={false}
+            <Composer {...composerProps} project={null} autoFocus
               onSend={(attachments) => onStartChat(project, composerProps.value, attachments)} />
           </div>
 
@@ -174,14 +209,24 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onC
               </div>
             )}
           </div>
+          <ProjectNotes project={project} onSave={(notes) => patch({ notes })} />
           <ProjectFiles projectId={id} />
+          {onOpenInCode && (
+            <button type="button" className="pj-code-btn" onClick={() => onOpenInCode(project)}>
+              <Code style={{ width: 15 }} />
+              <span>
+                <span className="pj-code-title">{t('Build in Code')}</span>
+                <span className="pj-code-sub">{t('Start a Code session with a copy of these files, where the assistant can edit and run them.')}</span>
+              </span>
+            </button>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-export default function ProjectsPanel({ openId, composerProps, onClose, onOpenChat, onStartChat, onOpenProject, startCreate = false, onCreateHandled }) {
+export default function ProjectsPanel({ openId, composerProps, onClose, onOpenChat, onStartChat, onOpenInCode, onOpenProject, startCreate = false, onCreateHandled }) {
   const [projects, setProjects] = useState(null);
   const showSkeleton = useSkeleton(projects === null);
   const [q, setQ] = useState('');
@@ -205,7 +250,7 @@ export default function ProjectsPanel({ openId, composerProps, onClose, onOpenCh
       {detailId ? (
         <ProjectDetail id={detailId} composerProps={composerProps}
           onBack={() => { setDetailId(null); onOpenProject?.(null); load(); }}
-          onOpenChat={onOpenChat} onStartChat={onStartChat}
+          onOpenChat={onOpenChat} onStartChat={onStartChat} onOpenInCode={onOpenInCode}
           onChanged={load}
           onDeleted={() => { setDetailId(null); onOpenProject?.(null); load(); }} />
       ) : (

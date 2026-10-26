@@ -14,21 +14,36 @@ export function wireToolCalls(protocol, calls) {
       arguments: protocol === 'ollama'
         ? (c.args ?? safeParse(c.argsText ?? c.function?.arguments) ?? {})
         : (typeof c.argsText === 'string' ? c.argsText : JSON.stringify(c.args ?? safeParse(c.function?.arguments) ?? {}))
-    }
+    },
+    ...(protocol !== 'ollama' && c.extra ? { extra_content: c.extra } : {})
   }));
 }
 
-export function normalizeMessages(protocol, messages) {
+const reasoningDetails = (m) => (Array.isArray(m.blocks) && m.blocks.some(b => String(b?.type || '').startsWith('reasoning.')) ? { reasoning_details: m.blocks } : {});
+
+function wireReasoning(protocol, m, field) {
+  if (!field || m.role !== 'assistant' || !m.reasoning) return {};
+  return { [protocol === 'ollama' ? 'thinking' : field]: m.reasoning };
+}
+
+export function normalizeMessages(protocol, messages, replayAs = '') {
   return messages.map(m => {
     if (m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length) {
       const calls = wireToolCalls(protocol, m.tool_calls);
-      return { role: 'assistant', content: (m.content && String(m.content).trim()) ? m.content : null, tool_calls: calls };
+      return { role: 'assistant', content: (m.content && String(m.content).trim()) ? m.content : null, tool_calls: calls, ...wireReasoning(protocol, m, replayAs), ...(protocol === 'ollama' ? {} : reasoningDetails(m)) };
     }
     if (m.role === 'tool') {
       if (protocol === 'ollama') return { role: 'tool', tool_name: m.name || '', content: String(m.content ?? '') };
       return { role: 'tool', tool_call_id: m.tool_call_id || '', content: String(m.content ?? '') };
     }
-    return { role: m.role, content: m.content };
+    if (protocol === 'ollama' && Array.isArray(m.content)) {
+      const text = m.content.filter(p => p && p.type === 'text').map(p => p.text || '').join('\n\n');
+      const images = m.content.filter(p => p && p.type === 'image_url')
+        .map(p => String(p.image_url?.url ?? p.image_url ?? '').replace(/^data:[^,]*,/, ''))
+        .filter(Boolean);
+      return images.length ? { role: m.role, content: text, images, ...wireReasoning(protocol, m, replayAs) } : { role: m.role, content: text, ...wireReasoning(protocol, m, replayAs) };
+    }
+    return { role: m.role, content: m.content, ...wireReasoning(protocol, m, replayAs) };
   });
 }
 export function safeParse(v) {

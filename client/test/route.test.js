@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseRoute, shouldResetPath, pathForChat, pathForProject, pathForLibrary, LIBRARY_PAGES } from '../src/lib/route.js';
+import { parseRoute, shouldResetPath, pathForChat, pathForProject, pathForLibrary, pathForCode, LIBRARY_PAGES } from '../src/lib/route.js';
 
 test('parseRoute reads each screen off the path', () => {
   assert.deepEqual(parseRoute('/'), { view: 'home' });
@@ -57,4 +57,13 @@ test('the artifacts and scheduled pages have their own addresses', () => {
   assert.equal(pathForLibrary('elsewhere'), '/');
   assert.equal(shouldResetPath('artifacts', '/artifacts'), true);
   assert.equal(shouldResetPath('scheduled', '/chat/x'), false);
+});
+
+test('the code screens have their own addresses', () => {
+  assert.deepEqual(parseRoute('/code'), { view: 'code', id: null });
+  assert.deepEqual(parseRoute('/code/'), { view: 'code', id: null });
+  assert.deepEqual(parseRoute('/code/abc'), { view: 'code', id: 'abc' });
+  assert.equal(pathForCode('abc'), '/code/abc');
+  assert.equal(pathForCode(null), '/code');
+  assert.deepEqual(parseRoute('/codes'), { view: 'notfound' });
 });

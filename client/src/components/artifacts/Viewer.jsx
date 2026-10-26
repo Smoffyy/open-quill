@@ -4,12 +4,12 @@ import { api } from '../../lib/api.js';
 import { copyText } from '../../lib/clipboard.js';
 import Markdown from '../chat/Markdown.jsx';
 import FileChip from './FileChip.jsx';
-import { Download, Check, ChevDown, Chevron, Search, X, Down, Eye, EyeOff, CodeTag, Pencil } from '../ui/icons.jsx';
+import { Download, Check, ChevDown, Chevron, Search, X, Up, Down, Plus, Minus, Expand, Eye, EyeOff, CodeTag, Pencil } from '../ui/icons.jsx';
 import { t } from '../../i18n.jsx';
 import { buildPreviewDoc } from '../../lib/preview.js';
 import { SegSlide } from '../ui/controls.jsx';
 import {
-  PREVIEW_HTML, PREVIEW_MD, IMAGE_EXT, EXT_LANG, baseName, extOf, escHtml,
+  PREVIEW_HTML, PREVIEW_MD, PREVIEW_MERMAID, IMAGE_EXT, EXT_LANG, baseName, extOf, escHtml, canPreviewExt, mermaidSource,
   diffLines, stableLineDiff, collapseRuns, splitHighlightedLines, markLine, findMatches
 } from '../../lib/artifacts.js';
 import { Skel, SkelLines } from '../ui/Skeleton.jsx';
@@ -57,11 +57,11 @@ function ImageView({ src, alt }) {
         <img className="art-img" src={src} alt={alt} draggable={false} style={{ transform: `translate(${off.x}px, ${off.y}px) scale(${z})` }} />
       </div>
       <div className="art-imgbar">
-        <button className="art-btn icon" onClick={() => setZ(v => Math.max(0.2, v * 0.8))} title={t("Zoom out")}>−</button>
+        <button className="art-btn icon" onClick={() => setZ(v => Math.max(0.2, v * 0.8))} data-tip={t("Zoom out")} aria-label={t("Zoom out")}><Minus style={{ width: 14 }} /></button>
         <span className="art-imgzoom">{Math.round(z * 100)}%</span>
-        <button className="art-btn icon" onClick={() => setZ(v => Math.min(8, v * 1.25))} title={t("Zoom in")}>+</button>
-        <button className="art-btn icon" onClick={reset} title={t("Reset")}>⤢</button>
-        <a className="art-btn copy" href={src} style={{ borderRadius: 8 }}><Download style={{ width: 14 }} /> {t("Download")}</a>
+        <button className="art-btn icon" onClick={() => setZ(v => Math.min(8, v * 1.25))} data-tip={t("Zoom in")} aria-label={t("Zoom in")}><Plus style={{ width: 14 }} /></button>
+        <button className="art-btn icon" onClick={reset} data-tip={t("Reset")} aria-label={t("Reset")}><Expand style={{ width: 14 }} /></button>
+        <a className="art-btn copy" href={src}><Download style={{ width: 14 }} /> {t("Download")}</a>
       </div>
     </div>
   );
@@ -80,10 +80,16 @@ function HtmlPreview({ base, path, html }) {
     return () => { on = false; };
   }, [base, path, html]);
   if (doc == null) return <div className="art-empty"><div className="art-empty-spin" />{t('Preparing preview…')}</div>;
-  return <iframe className="art-preview-frame" sandbox={PREVIEW_SANDBOX} srcDoc={doc} title={baseName(path)} referrerPolicy="no-referrer" />;
+  return <iframe className="art-preview-frame" sandbox={PREVIEW_SANDBOX} srcDoc={doc} data-tip={baseName(path)} aria-label={baseName(path)} referrerPolicy="no-referrer" />;
 }
 
-export default function Viewer({ chatId, apiBase, path, onBack, canBack, liveText, liveInfo = null, committed = true, pendingText = null, fileV = 0, headerExtra = null, onFocusPane, editable = false, onSaved, onDirtyChange }) {
+function DocPreview({ base, path, ext, text }) {
+  if (PREVIEW_MD.has(ext)) return <div className="art-md"><Markdown>{text}</Markdown></div>;
+  if (PREVIEW_MERMAID.has(ext)) return <div className="art-md"><Markdown>{mermaidSource(text)}</Markdown></div>;
+  return <HtmlPreview base={base} path={path} html={text} />;
+}
+
+export default function Viewer({ chatId, apiBase, path, onBack, canBack, liveText, liveInfo = null, committed = true, pendingText = null, fileV = 0, headerExtra = null, onFocusPane, editable = false, onSaved, onDirtyChange, preferPreview = false }) {
   const base = apiBase || '/api/chats/' + chatId;
   const [data, setData] = useState(null);
   const [draft, setDraft] = useState(null);
@@ -110,11 +116,12 @@ export default function Viewer({ chatId, apiBase, path, onBack, canBack, liveTex
 
   const ext = extOf(path);
   const isLive = liveText != null;
-  const canPreview = PREVIEW_HTML.has(ext) || PREVIEW_MD.has(ext);
-  const [mode, setMode] = useState(() => (PREVIEW_HTML.has(ext) ? 'preview' : 'code'));
-  useEffect(() => { setMode(PREVIEW_HTML.has(extOf(path)) ? 'preview' : 'code'); }, [path]);
+  const canPreview = canPreviewExt(ext);
+  const startMode = (e) => ((preferPreview ? canPreviewExt(e) : PREVIEW_HTML.has(e)) ? 'preview' : 'code');
+  const [mode, setMode] = useState(() => startMode(ext));
+  useEffect(() => { setMode(startMode(extOf(path))); }, [path]);
   const previewOn = canPreview && mode === 'preview' && !isLive && !diff && !editing;
-  const liveEdit = isLive && liveInfo && liveInfo.tool === 'str_replace';
+  const liveEdit = isLive && liveInfo && (liveInfo.tool === 'str_replace' || liveInfo.tool === 'artifact_edit');
   const liveActive = isLive || liveEdit;
   const rawStream = isLive ? liveText : (!committed && pendingText != null ? pendingText : null);
   const fromStream = rawStream != null;
@@ -334,7 +341,7 @@ export default function Viewer({ chatId, apiBase, path, onBack, canBack, liveTex
     <div className="art-viewer" onMouseDown={onFocusPane}>
       <div className="art-vhead">
         <div className="art-vtitle">
-          {canBack && <button className="art-back" onClick={onBack} title={t("Back to files")}><Chevron style={{ width: 16, transform: 'rotate(180deg)' }} /></button>}
+          {canBack && <button className="art-back" onClick={onBack} data-tip={t("Back to files")} aria-label={t("Back to files")}><Chevron style={{ width: 16, transform: 'rotate(180deg)' }} /></button>}
           {canPreview && showText && !isLive && !editing && (
             <SegSlide value={previewOn ? 'preview' : 'code'} label={t('View')} className="compact"
               onPick={(v) => setMode(v)}
@@ -352,11 +359,11 @@ export default function Viewer({ chatId, apiBase, path, onBack, canBack, liveTex
             <>
               {canPreview && (
                 <button type="button" className={'art-btn icon' + (livePreview ? ' on' : '')} aria-pressed={livePreview}
-                  title={livePreview ? t('Hide preview') : t('Show preview')} aria-label={livePreview ? t('Hide preview') : t('Show preview')}
+                  data-tip={livePreview ? t('Hide preview') : t('Show preview')} aria-label={livePreview ? t('Hide preview') : t('Show preview')}
                   onClick={() => setLivePreview(v => !v)}>{livePreview ? <EyeOff style={{ width: 15 }} /> : <Eye style={{ width: 15 }} />}</button>
               )}
               <button type="button" className="art-btn text" disabled={saving} onClick={cancelEdit}>{t('Cancel')}</button>
-              <button type="button" className="art-btn text solid" disabled={saving || !editable} title={editable ? undefined : t('Wait for the reply to finish before editing files.')} onClick={save}>
+              <button type="button" className="art-btn text solid" disabled={saving || !editable} data-tip={editable ? undefined : t('Wait for the reply to finish before editing files.')} onClick={save}>
                 {saving && <span className="btn-spin" aria-hidden="true" />}{saving ? t('Saving…') : t('Save')}
               </button>
             </>
@@ -401,9 +408,9 @@ export default function Viewer({ chatId, apiBase, path, onBack, canBack, liveTex
           <Search style={{ width: 14, opacity: .6, flexShrink: 0 }} />
           <input ref={searchInputRef} value={query} onChange={e => setQuery(e.target.value)} onKeyDown={onSearchKey} placeholder={t('Find in file')} spellCheck={false} />
           <span className="art-search-count">{matches.length ? `${matchIdx + 1} / ${matches.length}` : (query ? '0' : '')}</span>
-          <button className="art-btn icon" disabled={!matches.length} onClick={() => nextMatch(-1)} title={t("Previous")}>↑</button>
-          <button className="art-btn icon" disabled={!matches.length} onClick={() => nextMatch(1)} title={t("Next")}>↓</button>
-          <button className="art-btn icon" onClick={() => { setSearch(false); setQuery(''); }} title={t("Close")}><X style={{ width: 13 }} /></button>
+          <button className="art-btn icon" disabled={!matches.length} onClick={() => nextMatch(-1)} data-tip={t("Previous")} aria-label={t("Previous")}><Up style={{ width: 14 }} /></button>
+          <button className="art-btn icon" disabled={!matches.length} onClick={() => nextMatch(1)} data-tip={t("Next")} aria-label={t("Next")}><Down style={{ width: 14 }} /></button>
+          <button className="art-btn icon" onClick={() => { setSearch(false); setQuery(''); }} data-tip={t("Close")} aria-label={t("Close")}><X style={{ width: 14 }} /></button>
         </div>
       )}
       {stale && (
@@ -418,11 +425,7 @@ export default function Viewer({ chatId, apiBase, path, onBack, canBack, liveTex
             ? <Skel when><SkelLines className="art-skel" count={14} /></Skel>
             : renderDiffRows(liveRows, true)
         )}
-        {!liveEdit && showText && !diff && previewOn && (
-          PREVIEW_MD.has(ext)
-            ? <div className="art-md"><Markdown>{shownText || ''}</Markdown></div>
-            : <HtmlPreview base={base} path={path} html={shownText || ''} />
-        )}
+        {!liveEdit && showText && !diff && previewOn && <DocPreview base={base} path={path} ext={ext} text={shownText || ''} />}
         {editing && (
           <div className={'art-edit' + (splitPreview ? ' split' : '')}>
             <div className="art-edit-main">
@@ -433,9 +436,7 @@ export default function Viewer({ chatId, apiBase, path, onBack, canBack, liveTex
             </div>
             {splitPreview && (
               <div className="art-edit-preview" aria-label={t('Preview')} role="region">
-                {PREVIEW_MD.has(ext)
-                  ? <div className="art-md"><Markdown>{previewText}</Markdown></div>
-                  : <HtmlPreview base={base} path={path} html={previewText} />}
+                <DocPreview base={base} path={path} ext={ext} text={previewText} />
               </div>
             )}
           </div>
@@ -473,7 +474,7 @@ export default function Viewer({ chatId, apiBase, path, onBack, canBack, liveTex
             )
         )}
       </div>
-      {diff && diffRows && <button className="art-jump change" onClick={jumpToChange} title={t("Jump to first change")}><Down style={{ width: 14 }} /> {t("Change")}</button>}
+      {diff && diffRows && <button className="art-jump change" onClick={jumpToChange} data-tip={t("Jump to first change")}><Down style={{ width: 14 }} /> {t("Change")}</button>}
       {liveActive && !following && <button className="art-jump" onClick={jumpLatest}><Down style={{ width: 14 }} /> {t('Jump to latest')}</button>}
     </div>
   );

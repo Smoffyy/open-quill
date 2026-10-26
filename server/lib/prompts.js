@@ -39,17 +39,19 @@ export function sandboxHostText() {
   const env = sandbox.hostEnvInfo();
   const L = [];
   L.push(`- Operating system: **${env.osName}** (${env.arch}). Shell used by \`bash\`: \`${env.shellName}\`.`);
-  if (env.interpreters.length) {
-    L.push('- Programs installed on this host. These are the ONLY ones you may invoke:');
-    for (const i of env.interpreters) L.push(`  - \`${i.name}\`: ${i.label}, ${i.version}${i.run ? ` (e.g. \`${i.run}\`)` : ''}`);
-  } else {
-    L.push('- **No language runtimes were detected on this host.** Do not assume `node`, `python`, `npm` or a compiler exist. Do everything with the file tools, and tell the user if a task genuinely needs a runtime that is missing.');
+  if (env.probed) {
+    if (env.interpreters.length) {
+      L.push('- Programs installed on this host. These are the ONLY ones you may invoke:');
+      for (const i of env.interpreters) L.push(`  - \`${i.name}\`: ${i.label}, ${i.version}${i.run ? ` (e.g. \`${i.run}\`)` : ''}`);
+    } else {
+      L.push('- **No language runtimes were detected on this host.** Do not assume `node`, `python`, `npm` or a compiler exist. Do everything with the file tools, and tell the user if a task genuinely needs a runtime that is missing.');
+    }
+    if (env.utils.length) L.push(`- Extra utilities on PATH, safe to call: ${env.utils.map(u => '`' + u + '`').join(', ')}.`);
+    if (env.missingUtils.length) L.push(`- **NOT installed on this host.** Calling any of these fails, so never try, not even to check: ${env.missingUtils.map(u => '`' + u + '`').join(', ')}.`);
+    if (env.pythonCmd && env.pythonCmd !== 'python3') L.push(`- The Python command here is \`${env.pythonCmd}\`. \`python3\` does NOT exist on this host.`);
+    if (!env.pythonCmd) L.push('- Python is NOT installed here. Do not write `python`, `python3` or `pip` commands.');
+    if (!env.runtimes.node) L.push('- Node.js is NOT installed here. Do not write `node` or `npm` commands.');
   }
-  if (env.utils.length) L.push(`- Extra utilities on PATH, safe to call: ${env.utils.map(u => '`' + u + '`').join(', ')}.`);
-  if (env.missingUtils.length) L.push(`- **NOT installed on this host.** Calling any of these fails, so never try, not even to check: ${env.missingUtils.map(u => '`' + u + '`').join(', ')}.`);
-  if (env.pythonCmd && env.pythonCmd !== 'python3') L.push(`- The Python command here is \`${env.pythonCmd}\`. \`python3\` does NOT exist on this host.`);
-  if (!env.pythonCmd) L.push('- Python is NOT installed here. Do not write `python`, `python3` or `pip` commands.');
-  if (!env.runtimes.node) L.push('- Node.js is NOT installed here. Do not write `node` or `npm` commands.');
   if (!env.unix) {
     L.push('- This is **cmd.exe on Windows, not a Unix shell.** `find`, `sort` and `more` exist but are the Windows commands with different syntax, not the Unix ones.');
     L.push('- Unix FLAGS fail, even on commands that do exist: `mkdir -p`, `rm -rf`, `cp -r`, `ls -la`. Plain `mkdir a\\b` already creates parent folders.');
@@ -115,6 +117,11 @@ export function cleanCall(call) {
     if (call.text != null) o.text = String(call.text).slice(0, 500);
   }
   if (o.tool === 'calculator' && call.expression != null) o.expression = String(call.expression).slice(0, 500);
+  if (o.tool === 'project_notes') {
+    if (call.action != null) o.action = String(call.action).toLowerCase();
+    if (call.text != null) o.text = String(call.text).slice(0, 500);
+  }
+  if (o.tool === 'project_chats' && call.chat_id != null) o.chat_id = String(call.chat_id).slice(0, 64);
   if (o.tool === 'ask_user') {
     if (call.question != null) o.question = String(call.question).slice(0, 500);
     if (Array.isArray(call.options)) o.options = call.options.slice(0, 6).map(x => String(x ?? '').slice(0, 120));
@@ -210,12 +217,12 @@ export function formatToolResult(rawCall, r) {
 const CHAT_SEARCH_MAX = 25;
 const CHAT_SEARCH_SCAN = 400;
 
-export function runChatSearchTool(userId, currentChatId, call) {
+export function runChatSearchTool(userId, currentChatId, call, projectId = null) {
   if (call.tool === 'chat_search') {
     const q = String(call.query || '').trim().toLowerCase();
     if (!q) return { ok: false, error: 'Empty query.' };
     const byId = new Map();
-    for (const c of db.chats.listByUser(userId)) if (c.id !== currentChatId) byId.set(c.id, c);
+    for (const c of db.chats.listByUser(userId)) if (c.id !== currentChatId && (!projectId || c.project_id === projectId)) byId.set(c.id, c);
     const dateOf = (c) => new Date(c.updated_at || 0).toISOString().slice(0, 10);
     const matches = [];
     const seen = new Set();
@@ -245,7 +252,7 @@ export function runChatSearchTool(userId, currentChatId, call) {
   }
   if (call.tool === 'chat_view') {
     const c = db.chats.byId(String(call.chat_id || ''));
-    if (!c || c.user_id !== userId) return { ok: false, error: 'No such chat.' };
+    if (!c || c.user_id !== userId || (projectId && c.project_id !== projectId)) return { ok: false, error: 'No such chat.' };
     const limit = Math.min(60, Math.max(1, parseInt(call.limit) || 20));
     const msgs = activePath(c.id).filter(m => m.role === 'user' || m.role === 'assistant').slice(-limit)
       .map(m => ({ role: m.role, content: stripToolSyntax(String(m.content || '')).slice(0, 2000) }));

@@ -31,7 +31,7 @@ export default function TopbarActions({ leading, items, className }) {
       {leading}
       {list.length > 0 && (
         <button ref={btnRef} className={'paper-btn' + (open ? ' active' : '')} onClick={() => setOpen(o => !o)}
-          title={t('More')} aria-label={t('More')} aria-haspopup="menu" aria-expanded={open}>
+          data-tip={t('More')} aria-label={t('More')} aria-haspopup="menu" aria-expanded={open}>
           <Dots />
         </button>
       )}

@@ -1,13 +1,16 @@
 import { db, uid, tx, getSetting, setSetting } from '../db.js';
 import { authMiddleware, adminOnly } from '../auth.js';
-import { getProviders, resolveProvider, providerSpec } from '../lib/providers.js';
+import { getProviders, resolveProvider, providerSpec, isLocalType } from '../lib/providers.js';
+import { cloudPreset, rememberListing, listingFor } from '../lib/cloudmodels.js';
 import { matchPreset, presetList, setCustomPresets, getCustomPresets } from '../lib/pricing.js';
 import { logAudit } from '../lib/audit.js';
 import { staged } from '../lib/releases.js';
-import { draftModels, publicModels, detectContextLength, timedFetch } from '../lib/models.js';
+import { draftGet } from '../lib/draft.js';
+import { draftModels, publicModels, probeCtx, knownCtx, timedFetch } from '../lib/models.js';
 import { sanitizeKwargs } from '../lib/kwargs.js';
 import { listAnthropicModels } from '../llm/index.js';
 import { sanitizeBadgesOff } from '../lib/badges.js';
+import { safeUrl } from '../lib/safeurl.js';
 import { ROUTE_MATCHERS } from '../lib/router.js';
 import { DOCS_MODEL_STR, DOCS_MODEL_BOOL, DOCS_MODEL_INT, DOCS_MODEL_FLOAT, DOCS_MODEL_PARAM_COUNTS, DOCS_BADGES, sanitizePairs, sanitizeCards, sanitizeDocsLinks, sanitizeStrList } from '../lib/modeldocs.js';
 import { listLogos } from '../lib/logos.js';
@@ -15,6 +18,7 @@ import { parseParamCount } from '../lib/modelsize.js';
 import { syncedPrompt, draftFeatures, promptValues } from '../lib/systemprompt.js';
 import { sanitizeConsultModels } from '../lib/consult.js';
 import { touchesBlocks, addBlocks, eligibleBlocks } from '../lib/promptblocks.js';
+import { presetById } from '../lib/presets.js';
 
 function sanitizeRouterRules(raw) {
   const list = Array.isArray(raw) ? raw : [];
@@ -42,7 +46,7 @@ function sanitizeStop(raw) {
 
 function modelPatch(b, cur) {
   const str = ['display_name', 'description', 'internal_name', 'system_prompt', 'call_prompt', 'reasoning_token', 'non_reasoning_token', 'more_models_label', 'static_icon', 'generating_icon', 'thinking_icon', 'icon_position', 'think_open', 'think_close', 'generating_anim', 'thinking_anim', 'unavailable_reason', 'provider_id', 'bg_image', 'effort_kwarg', 'effort_default', ...DOCS_MODEL_STR];
-  const bool = ['has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'dropdown_icon', 'is_default', 'enable_summaries', 'unavailable', 'reasoning_collapsible', 'bg_enabled', 'web_search_auto', 'web_search_allowed', 'show_name', 'skills_allowed', 'mcp_allowed', 'chat_search_allowed', 'end_chat_allowed', 'memory_allowed', 'calculator_allowed', 'hide_tool_calls', 'todo_allowed', 'ask_user_allowed', 'consult_allowed', 'consult_images', 'long_convo_reminder', 'effort_enabled', 'effort_admin_only', 'hide_thinking', ...DOCS_MODEL_BOOL];
+  const bool = ['has_reasoning', 'has_vision', 'in_more_models', 'enabled', 'sandbox_auto', 'sandbox_allowed', 'dropdown_icon', 'show_icon', 'is_default', 'unavailable', 'reasoning_collapsible', 'bg_enabled', 'web_search_auto', 'web_search_allowed', 'show_name', 'skills_allowed', 'mcp_allowed', 'chat_search_allowed', 'end_chat_allowed', 'memory_allowed', 'calculator_allowed', 'artifacts_allowed', 'hide_tool_calls', 'todo_allowed', 'ask_user_allowed', 'consult_allowed', 'consult_images', 'long_convo_reminder', 'parallel_requests', 'effort_enabled', 'effort_admin_only', 'hide_thinking', 'code_allowed', ...DOCS_MODEL_BOOL];
   const patch = {};
   for (const k of str) if (k in b) patch[k] = b[k];
   for (const k of bool) if (k in b) patch[k] = b[k] ? 1 : 0;
@@ -54,6 +58,7 @@ function modelPatch(b, cur) {
     const v = String(b.sunset_action || '');
     patch.sunset_action = v === 'unavailable' ? 'unavailable' : 'hide';
   }
+  if ('docs_notice_url' in patch) patch.docs_notice_url = safeUrl(patch.docs_notice_url);
   if ('docs_badge' in patch) patch.docs_badge = DOCS_BADGES.has(patch.docs_badge) ? patch.docs_badge : '';
   if ('docs_ids' in b) patch.docs_ids = sanitizePairs(b.docs_ids);
   if ('docs_platforms' in b) patch.docs_platforms = sanitizeStrList(b.docs_platforms);
@@ -75,8 +80,6 @@ function modelPatch(b, cur) {
   if ('num_ctx' in b) patch.num_ctx = Math.max(0, parseInt(b.num_ctx) || 0);
   if ('recent_window' in b) patch.recent_window = Math.max(1, parseInt(b.recent_window) || 4);
   if ('icon_size' in b) patch.icon_size = Math.max(0, Math.min(80, parseInt(b.icon_size) || 0));
-  if ('summary_padding' in b) patch.summary_padding = Math.max(0.03, Math.min(0.6, parseFloat(b.summary_padding) || 0.125));
-  if ('ctx_trim_mode' in b) patch.ctx_trim_mode = b.ctx_trim_mode === 'cache' ? 'cache' : 'retain';
   if ('stop' in b) patch.stop = sanitizeStop(b.stop);
   const numF = ['temperature', 'top_p', 'presence_penalty', 'frequency_penalty', 'repetition_penalty', 'min_p', 'cost_in', 'cost_out',
     'dry_multiplier', 'dry_base', 'xtc_probability', 'xtc_threshold', 'mirostat_tau', 'mirostat_eta', ...DOCS_MODEL_FLOAT];
@@ -139,6 +142,55 @@ function syncModels(req, plan, holders) {
   staged(req, 'models', { keys, rows: [...ids].map(id => db.models.byId(id)).filter(Boolean) });
 }
 
+async function fetchListing(prov) {
+  const { spec, base, key } = providerSpec(prov);
+  const headers = key ? { Authorization: `Bearer ${key}` } : {};
+  let ids;
+  let entries = null;
+  if (spec.protocol === 'anthropic') {
+    if (!key) return { status: 400, error: 'Add an API key to this connection first.' };
+    ids = (await listAnthropicModels({ base, key })).map(m => m.id);
+  } else if (spec.protocol === 'ollama') {
+    const r = await timedFetch(base.replace(/\/v1$/, '') + '/api/tags', { headers });
+    if (!r.ok) return { status: 502, error: `Backend returned ${r.status}.` };
+    const j = await r.json().catch(() => ({}));
+    ids = (Array.isArray(j?.models) ? j.models : []).map(x => x?.name || x?.model).filter(Boolean);
+  } else {
+    const r = await timedFetch(base + '/models', { headers });
+    if (!r.ok) return { status: 502, error: `Backend returned ${r.status}.` };
+    const j = await r.json().catch(() => ({}));
+    const raw = Array.isArray(j?.data) ? j.data : (Array.isArray(j?.models) ? j.models : []);
+    ids = raw.map(x => (typeof x === 'string' ? x : (x?.id || x?.name))).filter(Boolean);
+    entries = raw.filter(x => x && typeof x === 'object');
+  }
+  if (spec.modelPrefix) ids = ids.map(id => (String(id).startsWith(spec.modelPrefix) ? String(id).slice(spec.modelPrefix.length) : id));
+  if (entries) rememberListing(prov.id, entries);
+  return { ids: [...new Set(ids)] };
+}
+
+function capsSummary(preset) {
+  const effort = preset.kwargs.find(k => k.id === 'effort');
+  return {
+    reasoning: !!(preset.reasoning || preset.kwargs.length),
+    vision: !!preset.vision,
+    ctx: preset.ctx || 0,
+    efforts: effort ? effort.values : [],
+    thinking: preset.kwargs.some(k => k.id === 'thinking')
+  };
+}
+
+function presetFields(b, providerId) {
+  const prov = resolveProvider(providerId);
+  if (!prov || isLocalType(prov.type) || !b.internal_name) return {};
+  const preset = cloudPreset(prov.type, b.internal_name, listingFor(prov.id));
+  if (!preset) return {};
+  const out = {};
+  if (!('has_reasoning' in b)) out.has_reasoning = preset.reasoning ? 1 : 0;
+  if (!('has_vision' in b)) out.has_vision = preset.vision ? 1 : 0;
+  if (!('kwargs' in b)) out.kwargs = sanitizeKwargs(preset.kwargs);
+  return out;
+}
+
 function applyPatch(cur, patch) {
   if (patch.is_default === 1) for (const other of db.models.all()) if (other.id !== cur.id && other.is_default) db.models.update(other.id, { is_default: 0 });
   db.models.update(cur.id, patch);
@@ -148,7 +200,7 @@ export default function registerModelRoutes(app) {
   app.get('/api/models', authMiddleware, (req, res) => res.json(req.user.is_admin ? draftModels() : publicModels()));
 
   app.get('/api/admin/models', authMiddleware, adminOnly, (req, res) =>
-    res.json(db.models.all().sort((a, b) => a.sort_order - b.sort_order)));
+    res.json(db.models.all().sort((a, b) => a.sort_order - b.sort_order).map(m => ({ ...m, known_ctx: knownCtx(m) }))));
 
   app.get('/api/admin/logos', authMiddleware, adminOnly, (req, res) => res.json({ logos: listLogos() }));
 
@@ -162,65 +214,65 @@ export default function registerModelRoutes(app) {
   app.get('/api/admin/discover-models', authMiddleware, adminOnly, async (req, res) => {
     try {
       const prov = req.query.provider ? resolveProvider(req.query.provider) : getProviders()[0];
-      const { spec, base, key } = providerSpec(prov);
-      const headers = key ? { Authorization: `Bearer ${key}` } : {};
-      let ids = [];
-      if (spec.protocol === 'anthropic') {
-        if (!key) return res.status(400).json({ error: 'Add an API key to this connection first.' });
-        ids = (await listAnthropicModels({ base, key })).map(m => m.id);
-      } else if (spec.protocol === 'ollama') {
-        const r = await timedFetch(base.replace(/\/v1$/, '') + '/api/tags', { headers });
-        if (!r.ok) return res.status(502).json({ error: `Backend returned ${r.status}.` });
-        const j = await r.json().catch(() => ({}));
-        ids = (Array.isArray(j?.models) ? j.models : []).map(x => x?.name || x?.model).filter(Boolean);
-      } else {
-        const r = await timedFetch(base + '/models', { headers });
-        if (!r.ok) return res.status(502).json({ error: `Backend returned ${r.status}.` });
-        const j = await r.json().catch(() => ({}));
-        const raw = Array.isArray(j?.data) ? j.data : (Array.isArray(j?.models) ? j.models : []);
-        ids = raw.map(x => (typeof x === 'string' ? x : (x?.id || x?.name))).filter(Boolean);
-      }
-      if (spec.modelPrefix) ids = ids.map(id => (String(id).startsWith(spec.modelPrefix) ? String(id).slice(spec.modelPrefix.length) : id));
-      ids = [...new Set(ids)];
+      const found = await fetchListing(prov);
+      if (found.error) return res.status(found.status).json({ error: found.error });
+      const listing = listingFor(prov.id);
       const existing = new Set(db.models.all().map(m => (m.internal_name || '').toLowerCase()));
-      res.json({ models: ids.map(id => ({ id, added: existing.has(String(id).toLowerCase()) })) });
+      res.json({
+        models: found.ids.map(id => {
+          const caps = isLocalType(prov.type) ? null : cloudPreset(prov.type, id, listing);
+          return { id, added: existing.has(String(id).toLowerCase()), ...(caps ? { caps: capsSummary(caps) } : {}) };
+        })
+      });
     } catch {
       res.status(502).json({ error: 'Could not reach the backend. Check the Connection settings.' });
     }
+  });
+
+  app.get('/api/admin/models/recommended', authMiddleware, adminOnly, async (req, res) => {
+    const prov = resolveProvider(String(req.query.provider_id || ''));
+    const id = String(req.query.internal_name || '').trim();
+    if (!prov || !id || isLocalType(prov.type)) return res.json({ preset: null });
+    if (prov.type === 'openrouter' && !listingFor(prov.id)) await fetchListing(prov).catch(() => null);
+    const preset = cloudPreset(prov.type, id, listingFor(prov.id));
+    res.json({ preset: preset ? { ...preset, kwargs: sanitizeKwargs(preset.kwargs), summary: capsSummary(preset) } : null });
   });
 
   app.post('/api/admin/models', authMiddleware, adminOnly, (req, res) => {
     const max = db.models.all().reduce((a, m) => Math.max(a, m.sort_order || 0), 0);
     const b = req.body;
     const preset = matchPreset(b.internal_name || '');
+    const look = presetById(draftGet('ui_preset', '')).model;
+    const providerId = b.provider_id || (getProviders()[0]?.id || null);
     const m = db.models.insert({
       id: uid(), display_name: b.display_name || 'New model', description: b.description || '',
       kind: b.kind === 'router' ? 'router' : 'model', router_rules: sanitizeRouterRules(b.router_rules), router_default: String(b.router_default || ''),
       internal_name: b.internal_name || 'local-model', system_prompt: b.system_prompt || '',
       call_prompt: b.call_prompt || '',
-      provider_id: b.provider_id || (getProviders()[0]?.id || null), max_tokens: parseInt(b.max_tokens) || null,
+      provider_id: providerId, max_tokens: parseInt(b.max_tokens) || null,
       has_reasoning: b.has_reasoning ? 1 : 0, reasoning_token: b.reasoning_token || '', non_reasoning_token: b.non_reasoning_token || '',
       kwargs: sanitizeKwargs(b.kwargs),
       effort_enabled: b.effort_enabled ? 1 : 0, effort_levels: Array.isArray(b.effort_levels) && b.effort_levels.length ? b.effort_levels : ['low', 'medium', 'high'], effort_default: b.effort_default || 'medium', effort_kwarg: b.effort_kwarg || 'reasoning_effort', effort_admin_only: b.effort_admin_only ? 1 : 0, hide_thinking: b.hide_thinking ? 1 : 0,
-      reasoning_collapsible: b.reasoning_collapsible === false ? 0 : 1, icon_size: parseInt(b.icon_size) || (getSetting('ui_preset', '') === 'openai' ? 28 : 0),
-      show_name: 'show_name' in b ? (b.show_name ? 1 : 0) : (getSetting('ui_preset', '') === 'openai' ? 1 : 0),
+      reasoning_collapsible: b.reasoning_collapsible === false ? 0 : 1, icon_size: parseInt(b.icon_size) || look.icon_size,
+      show_name: 'show_name' in b ? (b.show_name ? 1 : 0) : look.show_name,
       generating_anim: b.generating_anim || 'none',
       thinking_anim: b.thinking_anim || 'none',
       has_vision: b.has_vision ? 1 : 0,
       think_open: b.think_open || '', think_close: b.think_close || '',
-      sandbox_auto: b.sandbox_auto ? 1 : 0, sandbox_allowed: b.sandbox_allowed === false ? 0 : 1, dropdown_icon: 'dropdown_icon' in b ? (b.dropdown_icon === false ? 0 : 1) : (getSetting('ui_preset', '') === 'openai' ? 0 : 1), is_default: 0, agent_steps: Number.isInteger(b.agent_steps) ? Math.max(0, b.agent_steps) : 0,
-      web_search_auto: b.web_search_auto ? 1 : 0, web_search_allowed: b.web_search_allowed === false ? 0 : 1,
+      sandbox_auto: b.sandbox_auto ? 1 : 0, sandbox_allowed: b.sandbox_allowed === false ? 0 : 1, code_allowed: b.code_allowed === false ? 0 : 1, dropdown_icon: 'dropdown_icon' in b ? (b.dropdown_icon === false ? 0 : 1) : look.dropdown_icon, show_icon: b.show_icon === false ? 0 : 1, is_default: 0, agent_steps: Number.isInteger(b.agent_steps) ? Math.max(0, b.agent_steps) : 0,
+      web_search_auto: b.web_search_auto ? 1 : 0, web_search_allowed: b.web_search_allowed === false ? 0 : 1, artifacts_allowed: b.artifacts_allowed === false ? 0 : 1,
       skills_allowed: b.skills_allowed ? 1 : 0, mcp_allowed: b.mcp_allowed ? 1 : 0, chat_search_allowed: b.chat_search_allowed ? 1 : 0,
-      end_chat_allowed: b.end_chat_allowed ? 1 : 0, memory_allowed: b.memory_allowed ? 1 : 0, calculator_allowed: b.calculator_allowed ? 1 : 0, todo_allowed: b.todo_allowed ? 1 : 0, ask_user_allowed: b.ask_user_allowed ? 1 : 0, consult_allowed: b.consult_allowed ? 1 : 0, consult_images: b.consult_images ? 1 : 0, consult_models: sanitizeConsultModels(b.consult_models), hide_tool_calls: b.hide_tool_calls ? 1 : 0, long_convo_reminder: b.long_convo_reminder ? 1 : 0,
-      enable_summaries: b.enable_summaries ? 1 : 0, num_ctx: parseInt(b.num_ctx) || 0, summary_padding: typeof b.summary_padding === "number" ? b.summary_padding : 0.125, recent_window: parseInt(b.recent_window) > 0 ? parseInt(b.recent_window) : 4,
+      end_chat_allowed: b.end_chat_allowed ? 1 : 0, memory_allowed: b.memory_allowed ? 1 : 0, calculator_allowed: b.calculator_allowed ? 1 : 0, todo_allowed: b.todo_allowed ? 1 : 0, ask_user_allowed: b.ask_user_allowed ? 1 : 0, consult_allowed: b.consult_allowed ? 1 : 0, consult_images: b.consult_images ? 1 : 0, consult_models: sanitizeConsultModels(b.consult_models), hide_tool_calls: b.hide_tool_calls ? 1 : 0, long_convo_reminder: b.long_convo_reminder ? 1 : 0, parallel_requests: b.parallel_requests ? 1 : 0,
+      num_ctx: parseInt(b.num_ctx) || 0, recent_window: parseInt(b.recent_window) > 0 ? parseInt(b.recent_window) : 4,
       in_more_models: b.in_more_models ? 1 : 0, more_models_label: b.more_models_label || 'More models',
       unavailable: b.unavailable ? 1 : 0, unavailable_reason: b.unavailable_reason || '',
       bg_enabled: b.bg_enabled ? 1 : 0, bg_image: b.bg_image || '',
       badges_off: badgesOff(b.badges_off),
       static_icon: b.static_icon || '', generating_icon: b.generating_icon || '', thinking_icon: b.thinking_icon || '',
-      icon_position: b.icon_position || (getSetting('ui_preset', '') === 'openai' ? 'left' : 'below'),
+      icon_position: b.icon_position || look.icon_position,
       temperature: null, top_p: null, presence_penalty: null, frequency_penalty: null, repetition_penalty: null, min_p: null, top_k: null, seed: null,
       cost_in: preset ? preset.in : null, cost_out: preset ? preset.out : null,
+      ...presetFields(b, providerId),
       sort_order: max + 1, enabled: 1
     });
     const withBlocks = addBlocks(m.system_prompt || '', eligibleBlocks(m, draftFeatures()));
@@ -322,11 +374,10 @@ export default function registerModelRoutes(app) {
     res.json({ custom: getCustomPresets() });
   });
 
-  app.get('/api/admin/detect-ctx', authMiddleware, adminOnly, async (req, res) => {
-    const internal = req.query.model || '';
-    const prov = req.query.provider ? resolveProvider(req.query.provider) : getProviders()[0];
-    const numCtx = await detectContextLength(prov, internal);
-    res.json({ numCtx, ok: !!numCtx });
+  app.post('/api/admin/detect-ctx', authMiddleware, adminOnly, async (req, res) => {
+    const numCtx = {};
+    for (const row of db.models.all()) numCtx[row.id] = await probeCtx({ ...row, num_ctx: 0 });
+    res.json({ numCtx });
   });
 
   app.get('/api/admin/models/folders', authMiddleware, adminOnly, (req, res) => {

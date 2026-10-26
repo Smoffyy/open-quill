@@ -1,0 +1,113 @@
+.lib-page { flex: 1; min-height: 0; overflow: hidden auto; }
+.lib-col { width: 100%; max-width: 880px; margin: 0 auto; padding: 56px 24px 64px; }
+.lib-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.lib-headings { min-width: 0; }
+.lib-title { margin: 0; font-family: var(--font-serif); font-size: 24px; line-height: 32px; font-weight: 500; color: var(--text); }
+.lib-sub { margin: 8px 0 0; font-size: 14px; line-height: 20px; color: var(--text-faint); font-family: var(--font-sans); }
+.lib-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.lib-icon-btn {
+  display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; color: var(--text-muted);
+  transition: background var(--fx-t, .15s), color var(--fx-t, .15s);
+}
+.lib-icon-btn svg { width: 16px; height: 16px; }
+.lib-icon-btn:hover { background: var(--cl-hover); color: var(--text); }
+.lib-pill, .lib-primary {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 8px;
+  font-size: 14px; line-height: 20px; font-family: var(--font-sans); white-space: nowrap;
+  transition: background var(--fx-t, .15s), color var(--fx-t, .15s), opacity var(--fx-t, .15s);
+}
+.lib-pill { background: var(--cl-hover); color: var(--text); }
+.lib-pill .lib-pill-key { color: var(--text-faint); }
+.lib-pill:hover { background: var(--hover-mid); }
+.lib-pill svg, .lib-primary svg { width: 14px; height: 14px; flex-shrink: 0; }
+.lib-primary { background: var(--text); color: var(--bg); font-weight: 500; }
+.lib-primary:hover { opacity: .88; }
+
+.lib-tabs { display: flex; align-items: center; margin-top: 24px; }
+.lib-tab {
+  height: 32px; padding: 0 12px; border-radius: 8px; background: none;
+  font-size: 14px; line-height: 20px; font-weight: 500; font-family: var(--font-sans); color: var(--text-faint);
+  transition: background var(--fx-t, .15s), color var(--fx-t, .15s);
+}
+.lib-tab:hover { color: var(--text-muted); }
+.lib-tab.on { color: var(--text); background: var(--cl-hover); }
+.lib-body { margin-top: 28px; }
+
+.lib-empty { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 40px 0 48px; }
+.lib-empty-art {
+  display: grid; place-items: center; width: 72px; height: 72px; border-radius: 50%;
+  border: 1.5px solid var(--border); color: var(--text-muted);
+}
+.lib-empty-art svg { width: 32px; height: 32px; }
+.lib-empty-line { margin: 0; font-size: 14px; line-height: 20px; color: var(--text-faint); font-family: var(--font-sans); }
+
+.lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 24px; }
+.lib-card {
+  display: flex; flex-direction: column; text-align: left; height: 254px; overflow: hidden;
+  background: var(--surface); border-radius: 12px; color: inherit;
+  transition: background var(--fx-t, .15s) ease, transform var(--fx-t, .15s) ease;
+}
+.lib-card:hover { background: var(--surface-hover); }
+.lib-card-preview { flex: 1; min-height: 0; padding: 14px; overflow: hidden; color: var(--text-muted); }
+.lib-card-snippet { margin: 0; font-size: 11px; line-height: 15px; font-family: var(--font-mono, ui-monospace, monospace); white-space: pre-wrap; word-break: break-word; color: var(--text-muted); }
+.lib-card-foot { display: flex; flex-direction: column; gap: 8px; padding: 14px; }
+.lib-card-title {
+  font-size: 14px; line-height: 20px; font-weight: 500; color: var(--text);
+  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.lib-card-meta { font-size: 13px; line-height: 17px; color: var(--text-faint); font-family: var(--font-sans); }
+.lib-card-skel { pointer-events: none; }
+.lib-card-skel .lib-card-preview { display: flex; flex-direction: column; gap: 10px; }
+.lib-card-skel .skeleton { height: 11px; }
+.lib-card-skel .lib-card-foot .skeleton { height: 14px; }
+
+.sched-rule { height: 1px; margin: 32px 0; border-top: 1px dashed var(--border); }
+.sched-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 8px 40px; }
+.sched-card {
+  display: flex; align-items: flex-start; gap: 12px; padding: 12px; border-radius: 12px; text-align: left;
+  color: inherit; transition: background var(--fx-t, .15s) ease;
+}
+.sched-card:hover { background: var(--cl-hover); }
+.sched-card-ic {
+  display: grid; place-items: center; width: 32px; height: 32px; flex-shrink: 0; border-radius: 8px;
+  background: var(--cl-hover); color: var(--text-muted);
+}
+.sched-card-ic svg { width: 16px; height: 16px; }
+.sched-card-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sched-card-title { font-size: 14px; line-height: 20px; font-weight: 500; color: var(--text); }
+.sched-card-desc {
+  font-size: 14px; line-height: 20px; color: var(--text-muted); font-family: var(--font-sans);
+  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.sched-card-when {
+  display: inline-flex; align-items: center; gap: 6px; margin-top: 6px;
+  font-size: 13px; line-height: 17px; color: var(--text-faint); font-family: var(--font-sans);
+}
+.sched-card-when svg { width: 13px; height: 13px; flex-shrink: 0; }
+
+.lib-overlay {
+  position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column;
+  background: var(--bg);
+}
+
+.sched-list { display: flex; flex-direction: column; gap: 4px; }
+.sched-item {
+  display: flex; align-items: flex-start; gap: 12px; padding: 12px; border-radius: 12px;
+  background: var(--surface); transition: background var(--fx-t, .15s) ease;
+}
+.lib-list-skel { display: flex; flex-direction: column; gap: 4px; }
+.lib-row-skel { display: flex; align-items: flex-start; gap: 12px; padding: 12px; border-radius: 12px; background: var(--surface); }
+.lib-row-skel-ic { width: 20px; height: 20px; border-radius: 6px; flex-shrink: 0; }
+.lib-row-skel-body { display: flex; flex-direction: column; gap: 9px; flex: 1; min-width: 0; padding-top: 2px; }
+.lib-row-skel-body .skeleton { height: 13px; }
+.sched-item.off { opacity: .55; }
+.sched-item:hover { background: var(--surface-hover); }
+.sched-item-acts { display: flex; align-items: center; gap: 2px; margin-left: auto; flex-shrink: 0; }
+.sched-item-acts .lib-icon-btn { width: 28px; height: 28px; border-radius: 7px; }
+.sched-item-acts .lib-icon-btn svg { width: 14px; height: 14px; }
+.lib-icon-btn.danger:hover { color: var(--danger); }
+.lib-card-ext {
+  display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 6px;
+  background: var(--cl-hover); color: var(--text-muted);
+  font-size: 11px; line-height: 20px; font-family: var(--font-sans); text-transform: uppercase; letter-spacing: .04em;
+}

@@ -5,7 +5,7 @@ import { useAdmin } from '../store.jsx';
 import { Card, Btn, Empty, KV, Note, fmtAgo } from '../ui.jsx';
 import { Upload } from '../../ui/icons.jsx';
 import { t } from '../../../i18n.jsx';
-import { toast } from '../../../lib/toast.js';
+import { notify } from '../../../lib/notify.js';
 import { groupChanges } from '../../../lib/changeset.js';
 import { sectionMeta } from '../nav.jsx';
 import { Skel, SkelTable } from '../../ui/Skeleton.jsx';
@@ -88,11 +88,11 @@ export default function ReleasesSection() {
     onConfirm: async () => {
       try {
         const out = await api.post(`/api/admin/releases/${r.version}/restore`, {});
-        toast(t('Version {v} is live again, published as version {n}.', { v: r.version, n: out.version }));
+        notify(t('Version {v} is live again, published as version {n}.', { v: r.version, n: out.version }));
         await load();
         changes.reload();
       } catch (e) {
-        toast(e?.message || t('That version could not be restored.'), { kind: 'error', icon: 'info' });
+        notify(e?.message || t('That version could not be restored.'), { kind: 'error' });
       }
     }
   });
@@ -133,7 +133,7 @@ export default function ReleasesSection() {
                       <b>{r.note || kindLine(r)}</b>
                       <span>{[r.note ? kindLine(r) : '', r.author, live ? t('live now') : ''].filter(Boolean).join(' · ')}</span>
                     </span>
-                    <span className="rl-when" title={new Date(r.createdAt).toLocaleString()}>{fmtAgo(r.createdAt)}</span>
+                    <span className="rl-when" data-tip={new Date(r.createdAt).toLocaleString()}>{fmtAgo(r.createdAt)}</span>
                   </button>
                   {expanded && (
                     <div className="rl-body">

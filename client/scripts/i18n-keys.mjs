@@ -28,14 +28,21 @@ const EXTRA_KEYS = [
   'Boolean', 'Number', 'String', 'On/off toggle', 'Slider', 'Dropdown',
   'Users get an on/off switch.', 'Users get a segmented slider through every value.',
   'Users get a dropdown of every value.',
-  'Blank kwarg', 'An empty kwarg you fill in yourself.',
-  'On/off thinking toggle with false and true.', 'A slider through low, medium, and high.',
-  'Hidden kwarg meant to follow a thinking toggle.',
+  'Thinking switch', 'An on/off switch for models such as Qwen 3.',
+  'Reasoning effort', 'Low, medium and high, for models such as gpt-oss.',
+  'Thinking budget slider', 'A token slider that caps thinking, as llama.cpp reads it.',
+  'Thinking budget levels', 'Off, Low, Medium and High, each sending a token count.',
+  'Keep earlier thinking', 'Hidden. Follows the thinking switch and sends past thinking back.',
+  'Keep earlier thinking (GLM)', 'Hidden. Sends false so past thinking is kept.',
+  'Custom field', 'Start empty and set everything yourself.',
   'user', 'assistant', 'system',
   'Temperature', 'Top P', 'Top K', 'Min P', 'Repetition penalty', 'Presence penalty',
   'Frequency penalty', 'Max tokens', 'Context window', 'Seed', 'System prompt',
   'Extended-mode trigger', 'Standard-mode trigger',
   'Router', 'Unavailable',
+  'This task is still running from last time.', 'No model is available to run this task.',
+  'This router could not pick a model.', 'This model is currently unavailable.',
+  'The monthly usage budget has been reached.', 'The task could not start.',
 ];
 
 const TABLE_SCANS = [
@@ -43,6 +50,9 @@ const TABLE_SCANS = [
   { file: 'components/dialogs/ShortcutsModal.jsx', re: /\[\s*'((?:[^'\\]|\\.)*)'\s*,\s*\[/g },
   { file: 'lib/keybinds.js', re: /\b(?:label|group):\s*'((?:[^'\\]|\\.)*)'/g },
   { file: 'lib/playground.js', re: /\b(?:label|hint):\s*'((?:[^'\\]|\\.)*)'/g },
+  { file: 'lib/presets.js', re: /\blabel:\s*'((?:[^'\\]|\\.)*)'/g },
+  { file: 'components/chat/ToolCard.jsx', re: /\bplural\([^,]+,\s*'((?:[^'\\]|\\.)*)'/g },
+  { file: 'components/chat/ToolCard.jsx', re: /\bplural\([^,]+,\s*'(?:[^'\\]|\\.)*'\s*,\s*'((?:[^'\\]|\\.)*)'/g },
 ];
 
 function walk(dir, keys) {
