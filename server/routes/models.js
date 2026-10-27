@@ -260,7 +260,7 @@ export default function registerModelRoutes(app) {
       has_vision: b.has_vision ? 1 : 0,
       think_open: b.think_open || '', think_close: b.think_close || '',
       sandbox_auto: b.sandbox_auto ? 1 : 0, sandbox_allowed: b.sandbox_allowed === false ? 0 : 1, code_allowed: b.code_allowed === false ? 0 : 1, dropdown_icon: 'dropdown_icon' in b ? (b.dropdown_icon === false ? 0 : 1) : look.dropdown_icon, show_icon: b.show_icon === false ? 0 : 1, is_default: 0, agent_steps: Number.isInteger(b.agent_steps) ? Math.max(0, b.agent_steps) : 0,
-      web_search_auto: b.web_search_auto ? 1 : 0, web_search_allowed: b.web_search_allowed === false ? 0 : 1, artifacts_allowed: b.artifacts_allowed === false ? 0 : 1,
+      web_search_auto: b.web_search_auto ? 1 : 0, web_search_allowed: b.web_search_allowed === false ? 0 : 1, artifacts_allowed: b.artifacts_allowed ? 1 : 0,
       skills_allowed: b.skills_allowed ? 1 : 0, mcp_allowed: b.mcp_allowed ? 1 : 0, chat_search_allowed: b.chat_search_allowed ? 1 : 0,
       end_chat_allowed: b.end_chat_allowed ? 1 : 0, memory_allowed: b.memory_allowed ? 1 : 0, calculator_allowed: b.calculator_allowed ? 1 : 0, todo_allowed: b.todo_allowed ? 1 : 0, ask_user_allowed: b.ask_user_allowed ? 1 : 0, consult_allowed: b.consult_allowed ? 1 : 0, consult_images: b.consult_images ? 1 : 0, consult_models: sanitizeConsultModels(b.consult_models), hide_tool_calls: b.hide_tool_calls ? 1 : 0, long_convo_reminder: b.long_convo_reminder ? 1 : 0, parallel_requests: b.parallel_requests ? 1 : 0,
       num_ctx: parseInt(b.num_ctx) || 0, recent_window: parseInt(b.recent_window) > 0 ? parseInt(b.recent_window) : 4,

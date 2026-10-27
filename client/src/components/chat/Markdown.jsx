@@ -66,6 +66,13 @@ function remarkBreaks() {
 
 const BLOCK_HARD_LINES = 500;
 
+function continuesItem(lines, i) {
+  for (let j = i + 1; j < lines.length; j++) {
+    if (lines[j].trim()) return /^[ \t]/.test(lines[j]);
+  }
+  return false;
+}
+
 function blockify(text) {
   const lines = text.split('\n');
   const blocks = [];
@@ -97,7 +104,7 @@ function blockify(text) {
       const dollars = (line.match(/\$\$/g) || []).length;
       if (dollars % 2) inMath = !inMath;
     }
-    if (!inFence && !inMath && line.trim() === '' && hasContent) {
+    if (!inFence && !inMath && line.trim() === '' && hasContent && !continuesItem(lines, i)) {
       blocks.push(text.slice(start, end));
       start = next; count = 0; hasContent = false;
     } else if (!inFence && !inMath && count >= BLOCK_HARD_LINES) {

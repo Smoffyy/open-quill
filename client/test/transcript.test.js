@@ -163,6 +163,7 @@ test('isolateDisplayMath gives a display block its own paragraph and leaves inli
   assert.equal(isolateDisplayMath('Here:\n$$x^2$$\nDone.'), 'Here:\n\n$$\nx^2\n$$\n\nDone.');
   assert.equal(isolateDisplayMath('Intro:\n$$\n\\begin{align}\na &= b\n\\end{align}\n$$\nOutro.'), 'Intro:\n\n$$\n\\begin{align}\na &= b\n\\end{align}\n$$\n\nOutro.');
   assert.equal(isolateDisplayMath('Intro:\n\n$$x^2$$\n\nOutro.'), 'Intro:\n\n$$\nx^2\n$$\n\nOutro.');
+  assert.equal(isolateDisplayMath('1.  Solve:\n    $$x = 2$$\n    Done.'), '1.  Solve:\n\n    $$\n    x = 2\n    $$\n\n    Done.', 'a block inside a list item keeps the item\'s indent');
   const inline = 'The value $x$ and $y$ are inline.';
   assert.equal(isolateDisplayMath(inline), inline);
   const fenced = '```\n$$x^2$$\ntext\n```';

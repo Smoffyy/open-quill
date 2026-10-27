@@ -135,7 +135,8 @@ export function isolateDisplayMath(text) {
       // lines it becomes flow math, and therefore display.
       if (whole) {
         const inner = trimmed.slice(2, -2).trim();
-        if (inner) { out.push('$$', inner, '$$'); } else out.push(line);
+        const indent = line.match(/^[ \t]*/)[0];
+        if (inner) { out.push(indent + '$$', indent + inner, indent + '$$'); } else out.push(line);
       } else out.push(line);
       if (opens) open = true;
       else if (closes) open = false;

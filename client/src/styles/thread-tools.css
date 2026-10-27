@@ -88,7 +88,7 @@
 }
 .steer-seg button:hover:not(.on) { color: var(--text); }
 .steer-note { font-size: 10.5px; color: var(--text-faint); }
-.steer-chips { display: flex; flex-direction: column; gap: 4px; margin: 7px 0 2px; }
+.steer-chips { display: flex; flex-direction: column; gap: 4px; margin: 7px 0 2px 8px; }
 .steer-chip {
   display: inline-flex; align-items: center; gap: 5px; align-self: flex-start; max-width: 100%;
   padding: 2px 9px 2px 7px; border-radius: 999px; border: 1px dashed var(--border);
