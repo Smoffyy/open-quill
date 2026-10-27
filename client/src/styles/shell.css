@@ -43,7 +43,8 @@
 
 .app.has-bg { background: transparent; }
 .app.has-bg .main { background: transparent; }
-.app.has-bg .sidebar, .app.has-bg .main { position: relative; z-index: 1; }
+.app.has-bg .main { position: relative; z-index: 1; }
+.app.has-bg .sidebar { position: relative; z-index: 2; }
 
 .app.has-bg .sidebar {
   background: color-mix(in srgb, var(--sidebar) 56%, transparent);

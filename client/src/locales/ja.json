@@ -1142,7 +1142,6 @@
   "Pick a place, then choose what to put there. It appears immediately in the preview and you can style it like anything else.": "場所を選んでから、そこに配置するものを選びます。プレビューにすぐ反映され、他の要素と同様にスタイルを設定できます。",
   "Pick a screen size to override how this element behaves there. Anything left untouched keeps its desktop value.": "画面サイズを選んで、その画面でのこの要素の挙動を上書きします。変更しない項目はデスクトップの値のままです。",
   "Pick a state to style how this element looks when a user hovers, presses, focuses or disables it.": "ユーザーがこの要素にホバー、押下、フォーカス、無効化したときの見た目を設定する状態を選びます。",
-  "Pick up to 2 extra models. Your next message will be answered by each as versions of one response.": "追加のモデルを最大2つまで選べます。次のメッセージは、それぞれから1つの応答のバージョンとして回答されます。",
   "Pick up where this reply stopped": "この返信が止まったところから再開",
   "Picker chip": "選択画面のチップ",
   "Pill": "ピル",
@@ -3141,5 +3140,6 @@
   "{n} documents": "{n} ドキュメント",
   "{n} result": "{n} 件の結果",
   "{n} results": "{n} 件の結果",
-  "{n} image": "{n} 枚の画像"
+  "{n} image": "{n} 枚の画像",
+  "Up to 2 extra models answer your next message.": "追加のモデルは最大2つまで、次のメッセージに回答します。"
 }

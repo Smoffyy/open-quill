@@ -571,7 +571,7 @@ export default function Composer({
                         </button>
                       );
                     })}
-                    <div className="pm-foot">{t("Pick up to 2 extra models. Your next message will be answered by each as versions of one response.")}</div>
+                    <div className="pm-foot">{t("Up to 2 extra models answer your next message.")}</div>
                   </SubItem>
                 )}
                 <div className="pm-divider" />

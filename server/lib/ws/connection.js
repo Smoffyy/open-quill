@@ -255,12 +255,12 @@ export function initWs(server) {
           const seen = new Set(kept.map(a => a.url));
           const merged = kept.concat(attachments.filter(a => !seen.has(a.url))).slice(0, MAX_ATTACHMENTS);
           db.messages.insert({ id: umid, chat_id: chat.id, role: 'user', content, reasoning: '', model_id: null, attachments: merged, parent_id: orig.parent_id ?? null, created_at: now() });
-          db.chats.update(chat.id, { active_leaf: umid });
+          db.chats.update(chat.id, { active_leaf: umid, updated_at: now() });
         } else {
           const parent = (db.chats.byId(chat.id) || {}).active_leaf || null;
           const umid = uid();
           db.messages.insert({ id: umid, chat_id: chat.id, role: 'user', content, reasoning: '', model_id: null, attachments, parent_id: parent, created_at: now() });
-          db.chats.update(chat.id, { active_leaf: umid });
+          db.chats.update(chat.id, { active_leaf: umid, updated_at: now() });
           if (sandboxOn && attachments.length) {
             for (const a of attachments) {
               try {

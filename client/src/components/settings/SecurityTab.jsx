@@ -150,6 +150,12 @@ function Sessions() {
       <div className="me-section-h">{t("Active sessions")}</div>
       <div className="sec-note">{t("Devices signed in to your account. Sessions expire after 30 days idle.")}</div>
       <div className="dz-err" role="alert">{err}</div>
+      {sessions && sessions.some(s => !s.current) && (
+        <div className="field row">
+          <div><label>{t("Revoke all other sessions")}</label><div className="muted-note">{t("Keeps this device signed in and ends every other session.")}</div></div>
+          <button className="btn ghost" onClick={revokeOthers}>{t("Revoke others")}</button>
+        </div>
+      )}
       {!sessions && !err && <Skel when><SkelRows count={3} /></Skel>}
       {sessions && sessions.map(s => (
         <div className="field row" key={s.id}>
@@ -166,12 +172,6 @@ function Sessions() {
           {!s.current && <button className="btn ghost" onClick={() => revoke(s.id)}>{t("Revoke")}</button>}
         </div>
       ))}
-      {sessions && sessions.some(s => !s.current) && (
-        <div className="field row">
-          <div><label>{t("Revoke all other sessions")}</label><div className="muted-note">{t("Keeps this device signed in and ends every other session.")}</div></div>
-          <button className="btn ghost" onClick={revokeOthers}>{t("Revoke others")}</button>
-        </div>
-      )}
     </div>
   );
 }

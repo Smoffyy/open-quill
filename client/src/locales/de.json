@@ -1142,7 +1142,6 @@
   "Pick a place, then choose what to put there. It appears immediately in the preview and you can style it like anything else.": "Wählen Sie einen Ort und dann, was Sie dort platzieren. Es erscheint sofort in der Vorschau und Sie können es wie alles andere gestalten.",
   "Pick a screen size to override how this element behaves there. Anything left untouched keeps its desktop value.": "Wählen Sie eine Bildschirmgröße, um zu überschreiben, wie sich dieses Element dort verhält. Alles Unberührte behält seinen Desktop-Wert.",
   "Pick a state to style how this element looks when a user hovers, presses, focuses or disables it.": "Wählen Sie einen Zustand, um zu gestalten, wie dieses Element aussieht, wenn ein Nutzer darüber schwebt, es drückt, fokussiert oder deaktiviert.",
-  "Pick up to 2 extra models. Your next message will be answered by each as versions of one response.": "Wählen Sie bis zu 2 zusätzliche Modelle. Ihre nächste Nachricht wird von jedem als Version einer Antwort beantwortet.",
   "Pick up where this reply stopped": "Dort weitermachen, wo diese Antwort aufgehört hat",
   "Picker chip": "Auswahl-Chip",
   "Pill": "Pille",
@@ -3141,5 +3140,6 @@
   "{n} documents": "{n} Dokumente",
   "{n} result": "{n} Ergebnis",
   "{n} results": "{n} Ergebnisse",
-  "{n} image": "{n} Bild"
+  "{n} image": "{n} Bild",
+  "Up to 2 extra models answer your next message.": "Bis zu 2 weitere Modelle beantworten Ihre nächste Nachricht."
 }

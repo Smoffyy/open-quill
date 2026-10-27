@@ -487,7 +487,6 @@
   "Past-chat search": "Recherche dans les conversations passées",
   "Paste image": "Coller une image",
   "Permanently removes your account, all chats, and files. This cannot be undone.": "Supprime définitivement votre compte, toutes vos conversations et vos fichiers. Cette action est irréversible.",
-  "Pick up to 2 extra models. Your next message will be answered by each as versions of one response.": "Choisissez jusqu'à 2 modèles supplémentaires. Votre prochain message recevra une réponse de chacun, sous forme de versions d'une même réponse.",
   "Pin": "Épingler",
   "Pin to chat": "Épingler à la conversation",
   "Pin to chat (keep in context)": "Épingler à la conversation (conserver dans le contexte)",
@@ -3141,5 +3140,6 @@
   "{n} documents": "{n} documents",
   "{n} result": "{n} résultat",
   "{n} results": "{n} résultats",
-  "{n} image": "{n} image"
+  "{n} image": "{n} image",
+  "Up to 2 extra models answer your next message.": "Jusqu'à 2 modèles supplémentaires répondent à votre prochain message."
 }
