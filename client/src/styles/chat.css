@@ -314,7 +314,7 @@
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes pulse { 0%,100% { opacity: .55; transform: scale(.9);} 50% { opacity: 1; transform: scale(1.08);} }
 
-.actions { display: flex; align-items: center; gap: 0; margin-top: 8px; margin-left: 2px; height: 24px; opacity: 0; transition: opacity var(--fx-t, .16s); }
+.actions { display: flex; align-items: center; gap: 0; margin-top: 8px; margin-left: 4px; height: 24px; opacity: 0; transition: opacity var(--fx-t, .16s); }
 .msg.assistant:hover .actions { opacity: 1; }
 .msg.assistant.latest:not(.streaming-msg) .actions { opacity: 1; }
 .msg.assistant.latest .msg-time { opacity: 0; transition: opacity .2s ease; }
@@ -372,7 +372,7 @@
    header never leaves it and clicking cannot move it */
 .reasoning.carded {
   border: 1px solid var(--border-soft); border-radius: 16px;
-  padding: 6px 16px 12px; margin: 2px 0 10px;
+  padding: 6px 16px 12px; margin: 2px 0 10px 8px;
 }
 .reasoning.carded .rb-steps { max-height: 460px; }
 .rb-peek-in {
@@ -451,6 +451,7 @@
 /* ---------- code blocks ---------- */
 .code-wrap { position: relative; margin: 0 0 12px; border: 0.8px solid var(--code-border, var(--border-soft)); border-radius: 14px; background: var(--code-wrap-bg, var(--code-bg, #1f1f1d)); }
 .assistant-body > .code-wrap:last-child { margin-bottom: 0; }
+.assistant-body > .code-wrap, .assistant-body > .diagram-block { margin-left: 8px; }
 
 .code-bar {
   padding: 14px 14px 0; font-family: var(--font-sans); font-size: 12px; line-height: 17px;
@@ -479,6 +480,7 @@
 .assistant-body table thead th, .bubble-user table thead th, .art-md table thead th, .doc-body table thead th, .bc-col-body table thead th { background: var(--surface-2); font-weight: 600; font-size: .95em; color: var(--text); }
 .assistant-body table tbody tr:nth-child(even) td, .art-md table tbody tr:nth-child(even) td, .doc-body table tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--surface-2) 40%, transparent); }
 .assistant-body table code, .bubble-user table code { white-space: nowrap; }
+.assistant-body > table { margin-left: 8px; max-width: calc(100% - 8px); }
 
 .composer .mic.rec { color: var(--danger); animation: micPulse 1.4s ease-in-out infinite; }
 .composer .mic.busy { opacity: .55; pointer-events: none; }

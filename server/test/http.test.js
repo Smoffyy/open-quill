@@ -593,7 +593,8 @@ test('the catalog edits, copies and removes models in batches', async () => {
 
   const state = (await browser('GET', '/api/admin/changes')).json.models;
   assert.deepEqual([...state.changed].sort(), [a, b].sort(), 'only the edited rows are reported as unpublished');
-  assert.match(state.live[a].system_prompt, /^<context>\n[\s\S]*<tools>\n<tool name="project">[\s\S]*<tool name="artifacts">/, 'the published copy of each changed row comes along for diffing, with the blocks a new model starts with');
+  assert.match(state.live[a].system_prompt, /^<context>\n[\s\S]*<tools>\n<tool name="project">/, 'the published copy of each changed row comes along for diffing, with the blocks a new model starts with');
+  assert.doesNotMatch(state.live[a].system_prompt, /<tool name="artifacts">/, 'artifacts start switched off');
   assert.ok(state.order.indexOf(a) < state.order.indexOf(b), 'and so does the published order');
 
   const missing = await browser('PATCH', '/api/admin/models', { body: { rows: [{ id: a, description: 'x' }, { id: 'nope' }] } });
@@ -1202,7 +1203,7 @@ test('a project chat reads its knowledge, keeps notes and writes an artifact tha
   });
   try {
     const provider_id = await connection('anthropic', mock.url, 'sk-ant-proj');
-    const model = (await browser('POST', '/api/admin/models', { body: { display_name: 'Planner', internal_name: 'claude-opus-5-5', provider_id } })).json.id;
+    const model = (await browser('POST', '/api/admin/models', { body: { display_name: 'Planner', internal_name: 'claude-opus-5-5', provider_id, artifacts_allowed: true } })).json.id;
     const project = (await browser('POST', '/api/projects', { body: { name: 'Lisbon trip' } })).json;
     const boundary = 'oqknow' + Date.now();
     const raw = Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="brief.md"\r\nContent-Type: text/markdown\r\n\r\nThe budget is 400 euros.\r\n--${boundary}--\r\n`);

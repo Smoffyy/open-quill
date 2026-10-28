@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
+## [28.0.1] - 2026-10-28
+### Changed
+- **Sidebar order** - chats are sorted by when you last sent a message in them, not when the assistant finished replying, so a new chat stays where its first message put it.
+- **Compare models** - the footer of the Compare models menu is shorter: "Up to 2 extra models answer your next message."
+- **Sessions** - Revoke all other sessions sits above the list of active sessions.
+### Fixed
+- **All chats performance** - with hardware acceleration off, All chats no longer blurs the window behind it, which slowed every frame.
+- **Sidebar scroll line** - the line that appeared across the top of the chat list once it was scrolled is gone.
+- **Sidebar resize handle** - the handle sits on the sidebar's edge line instead of just inside it.
 
 ## [28.0.0] - 2026-10-25
 ### Added

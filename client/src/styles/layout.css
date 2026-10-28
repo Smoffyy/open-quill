@@ -10,7 +10,7 @@
 /* ---------- sidebar ---------- */
 .sidebar {
   width: 288px; background: var(--sidebar); display: flex; flex-direction: column;
-  border-right: 1px solid var(--border-soft); flex-shrink: 0; transition: width .2s ease; overflow: hidden;
+  border-right: 1px solid var(--border-soft); flex-shrink: 0; transition: width .2s ease; overflow: clip; overflow-clip-margin: 6px;
 }
 .sidebar.collapsed { width: 49px; }
 .sidebar.collapsed .brand-wrap,
@@ -92,10 +92,6 @@
 .rl-menu button.danger:hover { background: color-mix(in srgb, var(--danger) 13%, transparent); }
 .chats-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
 .chats { flex: 1; overflow: hidden auto; padding: 0 8px 12px; }
-
-.chats {
-  border-top: .8px solid transparent; transition: border-color var(--fx-t, .15s) cubic-bezier(.4, 0, .2, 1);
-}
 /* The fade is painted over the list rather than masked onto it, and stops short of
    the scroll gutter, so the scrollbar sits above the fade instead of dissolving into it. */
 .chats-wrap::before, .chats-wrap::after {
@@ -104,7 +100,6 @@
 }
 .chats-wrap::before { top: 0; background: linear-gradient(to bottom, var(--sidebar), transparent); }
 .chats-wrap::after { bottom: 0; background: linear-gradient(to top, var(--sidebar), transparent); }
-.chats.scrolled { border-top-color: color-mix(in srgb, var(--text) 10%, transparent); }
 .chat-row {
   display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 6px 32px 6px 8px; margin-bottom: 1px;
   border-radius: 8px; color: var(--text-soft, var(--text-muted)); font-size: 14px; line-height: 20px; cursor: pointer;

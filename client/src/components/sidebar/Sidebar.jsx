@@ -285,7 +285,6 @@ function Sidebar({
   const chatsRef = useRef(null);
   const sideRef = useRef(null);
   const [width, setWidth] = useState(() => storedSidebarWidth());
-  const [scrolled, setScrolled] = useState(false);
   const profileBtnRef = useRef(null);
   const [groupBy, setGroupBy] = useState(() => { try { return localStorage.getItem('oq-group-by') || 'date'; } catch { return 'date'; } });
   const [groupMenu, setGroupMenu] = useState(false);
@@ -410,7 +409,7 @@ function Sidebar({
         </>}
       </div>
       <div className="chats-wrap">
-      <div className={'chats' + (scrolled ? ' scrolled' : '')} ref={chatsRef} onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 0)}>
+      <div className="chats" ref={chatsRef}>
         {!chatsLoaded ? (
           <>
             <div className="section-label">{recentsLabel}</div>

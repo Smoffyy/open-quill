@@ -1142,7 +1142,6 @@
   "Pick a place, then choose what to put there. It appears immediately in the preview and you can style it like anything else.": "Выберите место, затем выберите, что туда поместить. Оно сразу появится в предпросмотре, и вы сможете оформить его как что угодно ещё.",
   "Pick a screen size to override how this element behaves there. Anything left untouched keeps its desktop value.": "Выберите размер экрана, чтобы переопределить поведение этого элемента на нём. Всё, что не тронуто, сохраняет значение для компьютера.",
   "Pick a state to style how this element looks when a user hovers, presses, focuses or disables it.": "Выберите состояние, чтобы оформить, как этот элемент выглядит при наведении, нажатии, фокусе или отключении.",
-  "Pick up to 2 extra models. Your next message will be answered by each as versions of one response.": "Выберите до 2 дополнительных моделей. Ваше следующее сообщение получит ответ от каждой из них как версии одного ответа.",
   "Pick up where this reply stopped": "Продолжить с того места, где остановился этот ответ",
   "Picker chip": "Чип выбора",
   "Pill": "Плашка",
@@ -3141,5 +3140,6 @@
   "{n} documents": "Документов: {n}",
   "{n} result": "{n} результат",
   "{n} results": "Результатов: {n}",
-  "{n} image": "{n} изображение"
+  "{n} image": "{n} изображение",
+  "Up to 2 extra models answer your next message.": "До 2 дополнительных моделей отвечают на ваше следующее сообщение."
 }

@@ -1142,7 +1142,6 @@
   "Pick a place, then choose what to put there. It appears immediately in the preview and you can style it like anything else.": "위치를 선택한 다음 그곳에 넣을 것을 선택하세요. 미리보기에 즉시 나타나며 다른 요소와 마찬가지로 스타일을 지정할 수 있습니다.",
   "Pick a screen size to override how this element behaves there. Anything left untouched keeps its desktop value.": "화면 크기를 선택해 해당 크기에서 이 요소의 동작을 재정의하세요. 건드리지 않은 항목은 데스크톱 값을 유지합니다.",
   "Pick a state to style how this element looks when a user hovers, presses, focuses or disables it.": "사용자가 이 요소를 호버, 클릭, 포커스, 비활성화할 때의 모습을 지정할 상태를 선택하세요.",
-  "Pick up to 2 extra models. Your next message will be answered by each as versions of one response.": "최대 2개의 추가 모델을 선택하세요. 다음 메시지는 각 모델이 하나의 응답에 대한 여러 버전으로 답변합니다.",
   "Pick up where this reply stopped": "이 답변이 멈춘 지점부터 이어가기",
   "Picker chip": "선택기 칩",
   "Pill": "필",
@@ -3141,5 +3140,6 @@
   "{n} documents": "문서 {n}개",
   "{n} result": "결과 {n}개",
   "{n} results": "결과 {n}개",
-  "{n} image": "이미지 {n}개"
+  "{n} image": "이미지 {n}개",
+  "Up to 2 extra models answer your next message.": "최대 2개의 추가 모델이 다음 메시지에 답변합니다."
 }

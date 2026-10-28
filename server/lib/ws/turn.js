@@ -97,7 +97,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
         reasoning_effort: model.reasoning_effort_level || null,
         kwarg_values: model.kwarg_values || null, created_at: now(), ...row
       });
-      db.chats.update(chat.id, { updated_at: now(), active_leaf: assistantId });
+      db.chats.update(chat.id, { active_leaf: assistantId });
       checkpointed = true;
     } catch (e) { console.warn('[turn] checkpoint failed', e.message); }
   };
@@ -865,9 +865,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     const finalRow = { id: assistantId, chat_id: chat.id, role: 'assistant', content, reasoning, activity, reasoning_segs: reasonSegs.length ? reasonSegs : null, reasoning_seg_ms: reasonSegs.length ? segMs : null, model_id: model.id, model_name: model.display_name || '', model_icon: model.static_icon || '', parent_id: assistantParent, usage: resume ? addUsage(resume.usage, usageRec) : usageRec, speed, reasoning_ms: reasonMs || null, extended: !!extended, reasoning_effort: model.reasoning_effort_level || null, kwarg_values: model.kwarg_values || null, steers: steerNotes.length ? steerNotes.slice(0, MAX_STEERS) : null, truncated: truncated || null, plan_mode: flags.planMode ? 1 : null, ctx_used: lastStepTokens || null, created_at: (resume && resume.created_at) || now() };
     if (checkpointed) db.messages.update(assistantId, finalRow);
     else db.messages.insert(finalRow);
-    db.chats.update(chat.id, { updated_at: now(), active_leaf: assistantId });
-  } else {
-    db.chats.update(chat.id, { updated_at: now() });
+    db.chats.update(chat.id, { active_leaf: assistantId });
   }
   safeSend(JSON.stringify({ type: 'done', chatId: chat.id, messageId: (hasOutput || usageRec) ? assistantId : null, truncated, stopped: wasStopped }));
   if (hasOutput && !turnFailed) {
