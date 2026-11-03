@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [28.0.2] - TBD
 ### Changed
+- **Model picker on phones** - the model picker opens as the same bottom sheet in every theme, where the Anthropic theme used to show a floating menu.
 - **Artifact panel resize handle** - the handle now matches the sidebar's: a pill on the panel's edge that appears on hover. Drag to resize, click to close, double-click to return to the default width, or use the arrow keys when it has focus. The width you choose is remembered.
 ### Fixed
 - **Sidebar resize handle** - a slightly unsteady click on the handle no longer leaves the sidebar stuck wide and empty, and a normal-speed double-click resets its width instead of hiding it.

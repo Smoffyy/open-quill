@@ -12,13 +12,3 @@
 [data-layout="pill"] .model-opt .check, [data-layout="pill"] .plus-menu .pm-check { color: var(--text); }
 [data-layout="pill"] .model-trigger { gap: 4px; font-weight: 400; line-height: 20px; }
 [data-layout="pill"] .model-trigger .ext { color: var(--text-faint); font-weight: 400; font-size: 14px; line-height: 1; }
-
-@media (max-width: 768px) {
-  :root[data-layout="pill"] .model-menu {
-    position: fixed; left: 0; right: 0; bottom: 0; top: auto;
-    width: 100%; min-width: 0; max-width: 100%; overflow: hidden auto;
-    border-radius: 20px 20px 0 0; padding: 14px 12px calc(14px + env(safe-area-inset-bottom));
-    max-height: 78vh;
-  }
-  [data-layout="pill"] .model-scrim { display: block; position: fixed; inset: 0; z-index: 49; background: #00000070; }
-}

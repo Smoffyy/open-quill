@@ -302,7 +302,13 @@ body:has(.app.has-bg) > .model-submenu.pinned {
   .co-head h2 { font-size: 22px; flex: 1 1 100%; }
   .co-body { padding-left: 16px; padding-right: 16px; }
 
-  .model-scrim { display: none; }
+  :root:root .model-menu {
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto;
+    width: 100%; min-width: 0; max-width: 100%; overflow: hidden auto;
+    border-radius: 20px 20px 0 0; padding: 14px 12px calc(14px + env(safe-area-inset-bottom));
+    max-height: 78vh;
+  }
+  .model-scrim { display: block; position: fixed; inset: 0; z-index: 49; background: #00000070; }
 
   /* compactness + overlap guards */
   /* iOS Safari auto-zooms on focus when a control is under 16px, so every
