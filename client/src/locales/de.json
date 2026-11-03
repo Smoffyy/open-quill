@@ -3141,5 +3141,6 @@
   "{n} result": "{n} Ergebnis",
   "{n} results": "{n} Ergebnisse",
   "{n} image": "{n} Bild",
-  "Up to 2 extra models answer your next message.": "Bis zu 2 weitere Modelle beantworten Ihre nächste Nachricht."
+  "Up to 2 extra models answer your next message.": "Bis zu 2 weitere Modelle beantworten Ihre nächste Nachricht.",
+  "Resize artifacts panel": "Größe des Artifacts-Bereichs ändern"
 }

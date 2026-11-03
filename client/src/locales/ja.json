@@ -3141,5 +3141,6 @@
   "{n} result": "{n} 件の結果",
   "{n} results": "{n} 件の結果",
   "{n} image": "{n} 枚の画像",
-  "Up to 2 extra models answer your next message.": "追加のモデルは最大2つまで、次のメッセージに回答します。"
+  "Up to 2 extra models answer your next message.": "追加のモデルは最大2つまで、次のメッセージに回答します。",
+  "Resize artifacts panel": "アーティファクトパネルのサイズを変更"
 }

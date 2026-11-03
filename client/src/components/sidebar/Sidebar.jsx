@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Tip from '../ui/Tip.jsx';
+import ResizeHandle, { storedWidth } from '../ui/ResizeHandle.jsx';
 import { SegSlide } from '../ui/controls.jsx';
 import { ChatMenu, menuAtButton, menuAtPointer } from './ChatMenu.jsx';
 import DocsNav from './DocsNav.jsx';
@@ -57,98 +58,10 @@ const SIDE_MIN = 232;
 const SIDE_MAX = 440;
 const SIDE_KEY = 'oq-sidebar-w';
 
+const clampSide = (w) => Math.min(SIDE_MAX, Math.max(SIDE_MIN, w));
+
 export function storedSidebarWidth() {
-  try {
-    const n = parseInt(localStorage.getItem(SIDE_KEY), 10);
-    if (Number.isFinite(n)) return Math.min(SIDE_MAX, Math.max(SIDE_MIN, n));
-  } catch { }
-  return null;
-}
-
-function SideResize({ targetRef, onCommit, onHide }) {
-  const drag = useRef(null);
-  const tap = useRef(0);
-
-  useEffect(() => () => clearTimeout(tap.current), []);
-
-  useEffect(() => {
-    const move = (e) => {
-      const d = drag.current;
-      const el = targetRef.current;
-      if (!d || !el) return;
-      el.style.width = Math.min(SIDE_MAX, Math.max(SIDE_MIN, d.w + (e.clientX - d.x))) + 'px';
-    };
-    const up = (e) => {
-      const el = targetRef.current;
-      const d = drag.current;
-      if (!d || !el) return;
-      drag.current = null;
-      el.style.transition = '';
-      document.body.classList.remove('resizing-x');
-      if (e.type === 'pointerup' && Math.abs(e.clientX - d.x) < 3) {
-        if (onHide && !tap.current) tap.current = setTimeout(() => { tap.current = 0; onHide(); }, 260);
-        return;
-      }
-      const w = Math.round(el.getBoundingClientRect().width);
-      try { localStorage.setItem(SIDE_KEY, String(w)); } catch { }
-      if (onCommit) onCommit(w);
-    };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-    window.addEventListener('pointercancel', up);
-    return () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-      window.removeEventListener('pointercancel', up);
-    };
-  }, [targetRef, onCommit, onHide]);
-
-  const start = (e) => {
-    const el = targetRef.current;
-    if (!el || e.button !== 0) return;
-    e.preventDefault();
-    drag.current = { x: e.clientX, w: el.getBoundingClientRect().width };
-    el.style.transition = 'none';
-    document.body.classList.add('resizing-x');
-  };
-
-  const setWidth = (w) => {
-    const el = targetRef.current;
-    if (!el) return;
-    if (w == null) {
-      el.style.width = '';
-      try { localStorage.removeItem(SIDE_KEY); } catch { }
-    } else {
-      el.style.width = w + 'px';
-      try { localStorage.setItem(SIDE_KEY, String(w)); } catch { }
-    }
-    if (onCommit) onCommit(w);
-  };
-
-  const reset = () => {
-    clearTimeout(tap.current);
-    tap.current = 0;
-    setWidth(null);
-  };
-
-  const nudge = (e) => {
-    const el = targetRef.current;
-    if (e.key === 'Enter' && onHide) { e.preventDefault(); onHide(); return; }
-    if (!el || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
-    e.preventDefault();
-    const step = e.shiftKey ? 32 : 8;
-    setWidth(Math.min(SIDE_MAX, Math.max(SIDE_MIN,
-      Math.round(el.getBoundingClientRect().width) + (e.key === 'ArrowRight' ? step : -step))));
-  };
-
-  return (
-    <Tip label={t('Hide sidebar')} keys={t('Drag to resize')}>
-      <div className="side-resize" role="separator" aria-orientation="vertical" aria-label={t('Resize sidebar')}
-        tabIndex={0} onPointerDown={start} onDoubleClick={reset} onKeyDown={nudge}>
-        <span className="side-resize-grip" aria-hidden="true" />
-      </div>
-    </Tip>
-  );
+  return storedWidth(SIDE_KEY, clampSide);
 }
 
 const FOLD_KEY = 'oq-folded-sections';
@@ -360,7 +273,8 @@ function Sidebar({
     <div className={'sidebar' + (collapsed ? ' collapsed' : '') + (mobileOpen ? ' mobile-open' : '') + (docs ? ' docs-mode' : '')}
       ref={sideRef} style={width && !collapsed ? { width } : undefined}
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
-      {!collapsed && <SideResize targetRef={sideRef} onCommit={setWidth} onHide={onToggle} />}
+      {!collapsed && <ResizeHandle className="side-resize" targetRef={sideRef} clamp={clampSide} storageKey={SIDE_KEY}
+        label={t('Resize sidebar')} hideLabel={t('Hide sidebar')} onCommit={setWidth} onHide={onToggle} />}
       {docs && <DocsNav tree={docs.tree} target={docs.target} onSelect={docs.onSelect} onExit={docs.onExit} appName={appName} appIcon={appIcon}
         editing={docs.editing} onAddTab={docs.onAddTab} onAddPage={docs.onAddPage} onRemoveTab={docs.onRemoveTab}
         onRemovePage={docs.onRemovePage} onRenameTab={docs.onRenameTab} />}

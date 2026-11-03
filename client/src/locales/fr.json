@@ -3141,5 +3141,6 @@
   "{n} result": "{n} résultat",
   "{n} results": "{n} résultats",
   "{n} image": "{n} image",
-  "Up to 2 extra models answer your next message.": "Jusqu'à 2 modèles supplémentaires répondent à votre prochain message."
+  "Up to 2 extra models answer your next message.": "Jusqu'à 2 modèles supplémentaires répondent à votre prochain message.",
+  "Resize artifacts panel": "Redimensionner le panneau des artefacts"
 }

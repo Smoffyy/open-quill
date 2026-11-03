@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
+
+## [28.0.2] - TBD
+### Changed
+- **Artifact panel resize handle** - the handle now matches the sidebar's: a pill on the panel's edge that appears on hover. Drag to resize, click to close, double-click to return to the default width, or use the arrow keys when it has focus. The width you choose is remembered.
+### Fixed
+- **Sidebar resize handle** - a slightly unsteady click on the handle no longer leaves the sidebar stuck wide and empty, and a normal-speed double-click resets its width instead of hiding it.
+- **Artifact panel outline** - the outline around the artifact panel is crisp and even on every side, including on displays scaled to a fractional size such as 125%.
+- **Artifact panel header** - resizing the artifact panel no longer crushes its top bar together or pushes the full screen and close buttons out of the panel. As the panel narrows, Edit, Add to project and then Copy fold down to icons, and the file name shortens to fit.
+
+---
+
 ## [28.0.1] - 2026-10-28
 ### Changed
 - **Sidebar order** - chats are sorted by when you last sent a message in them, not when the assistant finished replying, so a new chat stays where its first message put it.

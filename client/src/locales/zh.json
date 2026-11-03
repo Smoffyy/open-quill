@@ -3141,5 +3141,6 @@
   "{n} result": "{n} 个结果",
   "{n} results": "{n} 个结果",
   "{n} image": "{n} 张图片",
-  "Up to 2 extra models answer your next message.": "最多 2 个额外模型回答你的下一条消息。"
+  "Up to 2 extra models answer your next message.": "最多 2 个额外模型回答你的下一条消息。",
+  "Resize artifacts panel": "调整产物面板大小"
 }

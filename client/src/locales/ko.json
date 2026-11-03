@@ -3141,5 +3141,6 @@
   "{n} result": "결과 {n}개",
   "{n} results": "결과 {n}개",
   "{n} image": "이미지 {n}개",
-  "Up to 2 extra models answer your next message.": "최대 2개의 추가 모델이 다음 메시지에 답변합니다."
+  "Up to 2 extra models answer your next message.": "최대 2개의 추가 모델이 다음 메시지에 답변합니다.",
+  "Resize artifacts panel": "아티팩트 패널 크기 조정"
 }

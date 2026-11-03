@@ -124,21 +124,22 @@
   :root:root .sidebar,
   :root:root .sidebar.collapsed { width: min(86vw, 288px); }
 }
-.side-resize {
-  position: absolute; top: 0; bottom: 0; right: -6px; width: 12px; z-index: 6;
+.resize-handle {
+  position: absolute; top: 0; bottom: 0; width: 12px; z-index: 6;
   cursor: col-resize; display: grid; place-items: center; touch-action: none;
 }
-.side-resize-grip {
+.side-resize { right: -6px; }
+.resize-handle-grip {
   width: 3px; height: 48px; border-radius: 999px; background: var(--text-faint);
   opacity: 0; transition: opacity var(--fx-t, .15s) ease;
 }
-.side-resize:hover .side-resize-grip,
-.side-resize:focus-visible .side-resize-grip { opacity: 1; }
-.side-resize:focus-visible { outline: none; }
-.side-resize:focus-visible .side-resize-grip { background: var(--text); }
+.resize-handle:hover .resize-handle-grip,
+.resize-handle:focus-visible .resize-handle-grip { opacity: 1; }
+.resize-handle:focus-visible { outline: none; }
+.resize-handle:focus-visible .resize-handle-grip { background: var(--text); }
 
 body.resizing-x { cursor: col-resize; user-select: none; }
-body.resizing-x .side-resize-grip { opacity: 1; }
+.resize-handle.dragging .resize-handle-grip { opacity: 1; }
 
 .sec-head {
   display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; padding: 4px; border-radius: 8px;
