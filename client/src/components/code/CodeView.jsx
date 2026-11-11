@@ -6,7 +6,7 @@ import CodeMenu, { MenuItem, MenuSep } from './CodeMenu.jsx';
 import ChatError from '../chat/ChatError.jsx';
 import ThreadSkeleton from '../chat/ThreadSkeleton.jsx';
 import Tip from '../ui/Tip.jsx';
-import { Laptop, ChevDown, PanelRight, Download, DotsV, Down, Menu, Pencil, Copy, Star, Trash } from '../ui/icons.jsx';
+import { Laptop, Box, ChevDown, PanelRight, Download, DotsV, Down, Menu, Pencil, Copy, Star, Trash } from '../ui/icons.jsx';
 import { copyText } from '../../lib/clipboard.js';
 import { notify } from '../../lib/notify.js';
 import { pathForCode } from '../../lib/route.js';
@@ -47,7 +47,7 @@ function SessionMenu({ open, setOpen, anchorRef, align, chat, onRename, onCopyLi
   );
 }
 
-function SessionHeader({ chat, chatId, files, panelOpen, onTogglePanel, onRename, onToggleStar, onDelete, onOpenMenu }) {
+function SessionHeader({ chat, chatId, files, project, onOpenProject, panelOpen, onTogglePanel, onRename, onToggleStar, onDelete, onOpenMenu }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [menu, setMenu] = useState(null);
@@ -79,6 +79,12 @@ function SessionHeader({ chat, chatId, files, panelOpen, onTogglePanel, onRename
         <button type="button" className="cx-tag" onClick={onTogglePanel}>
           {files.length === 1 ? t('1 file') : t('{n} files', { n: files.length })}
         </button>
+        {project && (
+          <button type="button" className="cx-tag cx-from" onClick={onOpenProject}
+            data-tip={t('This session started from a copy of this project. Open the project.')}>
+            <Box aria-hidden="true" /><span>{project.name}</span>
+          </button>
+        )}
       </div>
       <div className="cx-head-right">
         <Tip label={panelOpen ? t('Hide files') : t('Show files')} keys="Alt+A">
@@ -143,7 +149,7 @@ function PlanPrompt({ onBuild, onKeep }) {
 
 export default function CodeView({
   userName, modelIcon, chatIcon, chat, chatId, booting, loading, messages, live, liveCalls, phase, status, statusDelay, streaming,
-  files, liveFile, pendingFiles, fileFocus, onFilesChanged, composer, scroll, error, onDismissError,
+  files, liveFile, pendingFiles, fileFocus, onFilesChanged, projects, project, onOpenProject, composer, scroll, error, onDismissError,
   onRename, onToggleStar, onDelete, onRetry, onContinue, onOpenFile, panelOpen, onTogglePanel, onOpenMenu, onBuildPlan
 }) {
   const [panelW, setPanelW] = useState(readPanelW);
@@ -197,7 +203,7 @@ export default function CodeView({
     <div ref={rootRef} className={'code-view' + (fresh ? ' fresh' : '') + (showPanel ? ' with-panel' : '') + (wide && showPanel ? ' panel-wide' : '') + (resizing ? ' resizing' : '')}>
       <div className="cx-main">
         {chatId ? (
-          <SessionHeader chat={chat} chatId={chatId} files={files} panelOpen={showPanel} onTogglePanel={onTogglePanel}
+          <SessionHeader chat={chat} chatId={chatId} files={files} project={project} onOpenProject={onOpenProject} panelOpen={showPanel} onTogglePanel={onTogglePanel}
             onRename={onRename} onToggleStar={onToggleStar} onDelete={onDelete} onOpenMenu={onOpenMenu} />
         ) : (
           <div className="cx-head blank">
@@ -227,6 +233,7 @@ export default function CodeView({
             onPointerDown={startResize} onKeyDown={nudge} onDoubleClick={() => { setPanelW(null); try { localStorage.removeItem(PANEL_KEY); } catch {} }} />
           <div className="cx-panel-slot" style={panelW && !wide ? { width: panelW } : undefined}>
             <CodeFiles chatId={chatId} files={files} live={liveFile} pending={pendingFiles} busy={streaming} focus={fileFocus}
+              projects={projects} projectId={project?.id || null}
               onFilesChanged={onFilesChanged} onClose={onTogglePanel} wide={wide} onToggleWide={() => setWide(w => !w)} />
           </div>
         </>

@@ -144,8 +144,8 @@ body.resizing-x .art-preview-frame { pointer-events: none; }
 .art-btn-glyph { display: none; }
 .art-viewer { container-type: inline-size; }
 @container (max-width: 680px) {
-  .chat-artifacts .art-btn.text.fold { width: 28px; padding: 0; justify-content: center; }
-  .chat-artifacts .art-btn.fold .art-btn-label { display: none; }
+  .art-btn.text.fold { width: 28px; padding: 0; justify-content: center; }
+  .art-btn.fold .art-btn-label { display: none; }
 }
 @container (max-width: 420px) {
   .chat-artifacts .art-vkind:not(.live) { display: none; }

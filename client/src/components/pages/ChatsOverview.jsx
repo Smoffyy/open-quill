@@ -1,23 +1,34 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import LibraryPage, { LibraryEmpty } from './LibraryPage.jsx';
 import { api } from '../../lib/api.js';
 import { notify } from '../../lib/notify.js';
 import { askConfirm } from '../../lib/confirm.js';
-import { t } from '../../i18n.jsx';
+import { t, tk, fmtRelative } from '../../i18n.jsx';
 import { useSkeleton } from '../../lib/skeleton.js';
-import { useFocusTrap } from '../../lib/focus.js';
-import CloseButton from '../ui/CloseButton.jsx';
-import { Check } from '../ui/icons.jsx';
+import { Check, Chat, Laptop } from '../ui/icons.jsx';
 
-function timeAgo(ts) {
-  const s = Math.floor((Date.now() - ts) / 1000);
-  if (s < 60) return 'just now';
-  if (s < 3600) return Math.floor(s / 60) + 'm ago';
-  if (s < 86400) return Math.floor(s / 3600) + 'h ago';
-  if (s < 604800) return Math.floor(s / 86400) + 'd ago';
-  return new Date(ts).toLocaleDateString();
-}
+const WORDS = {
+  chat: {
+    title: tk('Chats'), untitled: tk('New chat'), none: tk('No chats yet.'), noneArchived: tk('No archived chats.'),
+    archived: [tk('{n} chat archived.'), tk('{n} chats archived.')],
+    restored: [tk('{n} chat restored.'), tk('{n} chats restored.')],
+    deleted: [tk('{n} chat deleted.'), tk('{n} chats deleted.')],
+    confirm: [tk('Delete {n} chat?'), tk('Delete {n} chats?')]
+  },
+  code: {
+    title: tk('Sessions'), untitled: tk('Untitled session'), none: tk('No sessions yet'), noneArchived: tk('No archived sessions.'),
+    archived: [tk('{n} session archived.'), tk('{n} sessions archived.')],
+    restored: [tk('{n} session restored.'), tk('{n} sessions restored.')],
+    deleted: [tk('{n} session deleted.'), tk('{n} sessions deleted.')],
+    confirm: [tk('Delete {n} session?'), tk('Delete {n} sessions?')]
+  }
+};
 
-export default function ChatsOverview({ onOpen, onClose, onChatsChanged }) {
+const counted = (pair, n) => t(pair[n === 1 ? 0 : 1], { n });
+
+export default function ChatsOverview({ mode = 'chat', onOpen, onSearch, onChatsChanged }) {
+  const code = mode === 'code';
+  const words = WORDS[code ? 'code' : 'chat'];
   const [chats, setChats] = useState([]);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -36,7 +47,7 @@ export default function ChatsOverview({ onOpen, onClose, onChatsChanged }) {
     busyRef.current = true; setLoading(true);
     if (reset) { offsetRef.current = 0; setChats([]); setHasMore(true); }
     try {
-      const r = await api.get(`/api/chats-overview?offset=${offsetRef.current}&limit=18&archived=${tabRef.current === 'archived' ? 1 : 0}`);
+      const r = await api.get(`/api/chats-overview?offset=${offsetRef.current}&limit=18&archived=${tabRef.current === 'archived' ? 1 : 0}${code ? '&mode=code' : ''}`);
       setChats(cs => {
         const base = reset ? [] : cs;
         const seen = new Set(base.map(c => c.id));
@@ -46,9 +57,9 @@ export default function ChatsOverview({ onOpen, onClose, onChatsChanged }) {
       setHasMore(r.hasMore);
     } catch { setHasMore(false); }
     busyRef.current = false; setLoading(false);
-  }, []);
+  }, [code]);
 
-  useEffect(() => { loadMore(); }, [loadMore]);
+  useEffect(() => { loadMore(true); }, [loadMore]);
 
   useEffect(() => {
     if (!hasMore || loading) return;
@@ -66,8 +77,9 @@ export default function ChatsOverview({ onOpen, onClose, onChatsChanged }) {
     return () => ro.disconnect();
   }, [hasMore, loadMore]);
 
-  function switchTab(t) {
-    setTab(t); tabRef.current = t;
+  function switchTab(next) {
+    if (next === tabRef.current) return;
+    setTab(next); tabRef.current = next;
     setSelected(new Set()); setSelecting(false);
     loadMore(true);
   }
@@ -77,13 +89,10 @@ export default function ChatsOverview({ onOpen, onClose, onChatsChanged }) {
     if (el.scrollTop + el.clientHeight >= el.scrollHeight - 320) loadMore();
   }
 
-  const rootRef = useRef(null);
-  useFocusTrap(rootRef, onClose, { initial: rootRef });
-
   function toggleSel(id) {
     setSelected(prev => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   }
@@ -101,18 +110,14 @@ export default function ChatsOverview({ onOpen, onClose, onChatsChanged }) {
     setChats(cs => cs.filter(c => !selected.has(c.id)));
     setSelected(new Set());
     setBusy(false);
-    const n = ids.length;
-    notify(archived
-      ? (n === 1 ? t('{n} chat archived.', { n }) : t('{n} chats archived.', { n }))
-      : (n === 1 ? t('{n} chat restored.', { n }) : t('{n} chats restored.', { n })));
+    notify(counted(archived ? words.archived : words.restored, ids.length));
     onChatsChanged?.();
   }
 
   async function bulkDelete() {
     if (!selected.size || busy) return;
-    const count = selected.size;
     if (!await askConfirm({
-      title: count === 1 ? t('Delete {n} chat?', { n: count }) : t('Delete {n} chats?', { n: count }),
+      title: counted(words.confirm, selected.size),
       message: t('This cannot be undone.'), confirm: t('Delete'), danger: true
     })) return;
     setBusy(true);
@@ -121,7 +126,7 @@ export default function ChatsOverview({ onOpen, onClose, onChatsChanged }) {
     setChats(cs => cs.filter(c => !selected.has(c.id)));
     setSelected(new Set());
     setBusy(false);
-    notify(ids.length === 1 ? t('{n} chat deleted.', { n: ids.length }) : t('{n} chats deleted.', { n: ids.length }));
+    notify(counted(words.deleted, ids.length));
     onChatsChanged?.();
   }
 
@@ -130,49 +135,46 @@ export default function ChatsOverview({ onOpen, onClose, onChatsChanged }) {
   }
 
   return (
-    <div className="chats-overview" ref={rootRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="co-title">
-      <div className="co-head">
-        <h2 id="co-title">{t("Your chats")}</h2>
-        <div className="co-tools">
-          <div className="seg co-seg">
-            <button className={tab === 'all' ? 'on' : ''} onClick={() => switchTab('all')}>{t("Active")}</button>
-            <button className={tab === 'archived' ? 'on' : ''} onClick={() => switchTab('archived')}>{t("Archived")}</button>
-          </div>
-          <button className={'co-select-btn' + (selecting ? ' on' : '')} onClick={() => { setSelecting(v => !v); setSelected(new Set()); }}>{selecting ? t('Done') : t('Select')}</button>
-        </div>
-        <CloseButton plain className="co-close" onClick={onClose} />
-      </div>
+    <LibraryPage
+      title={t(words.title)}
+      onSearch={onSearch}
+      scrollRef={bodyRef} onScroll={onScroll}
+      tabs={[{ id: 'all', label: t('Active') }, { id: 'archived', label: t('Archived') }]} tabValue={tab} onTab={switchTab}
+      actions={
+        <button className="lib-pill" aria-pressed={selecting} onClick={() => { setSelecting(v => !v); setSelected(new Set()); }}>
+          {selecting ? t('Done') : t('Select')}
+        </button>
+      }>
       {selecting && (
         <div className="co-bulkbar">
           <button className="co-bulk-link" onClick={selectAll}>{selected.size === chats.length && chats.length ? t('Clear selection') : t('Select all')}</button>
-          <span className="co-bulk-count">{selected.size} selected</span>
+          <span className="co-bulk-count">{t('{n} selected', { n: selected.size })}</span>
           <div className="co-bulk-actions">
             <button className="btn ghost" disabled={!selected.size || busy} onClick={() => bulkArchive(tab !== 'archived')}>{tab === 'archived' ? t('Unarchive') : t('Archive')}</button>
             <button className="btn ghost danger" disabled={!selected.size || busy} onClick={bulkDelete}>{t("Delete")}</button>
           </div>
         </div>
       )}
-      <div className="co-body" ref={bodyRef} onScroll={onScroll}>
-        {chats.length === 0 && !loading && <div className="art-empty">{tab === 'archived' ? t('No archived chats.') : t('No chats yet.')}</div>}
-        <div className="co-grid">
-          {showSkeleton && chats.length === 0 && Array.from({ length: 9 }).map((_, i) => (
-            <div key={'skel' + i} className="co-card co-card-skel" aria-hidden="true">
-              <span className="skeleton" style={{ width: (38 + ((i * 29) % 40)) + '%' }} />
-            </div>
-          ))}
-          {chats.map((c, i) => (
-            <button key={c.id} className={'co-card' + (selecting && selected.has(c.id) ? ' selected' : '')} style={{ animationDelay: (i % 18) * 22 + 'ms' }} onClick={() => clickCard(c)}>
-              {selecting && <span className={'co-check' + (selected.has(c.id) ? ' on' : '')}>{selected.has(c.id) && <Check strokeWidth="2.4" />}</span>}
-              <div className="co-title">{c.starred ? '★ ' : ''}{c.ended ? '🔒 ' : ''}{c.title || t('New chat')}</div>
-              {c.preview && <div className="co-preview">{c.preview}</div>}
-              <div className="co-fade" />
-              <div className="co-time">{timeAgo(c.updated_at)}</div>
-            </button>
-          ))}
-        </div>
-        {showSkeleton && <div className="co-loading"><span className="skeleton" style={{ width: 120, height: 12 }} /></div>}
-        {!hasMore && chats.length > 0 && <div className="co-end">{t("That's all of them.")}</div>}
+      {chats.length === 0 && !loading && (
+        <LibraryEmpty icon={code ? <Laptop /> : <Chat />} line={t(tab === 'archived' ? words.noneArchived : words.none)} />
+      )}
+      <div className="co-grid">
+        {showSkeleton && chats.length === 0 && Array.from({ length: 9 }).map((_, i) => (
+          <div key={'skel' + i} className="co-card co-card-skel" aria-hidden="true">
+            <span className="skeleton" style={{ width: (38 + ((i * 29) % 40)) + '%' }} />
+          </div>
+        ))}
+        {chats.map((c, i) => (
+          <button key={c.id} className={'co-card' + (selecting && selected.has(c.id) ? ' selected' : '')} style={{ animationDelay: (i % 18) * 22 + 'ms' }}
+            aria-pressed={selecting ? selected.has(c.id) : undefined} onClick={() => clickCard(c)}>
+            {selecting && <span className={'co-check' + (selected.has(c.id) ? ' on' : '')}>{selected.has(c.id) && <Check strokeWidth="2.4" />}</span>}
+            <div className="co-title">{c.starred ? '★ ' : ''}{c.ended ? '🔒 ' : ''}{c.title && c.title !== 'New chat' ? c.title : t(words.untitled)}</div>
+            <div className="co-time">{fmtRelative(c.updated_at)}</div>
+          </button>
+        ))}
       </div>
-    </div>
+      {showSkeleton && chats.length > 0 && <div className="co-loading"><span className="skeleton" style={{ width: 120, height: 12 }} /></div>}
+      {!hasMore && chats.length > 0 && <div className="co-end">{t("That's all of them.")}</div>}
+    </LibraryPage>
   );
 }

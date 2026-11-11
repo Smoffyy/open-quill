@@ -7,11 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [28.0.2] - TBD
+## [28.1.0] - TBD
+### Added
+- **Sessions page** - Code has its own browse page at `/sessions`, with Active and Archived tabs and the same select, archive and delete tools as the chats list. Sessions used to have no full list at all.
+- **Code sessions remember their project** - a session started from a project shows the project's name in its top bar, and clicking it opens the project. The project page lists the sessions started from it on a new Code card.
+- **Add to project from Code** - an open file in a Code session has Add to project, which copies it into a project's knowledge. The session's own project is listed first, and an existing file is never overwritten.
 ### Changed
+- **Sidebar navigation** - each mode shows only what belongs to it. Chat has New, Search, Projects, Artifacts and Customize; Code has New, Search, Sessions and Customize. Model docs sits in the list directly and the More toggle is gone. All chats used to be hidden under More and now opens from the arrow beside Recents.
+- **Search in the sidebar** - Search moved from the button beside your profile to the top of the sidebar, under New, and opens chat search, matching the shortcut it shows. The command palette keeps its own shortcut.
+- **Sidebar icons** - hovering Model docs turns a page of its book and hovering Search tilts the magnifier, so every sidebar item now animates.
+- **Scheduled tasks** - Scheduled left the sidebar list. The clock button beside New opens it, is always visible instead of only on hover, and is highlighted while the page is open. It is also in the command palette, next to a new Open Artifacts command.
+- **Artifacts page** - Artifacts lists only the documents your chats have written. Project knowledge and the files of Code sessions no longer appear there; they stay on the project page and in the session. The New artifact button, which only opened an empty chat, is removed.
+- **Chats and Projects pages** - both use the same page layout as Artifacts and Scheduled tasks and open beside the sidebar instead of covering the window. All chats has its own address, `/chats`, so it survives a reload and works with Back and Forward, and it shows times in your language.
+- **Project page** - the two ways to start a Code session (Open in Code in the menu and the Build in Code button) are one Code card.
 - **Model picker on phones** - the model picker opens as the same bottom sheet in every theme, where the Anthropic theme used to show a floating menu.
 - **Artifact panel resize handle** - the handle now matches the sidebar's: a pill on the panel's edge that appears on hover. Drag to resize, click to close, double-click to return to the default width, or use the arrow keys when it has focus. The width you choose is remembered.
 ### Fixed
+- **Projects with a resized sidebar** - the Projects page assumed the sidebar's default width, so after resizing the sidebar it either slid under it or left a gap. It now fills the space beside the sidebar at any width.
+- **Projects and library pages on phones** - a project's page stacks into one column on narrow screens instead of squeezing the chat column to a sliver, page headers wrap instead of overlapping their buttons, and every browse page carries its own menu button.
 - **Sidebar resize handle** - a slightly unsteady click on the handle no longer leaves the sidebar stuck wide and empty, and a normal-speed double-click resets its width instead of hiding it.
 - **Artifact panel outline** - the outline around the artifact panel is crisp and even on every side, including on displays scaled to a fractional size such as 125%.
 - **Artifact panel header** - resizing the artifact panel no longer crushes its top bar together or pushes the full screen and close buttons out of the panel. As the panel narrows, Edit, Add to project and then Copy fold down to icons, and the file name shortens to fit.

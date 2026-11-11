@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Viewer from '../artifacts/Viewer.jsx';
+import SaveToProject from '../artifacts/SaveToProject.jsx';
 import CodeMenu, { MenuItem, MenuSep } from './CodeMenu.jsx';
 import Tip from '../ui/Tip.jsx';
 import { Menu, Search, FilePlus, Upload, Download, Expand, Collapse, X, Dots, ChevDown, Folder, FileText, CodeTag, Pencil, Trash, Copy } from '../ui/icons.jsx';
@@ -114,7 +115,7 @@ function Tree({ node, depth, closed, onToggle, ...rest }) {
   );
 }
 
-export default function CodeFiles({ chatId, files, live, pending = {}, busy, focus, onFilesChanged, onClose, wide, onToggleWide }) {
+export default function CodeFiles({ chatId, files, live, pending = {}, busy, focus, projects = [], projectId = null, onFilesChanged, onClose, wide, onToggleWide }) {
   const [active, setActive] = useState(null);
   const [showTree, setShowTree] = useState(readTreePref);
   const [filter, setFilter] = useState('');
@@ -290,7 +291,10 @@ export default function CodeFiles({ chatId, files, live, pending = {}, busy, foc
               editable={!busy}
               onSaved={onSaved}
               canBack={!showTree} onBack={() => setActive(null)}
-              headerExtra={<button type="button" className="art-btn icon" onClick={() => setActive(null)} data-tip={t('Close file')} aria-label={t('Close file')}><X style={{ width: 14 }} /></button>} />
+              headerExtra={<>
+                {files.some(f => f.path === active) && <SaveToProject saveUrl={base + '/files/save'} path={active} projectId={projectId} projects={projects} />}
+                <button type="button" className="art-btn icon" onClick={() => setActive(null)} data-tip={t('Close file')} aria-label={t('Close file')}><X style={{ width: 14 }} /></button>
+              </>} />
           </div>
         )}
       </div>

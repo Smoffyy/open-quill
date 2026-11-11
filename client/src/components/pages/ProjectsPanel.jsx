@@ -2,9 +2,10 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../../lib/api.js';
 import { notify } from '../../lib/notify.js';
 import Composer from '../composer/Composer.jsx';
-import { Box, Search, Plus, ChevDown, Star, Dots, Trash, Pencil, Check, Code } from '../ui/icons.jsx';
+import { Box, Search, Plus, ChevDown, Star, Dots, Trash, Pencil, Check, Laptop } from '../ui/icons.jsx';
 import Markdown from '../chat/Markdown.jsx';
-import { t, fmtDate } from '../../i18n.jsx';
+import LibraryPage, { LibraryEmpty } from './LibraryPage.jsx';
+import { t, fmtDate, fmtRelative } from '../../i18n.jsx';
 import { focusUnlessTouch } from '../../lib/touch.js';
 import Dialog from '../ui/Dialog.jsx';
 import CloseButton from '../ui/CloseButton.jsx';
@@ -99,7 +100,31 @@ function ProjectNotes({ project, onSave }) {
   );
 }
 
-function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onOpenInCode, onChanged, onDeleted }) {
+function ProjectCode({ project, onOpenInCode, onOpenSession }) {
+  return (
+    <div className="pj-card pj-code">
+      <div className="pj-card-head">
+        <span>{t('Code')}</span>
+        <button type="button" className="pj-card-add" onClick={() => onOpenInCode(project)}
+          data-tip={t('Build in Code')} aria-label={t('Build in Code')}><Plus style={{ width: 16 }} /></button>
+      </div>
+      <div className="pj-card-sub pj-code-sub">{t('Start a Code session with a copy of these files, where the assistant can edit and run them.')}</div>
+      {project.sessions.length > 0 && (
+        <div className="pj-file-tree">
+          {project.sessions.map(s => (
+            <button key={s.id} type="button" className="pj-row pj-session-row" onClick={() => onOpenSession(s.id)}>
+              <Laptop className="pj-row-icon" style={{ width: 14 }} />
+              <span className="pj-row-name">{s.title || t('Untitled session')}</span>
+              <span className="pj-row-meta">{fmtRelative(s.updated_at)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onOpenInCode, onOpenSession, onChanged, onDeleted }) {
   const [project, setProject] = useState(null);
   const showSkeleton = useSkeleton(!project);
   const [editingInstr, setEditingInstr] = useState(false);
@@ -161,7 +186,6 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onO
                 {menu && (
                   <div className="pj-menu">
                     <button onClick={() => { setMenu(false); setRenaming(true); }}><Pencil style={{ width: 15 }} /> {t("Rename")}</button>
-                    {onOpenInCode && <button onClick={() => { setMenu(false); onOpenInCode(project); }}><Code style={{ width: 15 }} /> {t('Open in Code')}</button>}
                     <button className="danger" onClick={() => { setMenu(false); del(); }}><Trash style={{ width: 15 }} /> {t("Delete project")}</button>
                   </div>
                 )}
@@ -211,22 +235,14 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onO
           </div>
           <ProjectNotes project={project} onSave={(notes) => patch({ notes })} />
           <ProjectFiles projectId={id} />
-          {onOpenInCode && (
-            <button type="button" className="pj-code-btn" onClick={() => onOpenInCode(project)}>
-              <Code style={{ width: 15 }} />
-              <span>
-                <span className="pj-code-title">{t('Build in Code')}</span>
-                <span className="pj-code-sub">{t('Start a Code session with a copy of these files, where the assistant can edit and run them.')}</span>
-              </span>
-            </button>
-          )}
+          {onOpenInCode && <ProjectCode project={project} onOpenInCode={onOpenInCode} onOpenSession={onOpenSession} />}
         </div>
       </div>
     </div>
   );
 }
 
-export default function ProjectsPanel({ openId, composerProps, onClose, onOpenChat, onStartChat, onOpenInCode, onOpenProject, startCreate = false, onCreateHandled }) {
+export default function ProjectsPanel({ openId, composerProps, onOpenChat, onStartChat, onOpenInCode, onOpenSession, onOpenProject, startCreate = false, onCreateHandled }) {
   const [projects, setProjects] = useState(null);
   const showSkeleton = useSkeleton(projects === null);
   const [q, setQ] = useState('');
@@ -246,61 +262,59 @@ export default function ProjectsPanel({ openId, composerProps, onClose, onOpenCh
   list = list.slice().sort((a, b) => sort === 'name' ? a.name.localeCompare(b.name) : b.updated_at - a.updated_at);
 
   return (
-    <div className="chats-overview pj-overview">
+    <>
       {detailId ? (
         <ProjectDetail id={detailId} composerProps={composerProps}
           onBack={() => { setDetailId(null); onOpenProject?.(null); load(); }}
-          onOpenChat={onOpenChat} onStartChat={onStartChat} onOpenInCode={onOpenInCode}
+          onOpenChat={onOpenChat} onStartChat={onStartChat} onOpenInCode={onOpenInCode} onOpenSession={onOpenSession}
           onChanged={load}
           onDeleted={() => { setDetailId(null); onOpenProject?.(null); load(); }} />
       ) : (
-        <>
-          <div className="co-head pj-head">
-            <h2>{t("Projects")}</h2>
-            <div className="pj-head-actions">
-              <div className="pj-sort">
-                <span>{t("Sort by")}</span> <b>{sort === 'name' ? t('Name') : t('Last updated')}</b>
-                <button className="pj-sort-toggle" onClick={() => setSort(s => s === 'name' ? 'updated' : 'name')}><ChevDown style={{ width: 15 }} /></button>
-              </div>
-              <button className="pj-new" onClick={() => setCreating(true)}>{t("New project")}</button>
-              <CloseButton plain className="co-close" onClick={onClose} />
-            </div>
-          </div>
-          <div className="co-body">
+        <LibraryPage
+          title={t('Projects')}
+          actions={<>
+            <button className="lib-pill" onClick={() => setSort(s => (s === 'name' ? 'updated' : 'name'))}>
+              <span className="lib-pill-key">{t('Sort by')}</span>
+              <span className="lib-pill-val">{sort === 'name' ? t('Name') : t('Last updated')}</span>
+              <ChevDown />
+            </button>
+            <button className="lib-primary" onClick={() => setCreating(true)}><Plus /> {t('New project')}</button>
+          </>}>
+          {(projects === null || projects.length > 0) && (
             <div className="pj-search">
               <Search style={{ width: 16 }} />
-              <input value={q} placeholder={t("Search projects...")} onChange={(e) => setQ(e.target.value)} />
+              <input value={q} placeholder={t("Search projects...")} aria-label={t("Search projects...")} onChange={(e) => setQ(e.target.value)} />
             </div>
-            {projects === null ? (showSkeleton &&
-              <div className="pj-grid" aria-hidden="true">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <div key={i} className="pj-card-tile pj-tile-skel">
-                    <div className="pj-tile-top"><span className="skeleton" style={{ width: '52%' }} /></div>
-                    <span className="skeleton" style={{ width: '78%' }} />
-                    <span className="skeleton" style={{ width: '34%' }} />
+          )}
+          {projects === null ? (showSkeleton &&
+            <div className="pj-grid" aria-hidden="true">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="pj-card-tile pj-tile-skel">
+                  <div className="pj-tile-top"><span className="skeleton" style={{ width: '52%' }} /></div>
+                  <span className="skeleton" style={{ width: '78%' }} />
+                  <span className="skeleton" style={{ width: '34%' }} />
+                </div>
+              ))}
+            </div>
+          ) : list.length === 0 ? (
+            <LibraryEmpty icon={<Box />} line={q.trim() ? t('No projects match your search.') : t('No projects yet, create one to get started.')} />
+          ) : (
+            <div className="pj-grid">
+              {list.map((p, i) => (
+                <button key={p.id} className="pj-card-tile" style={{ animationDelay: (i % 18) * 26 + 'ms' }} onClick={() => openDetail(p.id)}>
+                  <div className="pj-tile-top">
+                    <span className="pj-tile-icon"><Box style={{ width: 17 }} /></span>
+                    <div className="pj-tile-name">{p.name}</div>
                   </div>
-                ))}
-              </div>
-            ) : list.length === 0 ? (
-              <div className="co-end">{q.trim() ? t('No projects match your search.') : t('No projects yet, create one to get started.')}</div>
-            ) : (
-              <div className="pj-grid">
-                {list.map((p, i) => (
-                  <button key={p.id} className="pj-card-tile" style={{ animationDelay: (i % 18) * 26 + 'ms' }} onClick={() => openDetail(p.id)}>
-                    <div className="pj-tile-top">
-                      <span className="pj-tile-icon"><Box style={{ width: 17 }} /></span>
-                      <div className="pj-tile-name">{p.name}</div>
-                    </div>
-                    {p.description && <div className="pj-tile-desc">{p.description}</div>}
-                    <div className="pj-tile-time">{updatedLabel(p.updated_at)}</div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </>
+                  {p.description && <div className="pj-tile-desc">{p.description}</div>}
+                  <div className="pj-tile-time">{updatedLabel(p.updated_at)}</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </LibraryPage>
       )}
       {creating && <CreateModal onClose={() => setCreating(false)} onCreate={(p) => { setCreating(false); load(); openDetail(p.id); }} />}
-    </div>
+    </>
   );
 }

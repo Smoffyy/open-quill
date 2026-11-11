@@ -121,7 +121,7 @@ export default function registerMessageRoutes(app) {
     const nc = db.chats.insert({
       id: uid(), user_id: req.user.id, project_id: c.project_id || null, folder_id: c.folder_id || null,
       title: (c.title ? c.title + ' (fork)' : 'Forked chat').slice(0, 120), starred: 0, sandbox: c.sandbox ? 1 : 0, mode: c.mode === 'code' ? 'code' : 'chat',
-      summary: '', summary_upto: 0, created_at: t, updated_at: t
+      origin_project_id: c.origin_project_id || null, summary: '', summary_upto: 0, created_at: t, updated_at: t
     });
     let prev = null, ts = t, leaf = null;
     tx(() => {

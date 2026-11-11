@@ -15,6 +15,8 @@ export function parseRoute(pathname, opts = {}) {
     /^\/admin(\/|$)/.test(p) ? 'admin' :
     /^\/playground(\/|$)/.test(p) ? 'playground' :
     /^\/docs(\/|$)/.test(p) ? 'docs' :
+    /^\/chats\/?$/.test(p) ? 'chats' :
+    /^\/sessions\/?$/.test(p) ? 'sessions' :
     /^\/artifacts\/?$/.test(p) ? 'artifacts' :
     /^\/scheduled\/?$/.test(p) ? 'scheduled' :
     null
@@ -52,6 +54,8 @@ const OWNS = {
   admin: /^\/admin(\/|$)/,
   playground: /^\/playground(\/|$)/,
   docs: /^\/docs(\/|$)/,
+  chats: /^\/chats\/?$/,
+  sessions: /^\/sessions\/?$/,
   artifacts: /^\/artifacts\/?$/,
   scheduled: /^\/scheduled\/?$/,
   projects: /^\/projects?(\/|$)|^\/project\//
@@ -62,7 +66,9 @@ export function shouldResetPath(view, pathname) {
   return !!re && re.test(String(pathname || ''));
 }
 
-export const LIBRARY_PAGES = ['artifacts', 'scheduled'];
+export const LIBRARY_PAGES = ['chats', 'sessions', 'artifacts', 'scheduled'];
+
+export const isCodeView = (view) => view === 'code' || view === 'sessions';
 
 export function pathForChat(id) { return '/chat/' + id; }
 export function pathForCode(id) { return id ? '/code/' + id : '/code'; }

@@ -58,9 +58,9 @@ export function LibraryEmpty({ icon, line, children }) {
   );
 }
 
-export default function LibraryPage({ title, subtitle, onSearch, actions, tabs, tabValue, onTab, children }) {
+export default function LibraryPage({ title, subtitle, onSearch, actions, tabs, tabValue, onTab, scrollRef, onScroll, children }) {
   return (
-    <div className="lib-page">
+    <div className="lib-page" ref={scrollRef} onScroll={onScroll}>
       <div className="lib-col">
         <div className="lib-head">
           <div className="lib-headings">

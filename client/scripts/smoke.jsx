@@ -22,6 +22,7 @@ import KeybindsPanel from '../src/components/settings/KeybindsPanel.jsx';
 import BranchTree from '../src/components/chat/BranchTree.jsx';
 import Login from '../src/components/pages/Login.jsx';
 import ScheduledTasks from '../src/components/pages/ScheduledTasks.jsx';
+import ChatsOverview from '../src/components/pages/ChatsOverview.jsx';
 import ChatArtifacts from '../src/components/artifacts/ChatArtifacts.jsx';
 import ToolCard from '../src/components/chat/ToolCard.jsx';
 import TaskEditor from '../src/components/pages/TaskEditor.jsx';
@@ -100,6 +101,8 @@ for (const [tool, result] of [
     call: { tool, name: 'trip plan', path: 'trip-plan.md', query: 'budget', text: 'Budget is 400.' }, result
   })]);
 }
+cases.push(['ChatsOverview:chats', () => React.createElement(ChatsOverview, { mode: 'chat', onOpen: noop, onSearch: noop, onChatsChanged: noop })]);
+cases.push(['ChatsOverview:sessions', () => React.createElement(ChatsOverview, { mode: 'code', onOpen: noop, onSearch: noop, onChatsChanged: noop })]);
 cases.push(['ScheduledTasks', () => React.createElement(ScheduledTasks, { onSearch: noop, onRunTask: noop, onOpenChat: noop, models: [], webSearchAvailable: true })]);
 const taskModels = [{ id: 'm1', displayName: 'Local', isDefault: true, webSearchAllowed: true }, { id: 'm2', displayName: 'Other', webSearchAllowed: false }];
 for (const schedule of [

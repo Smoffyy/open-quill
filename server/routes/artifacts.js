@@ -29,20 +29,18 @@ export default function registerArtifactRoutes(app) {
     const q = String(req.query.q ?? '').slice(0, 120).trim().toLowerCase();
     const limit = Math.min(LIBRARY_PAGE, Math.max(1, parseInt(req.query.limit, 10) || LIBRARY_PAGE));
     const chats = db.chats.listByUser(req.user.id)
-      .filter(c => !c.archived)
+      .filter(c => !c.archived && c.mode !== 'code')
       .slice(0, LIBRARY_SCAN);
     const items = [];
-    const seen = new Set();
     let scanned = 0;
-    const projects = new Map(db.projects.byUser(req.user.id).map(p => [p.id, p.name]));
-    const collect = (key, c, source) => {
-      let files;
-      try { files = sandbox.list(key); } catch { return; }
-      if (!Array.isArray(files)) return;
-      const label = source === 'project' ? (projects.get(c.project_id) || '') : (c.title || '');
-      for (const f of files) {
-        if (items.length >= limit) return;
-        if (q && f.path.toLowerCase().indexOf(q) === -1 && label.toLowerCase().indexOf(q) === -1) continue;
+    for (const c of chats) {
+      if (items.length >= limit) break;
+      scanned++;
+      const key = artOf(c);
+      const title = c.title || '';
+      for (const f of listArtifacts(c.id)) {
+        if (items.length >= limit) break;
+        if (q && !f.path.toLowerCase().includes(q) && !title.toLowerCase().includes(q)) continue;
         let preview = '';
         if (f.size > 0 && f.size < 512 * 1024) {
           try {
@@ -53,9 +51,7 @@ export default function registerArtifactRoutes(app) {
           preview,
           id: key + ':' + f.path,
           chatId: c.id,
-          chatTitle: label,
-          source,
-          projectId: c.project_id || null,
+          chatTitle: title,
           path: f.path,
           name: f.path.split('/').pop(),
           ext: f.ext || '',
@@ -63,19 +59,6 @@ export default function registerArtifactRoutes(app) {
           v: f.v || 1,
           updated_at: c.updated_at || 0
         });
-      }
-    };
-    for (const c of chats) {
-      if (items.length >= limit) break;
-      scanned++;
-      if (c.mode === 'code') {
-        collect(wsOf(c), c, 'code');
-        continue;
-      }
-      collect(artOf(c), c, 'chat');
-      if (c.project_id && !seen.has(c.project_id)) {
-        seen.add(c.project_id);
-        collect(workspaceOfProject(c.project_id), c, 'project');
       }
     }
     res.json({ artifacts: items, scanned, more: chats.length > scanned });
@@ -126,19 +109,29 @@ export default function registerArtifactRoutes(app) {
     res.json({ files: listArtifacts(c.id) });
   });
 
-  app.post('/api/chats/:id/artifacts/save', authMiddleware, (req, res) => {
-    const c = ownChat(req, res); if (!c) return;
-    const projectId = String(req.body?.projectId || c.project_id || '');
+  function saveToProject(req, res, c, from) {
+    const projectId = String(req.body?.projectId || c.project_id || c.origin_project_id || '');
     const p = projectId ? db.projects.byId(projectId) : null;
     if (!p || p.user_id !== req.user.id) return res.status(400).json({ error: 'Choose a project to save it to.' });
     const rel = String(req.body?.path || '');
-    if (!listArtifacts(c.id).some(f => f.path === rel)) return res.status(404).json({ error: 'not found' });
+    if (!sandbox.list(from).some(f => f.path === rel)) return res.status(404).json({ error: 'not found' });
     const ws = workspaceOfProject(p.id);
     const dest = freePath(ws, rel);
-    const r = sandbox.importBuffer(ws, dest, sandbox.readBuffer(artOf(c), rel), sandboxCap(req.user));
+    const r = sandbox.importBuffer(ws, dest, sandbox.readBuffer(from, rel), sandboxCap(req.user));
     if (!r.ok) return res.status(400).json({ error: r.error });
     db.projects.update(p.id, { updated_at: now() });
     res.json({ ok: true, projectId: p.id, projectName: p.name, path: dest });
+  }
+
+  app.post('/api/chats/:id/artifacts/save', authMiddleware, (req, res) => {
+    const c = ownChat(req, res); if (!c) return;
+    saveToProject(req, res, c, artOf(c));
+  });
+
+  app.post('/api/chats/:id/files/save', authMiddleware, (req, res) => {
+    const c = ownChat(req, res); if (!c) return;
+    if (c.mode !== 'code') return res.status(404).json({ error: 'not found' });
+    saveToProject(req, res, c, wsOf(c));
   });
 
   app.get('/api/chats/:id/files', authMiddleware, (req, res) => {

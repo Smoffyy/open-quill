@@ -74,7 +74,7 @@ import { dispatchWs } from './lib/wsmessages.js';
 import { createLru } from './lib/lru.js';
 import { useTurnMeta } from './lib/turnmeta.js';
 import { useTurnStream } from './lib/turnstream.js';
-import { parseRoute, shouldResetPath, pathForChat, pathForCode, pathForProject, pathForLibrary, LIBRARY_PAGES } from './lib/route.js';
+import { parseRoute, shouldResetPath, pathForChat, pathForCode, pathForProject, pathForLibrary, isCodeView, LIBRARY_PAGES } from './lib/route.js';
 import { hasMath, katexPlugin, ensureKatex } from './lib/mathjs.js';
 import { docsConfig, docsTree, docsPath, parseDocsPath } from './lib/modeldocs.js';
 import { useDocsEdit } from './lib/docsedit.js';
@@ -148,8 +148,8 @@ export default function App() {
     return fallback;
   }, [modelById]);
   const sidebarFns = useRef({});
-  const sbNewChat = useCallback((...a) => { setLibPage(null); setChatsOverview(false); setDocsTarget(null); sidebarFns.current.newChat(...a); }, []);
-  const sbOpenChat = useCallback((...a) => { setLibPage(null); setChatsOverview(false); setDocsTarget(null); sidebarFns.current.openChat(...a); }, []);
+  const sbNewChat = useCallback((...a) => { setLibPage(null); setDocsTarget(null); sidebarFns.current.newChat(...a); }, []);
+  const sbOpenChat = useCallback((...a) => { setLibPage(null); setDocsTarget(null); sidebarFns.current.openChat(...a); }, []);
   const sbDeleteChat = useCallback((...a) => sidebarFns.current.deleteChat(...a), []);
   const sbToggleStar = useCallback((...a) => sidebarFns.current.toggleStar(...a), []);
   const sbLogout = useCallback((...a) => sidebarFns.current.logout(...a), []);
@@ -158,10 +158,10 @@ export default function App() {
   const sbSetTags = useCallback((...a) => sidebarFns.current.setChatTags(...a), []);
   const navTo = useCallback((to) => {
     setMobileDrawer(false);
-    setChatsOverview(to === 'chats');
+    const library = LIBRARY_PAGES.includes(to);
+    if (library) sidebarFns.current.alignMode(isCodeView(to));
     setDocsTarget(to === 'docs' ? { kind: 'overview', id: null } : null);
     if (to !== 'projects') { setShowProjects(false); setProjectOpenId(null); }
-    const library = LIBRARY_PAGES.includes(to);
     setLibPage(library ? to : null);
     if (library) {
       if (location.pathname !== pathForLibrary(to)) history.pushState({}, '', pathForLibrary(to));
@@ -172,7 +172,7 @@ export default function App() {
   const sbProjects = useCallback(() => { navTo('projects'); sidebarFns.current.openProjects(null); }, [navTo]);
   const sbOpenProject = useCallback((id) => { navTo('projects'); sidebarFns.current.openProjects(id); }, [navTo]);
   const sbNewProject = useCallback(() => { navTo('projects'); sidebarFns.current.newProject(); }, [navTo]);
-  const onSearchCb = useCallback(() => setCmdkOpen(true), []);
+  const onSearchCb = useCallback(() => setShowSearch(true), []);
   const onToggleSidebarCb = useCallback(() => setCollapsed(c => !c), []);
   const onMobileCloseCb = useCallback(() => setMobileDrawer(false), []);
   const openSettings = useCallback((tab = 'general', opts) => { setMobileDrawer(false); setSettings({ tab, ...opts }); }, []);
@@ -197,7 +197,7 @@ export default function App() {
   const onChangelogCb = useCallback(() => { setMobileDrawer(false); setShowChangelog(true); }, []);
   const onLicenseCb = useCallback(() => { setMobileDrawer(false); setShowLicense(true); }, []);
   const onPrivacyCb = useCallback(() => { setMobileDrawer(false); setShowPrivacy(true); }, []);
-  const onChatsOverviewCb = useCallback(() => navTo('chats'), [navTo]);
+  const onChatsOverviewCb = useCallback(() => navTo(codeModeRef.current ? 'sessions' : 'chats'), [navTo]);
   const onArtifactsCb = useCallback(() => navTo('artifacts'), [navTo]);
   const onScheduledCb = useCallback(() => navTo('scheduled'), [navTo]);
   const onModeCb = useCallback((mode) => sidebarFns.current.switchMode(mode), []);
@@ -311,7 +311,7 @@ export default function App() {
   const [authCtx, setAuthCtx] = useState(null);
   const [budget, setBudget] = useState(null);
   const [greeting, setGreeting] = useState(DEFAULT_CFG.greetings[0]);
-  const [codeMode, setCodeMode] = useState(() => parseRoute(location.pathname).view === 'code');
+  const [codeMode, setCodeMode] = useState(() => isCodeView(parseRoute(location.pathname).view));
   const codeModeRef = useRef(codeMode);
   const modeViews = useRef({});
   useEffect(() => { codeModeRef.current = codeMode; }, [codeMode]);
@@ -360,7 +360,6 @@ export default function App() {
   const [artPanel, setArtPanel] = useState(false);
   const [incognito, setIncognito] = useState(false);
   const [incognitoGreeting, setIncognitoGreeting] = useState(tk('Greetings, whoever you are'));
-  const [chatsOverview, setChatsOverview] = useState(false);
   const [libPage, setLibPage] = useState(null);
   const runTask = useCallback(async (task) => {
     try {
@@ -681,6 +680,8 @@ export default function App() {
     const r = parseRoute(location.pathname, { isAdmin: !!user?.isAdmin });
     if (r.replace) history.replaceState({}, '', r.replace);
     const onProjects = r.view === 'project' || r.view === 'projects';
+    const library = LIBRARY_PAGES.includes(r.view);
+    if (library || onProjects) alignMode(isCodeView(r.view));
     // Every view flag is written on every route change. The branches used to
     // return early, so going Back into a project from another view left the
     // projects panel mounted underneath it.
@@ -689,9 +690,8 @@ export default function App() {
     setShowPlayground(r.view === 'playground');
     setDocsTarget(r.view === 'docs' ? parseDocsPath(location.pathname) : null);
     setShowProjects(onProjects);
-    setLibPage(LIBRARY_PAGES.includes(r.view) ? r.view : null);
-    setChatsOverview(false);
-    if (r.view === 'notfound' || LIBRARY_PAGES.includes(r.view)) return;
+    setLibPage(library ? r.view : null);
+    if (r.view === 'notfound' || library) return;
     if (r.view === 'docs') return;
     if (onProjects) { setProjectOpenId(r.id ?? null); return; }
     if (r.view !== 'home' && r.view !== 'chat' && r.view !== 'code') return;
@@ -765,14 +765,15 @@ export default function App() {
       : showProjects ? (projects.find(p => p.id === projectOpenId)?.name || t('Projects'))
       : libPage === 'artifacts' ? t('Artifacts')
       : libPage === 'scheduled' ? t('Scheduled tasks')
-      : chatsOverview ? t('All chats')
+      : libPage === 'chats' ? t('Chats')
+      : libPage === 'sessions' ? t('Sessions')
       : incognito ? t('Incognito chat')
       : codeMode ? (activeId ? ((chats.find(c => c.id === activeId)?.title) || t('Untitled session')) : t('New session'))
       : activeId ? ((chats.find(c => c.id === activeId)?.title) || t('Untitled chat'))
       : t('New chat')
     );
     document.title = titleWithUnread(codeMode ? `${head} - ${appName} ${t('Code')}` : `${head} - ${appName}`, unreadChats.length);
-  }, [activeId, chats, cfg.appName, incognito, notFound, showAdmin, showPlayground, docsTarget, showProjects, projectOpenId, projects, libPage, chatsOverview, codeMode, unreadChats.length]);
+  }, [activeId, chats, cfg.appName, incognito, notFound, showAdmin, showPlayground, docsTarget, showProjects, projectOpenId, projects, libPage, codeMode, unreadChats.length]);
   function exportAllChats() { window.open('/api/chats/export-all', '_blank'); }
   async function importChatsFile(file) {
     const job = notify(t('Importing chats'), { icon: 'upload', progress: true });
@@ -1200,11 +1201,19 @@ export default function App() {
     setFocusTick(t => t + 1);
     if (fromPop !== true) history.pushState({}, '', codeModeRef.current ? '/code' : '/');
   }
+  function alignMode(code) {
+    if (code === codeModeRef.current) return;
+    setCodeMode(code);
+    codeModeRef.current = code;
+    setCtlOpen(false);
+    setCallOpen(false);
+    newChat(true);
+  }
   function switchMode(mode) {
     const code = mode === 'code';
     if (code === codeModeRef.current && !activeIdRef.current) return;
-    modeViews.current[codeModeRef.current ? 'code' : 'chat'] = { path: location.pathname, overview: chatsOverview };
-    setLibPage(null); setChatsOverview(false); setDocsTarget(null);
+    modeViews.current[codeModeRef.current ? 'code' : 'chat'] = { path: location.pathname };
+    setLibPage(null); setDocsTarget(null);
     setCodeMode(code);
     codeModeRef.current = code;
     setCtlOpen(false);
@@ -1214,7 +1223,6 @@ export default function App() {
     newChat(true);
     if (home) history.pushState({}, '', code ? '/code' : '/');
     else { history.pushState({}, '', view.path); openFromUrl(); }
-    if (view && view.overview) setChatsOverview(true);
   }
   function toggleIncognito() {
     if (streaming || queued || codeModeRef.current) return;
@@ -1391,10 +1399,10 @@ export default function App() {
     const job = notify(t('Copying {name} into a Code session', { name: project.name }), { progress: true });
     try {
       const c = await api.post('/api/projects/' + project.id + '/code', {});
-      setChats(cs => [{ id: c.id, title: c.title, updated_at: c.updated_at, starred: false, mode: 'code' }, ...cs]);
+      setChats(cs => [{ id: c.id, title: c.title, updated_at: c.updated_at, starred: false, mode: 'code', originProjectId: project.id }, ...cs]);
       setShowProjects(false); setProjectOpenId(null);
-      setLibPage(null); setChatsOverview(false); setCallOpen(false);
-      modeViews.current.chat = { path: '/', overview: false };
+      setLibPage(null); setCallOpen(false);
+      modeViews.current.chat = { path: '/' };
       codeModeRef.current = true;
       openChat(c.id);
       job.done(c.copied ? t('Opened in Code with a copy of the project files') : t('Opened in Code. The project has no files to copy yet.'));
@@ -1423,6 +1431,8 @@ export default function App() {
   }
   function openProjects(id = null) {
     setMobileDrawer(false);
+    alignMode(false);
+    setLibPage(null); setDocsTarget(null);
     setProjectOpenId(id);
     setShowProjects(true);
     history.pushState({}, '', pathForProject(id));
@@ -1640,7 +1650,9 @@ export default function App() {
     { id: 'sidebar', label: collapsed ? t('Show sidebar') : t('Hide sidebar'), shortcut: comboLabel(kb.toggleSidebar), keywords: 'toggle collapse panel', action: () => setCollapsed(c => !c) },
     ...((activeId && messages.length > 0) || focusMode ? [{ id: 'focus', label: focusMode ? t('Exit focus mode') : t('Enter focus mode'), shortcut: comboLabel(kb.focusMode), keywords: 'reading distraction free immersive zen hide sidebar', action: () => setFocusMode(o => !o) }] : []),
     ...(outline.length ? [{ id: 'outline', label: outlineOpen ? t('Hide contents') : t('Show contents'), shortcut: comboLabel(kb.toggleOutline), keywords: 'outline headings table of contents jump sections', action: () => setOutlineOpen(o => !o) }] : []),
-    { id: 'chats', label: t('Browse all chats'), keywords: 'overview history search', action: () => setChatsOverview(true) },
+    { id: 'chats', label: codeMode ? t('Browse all sessions') : t('Browse all chats'), keywords: 'overview history search archive', action: onChatsOverviewCb },
+    { id: 'artifacts', label: t('Open Artifacts'), keywords: 'documents files library', action: onArtifactsCb },
+    { id: 'scheduled', label: t('Scheduled tasks'), keywords: 'tasks recurring timer automation schedule', action: onScheduledCb },
     { id: 'search', label: t('Search chats'), shortcut: comboLabel(kb.searchChats), keywords: 'find message text', action: () => setShowSearch(true) },
     { id: 'shortcuts', label: t('Keyboard shortcuts'), shortcut: comboLabel(kb.shortcuts), keywords: 'keys help hotkeys', action: () => setShowShortcuts(true) },
     { id: 'projects', label: t('Open Projects'), keywords: 'project workspace organize', action: () => openProjects(null) },
@@ -1676,7 +1688,13 @@ export default function App() {
       onSendText={(txt) => send([], txt, { call: true })} />
   ) : null;
 
-  sidebarFns.current = { newChat, openChat, deleteChat, toggleStar, toggleArchive, setChatTags, logout, openProjects, moveChatToProject, switchMode, newProject: () => { openProjects(null); setProjectCreate(true); } };
+  const pageOpen = showProjects || !!libPage;
+  const pageMenuBtn = (
+    <button className="mobile-menu-btn empty-menu" onClick={() => setMobileDrawer(true)} data-tip={t("Menu")} aria-label={t("Menu")}><Menu style={{ width: 20 }} /></button>
+  );
+  const originProject = activeChat?.originProjectId ? projects.find(p => p.id === activeChat.originProjectId) : null;
+
+  sidebarFns.current = { newChat, openChat, deleteChat, toggleStar, toggleArchive, setChatTags, logout, openProjects, moveChatToProject, switchMode, alignMode, newProject: () => { openProjects(null); setProjectCreate(true); } };
 
   const streamKey = assistantIdRef.current || '_stream';
   const codeLive = !codeMode ? null
@@ -1686,6 +1704,7 @@ export default function App() {
     <CodeView userName={user?.displayName} modelIcon={model?.staticIcon || ''} chatIcon={model?.showIcon === false ? '' : model?.staticIcon || ''} chat={activeChat} chatId={activeId} booting={booting} loading={threadLoading}
       messages={messages} live={codeLive} liveCalls={liveCalls} phase={phase} status={modelStatus} statusDelay={statusDelay} streaming={streaming || queued}
       files={files} liveFile={liveFile} pendingFiles={pendingFiles} fileFocus={artifactFocus} onFilesChanged={setFiles}
+      projects={projects} project={originProject} onOpenProject={() => openProjects(originProject.id)}
       composer={{
         value: input, onChange: (v) => { setInput(v); saveDraft(activeId || 'code', v); },
         onSend: send, onStop: stop, streaming: (streaming || queued) && !pendingAsk, stopping, ended: chatEnded,
@@ -1714,7 +1733,7 @@ export default function App() {
       <a className="skip-link" href="#oq-composer">{t('Skip to message input')}</a>
       <AppBackground bg={activeBg} />
       <Sidebar user={user} chats={modeChats} mode={codeMode ? 'code' : 'chat'} onMode={onModeCb} chatsLoaded={chatsLoaded} projectsReady={projectsReady} activeId={activeId} appName={cfg.appName} appIcon={cfg.appIcon} onSearch={onSearchCb}
-        dest={showProjects ? 'projects' : chatsOverview ? 'chats' : libPage}
+        dest={showProjects ? 'projects' : libPage}
         onArtifacts={onArtifactsCb} onScheduled={onScheduledCb}
         onCustomize={onSkillsCb} onModelDocs={onDocsCb} showModelDocs={cfg.modelDocs !== false} onVersion={onVersionCb}
         docs={docsTarget ? {
@@ -1759,22 +1778,40 @@ export default function App() {
             </Suspense>
           </div>
         )}
-        {libPage && (
-          <div className="lib-overlay" role="region" aria-label={libPage === 'artifacts' ? t('Artifacts') : t('Scheduled tasks')}>
-            {libPage === 'artifacts'
-              ? <ArtifactsLibrary onSearch={() => setShowSearch(true)} onNew={() => { setLibPage(null); newChat(); }}
-                  onOpen={(a) => {
-                    setLibPage(null);
-                    if (a.source === 'project') { openProjects(a.projectId); return; }
-                    openChat(a.chatId);
-                    if (a.source === 'code') setCodePanel(true); else setArtPanel(true);
-                    setArtifactFocus({ path: a.path, n: Date.now() });
-                  }} />
-              : <ScheduledTasks onSearch={() => setShowSearch(true)} onRunTask={runTask}
-                  onOpenChat={(id) => { setLibPage(null); openChat(id); }}
-                  models={models} webSearchAvailable={!!cfg.webSearchAvailable} />}
+        {showProjects ? (
+          <div className="lib-overlay pj-overview" role="region" aria-label={t('Projects')}>
+            {pageMenuBtn}
+            <ProjectsPanel openId={projectOpenId} composerProps={composerProps}
+              startCreate={projectCreate} onCreateHandled={() => setProjectCreate(false)}
+              onOpenChat={openProjectChat} onStartChat={startProjectChat} onOpenInCode={openProjectInCode}
+              onOpenSession={(id) => { setProjectOpenId(null); openChat(id); }}
+              onOpenProject={(id) => { setProjectOpenId(id); history.replaceState({}, '', pathForProject(id)); loadProjects(); }} />
           </div>
-        )}
+        ) : libPage === 'artifacts' ? (
+          <div className="lib-overlay" role="region" aria-label={t('Artifacts')}>
+            {pageMenuBtn}
+            <ArtifactsLibrary onSearch={() => setShowSearch(true)}
+              onOpen={(a) => {
+                setLibPage(null);
+                openChat(a.chatId);
+                setArtPanel(true);
+                setArtifactFocus({ path: a.path, n: Date.now() });
+              }} />
+          </div>
+        ) : libPage === 'scheduled' ? (
+          <div className="lib-overlay" role="region" aria-label={t('Scheduled tasks')}>
+            {pageMenuBtn}
+            <ScheduledTasks onSearch={() => setShowSearch(true)} onRunTask={runTask}
+              onOpenChat={(id) => { setLibPage(null); openChat(id); }}
+              models={models} webSearchAvailable={!!cfg.webSearchAvailable} />
+          </div>
+        ) : libPage ? (
+          <div className="lib-overlay chats-overview" role="region" aria-label={libPage === 'sessions' ? t('Sessions') : t('Chats')}>
+            {pageMenuBtn}
+            <ChatsOverview key={libPage} mode={libPage === 'sessions' ? 'code' : 'chat'} onSearch={() => setShowSearch(true)}
+              onOpen={(id) => { setLibPage(null); openChat(id); }} onChatsChanged={() => loadChats()} />
+          </div>
+        ) : null}
 
         {incognito && (
           <div className="incognito-bar">
@@ -1785,9 +1822,7 @@ export default function App() {
             <button className="incognito-close" onClick={toggleIncognito} data-tip={t("Exit incognito")} aria-label={t("Exit incognito")} disabled={streaming || queued}><X style={{ width: 16 }} /></button>
           </div>
         )}
-        {empty && !codeMode && (
-          <button className="mobile-menu-btn empty-menu" onClick={() => setMobileDrawer(true)} data-tip={t("Menu")} aria-label={t("Menu")}><Menu style={{ width: 20 }} /></button>
-        )}
+        {empty && !codeMode && !pageOpen && pageMenuBtn}
         {!incognito && empty && !codeMode && (
           <TopbarActions className="home-actions"
             leading={<>
@@ -1896,7 +1931,7 @@ export default function App() {
         )}
       </div>
 
-      {!codeMode && artPanel && activeId && !incognito && !callOpen && (
+      {!codeMode && artPanel && activeId && !incognito && !callOpen && !pageOpen && (
         <ChatArtifacts chatId={activeId} files={files} live={liveFile} pending={pendingFiles} focus={artifactFocus}
           busy={streaming || queued} projectId={activeChat?.projectId || null} projects={projects}
           onFilesChanged={setFiles} onClose={() => setArtPanel(false)} />
@@ -1917,7 +1952,6 @@ export default function App() {
       {user?.isAdmin && cfg.setupComplete === false && !setupDone && (
         <Suspense fallback={null}><SetupGuide appName={cfg.appName || 'open-quill'} onDone={onSetupDone} /></Suspense>
       )}
-      {chatsOverview && <ChatsOverview onClose={() => setChatsOverview(false)} onOpen={(id) => { setChatsOverview(false); openChat(id); }} onChatsChanged={() => loadChats()} />}
       {showSearch && <SearchModal onClose={() => setShowSearch(false)} onOpen={(id) => openChat(id)} />}
       {ledgerPrompt && activeId && (
         <PromptLedger chatId={activeId} modelId={currentId} onClose={() => setLedgerPrompt(false)} />
@@ -1931,11 +1965,6 @@ export default function App() {
         {showAdmin && <AdminPanel user={user} onClose={() => { setShowAdmin(false); if (shouldResetPath('admin', location.pathname)) history.pushState({}, '', '/'); }} />}
         {showPlayground && <Playground user={user} onClose={() => { setShowPlayground(false); if (shouldResetPath('playground', location.pathname)) history.pushState({}, '', '/'); }} />}
       </Suspense>
-      {showProjects && <ProjectsPanel openId={projectOpenId} composerProps={composerProps}
-        startCreate={projectCreate} onCreateHandled={() => setProjectCreate(false)}
-        onClose={() => { setShowProjects(false); setProjectOpenId(null); if (shouldResetPath('projects', location.pathname)) history.pushState({}, '', '/'); }}
-        onOpenChat={openProjectChat} onStartChat={startProjectChat} onOpenInCode={openProjectInCode}
-        onOpenProject={(id) => { setProjectOpenId(id); history.replaceState({}, '', pathForProject(id)); loadProjects(); }} />}
       {showCredits && <DocModal title={t("Credits")} name="credits" serif onClose={() => setShowCredits(false)} />}
       {showLicense && <DocModal title={t("Licensing")} name="license" onClose={() => setShowLicense(false)} />}
       {showPrivacy && <DocModal title={t("Privacy & security")} name="privacy" onClose={() => setShowPrivacy(false)} />}

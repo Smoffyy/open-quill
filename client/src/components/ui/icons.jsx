@@ -17,7 +17,7 @@ export const Chat = (p) => <I {...p}>
   </g>
 </I>;
 export const NewChatIcon = Plus;
-export const Search = (p) => <I {...p}><circle cx="10.25" cy="10.25" r="6.5" /><path d="m14.85 14.85 5.4 5.4" /></I>;
+export const Search = (p) => <I {...p}><g className="ic-lens"><circle cx="10.25" cy="10.25" r="6.5" /><path d="m14.85 14.85 5.4 5.4" /></g></I>;
 export const Globe = (p) => <I {...p}><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9S9.5 5.6 12 3z" /></I>;
 export const Panel = (p) => <I {...p}><rect {...Frame} /><path d="M9.5 4.5v15" /></I>;
 export const Menu = (p) => <I {...p}><path d="M4 6.5h16M4 12h11M4 17.5h16" /></I>;
@@ -87,7 +87,7 @@ export const Gauge = (p) => <I {...p}><path d="M4.6 19a9 9 0 1 1 14.8 0M12 13.9l
 export const Steer = (p) => <I {...p}><circle cx="12" cy="12" r="3" /><path d="M12 3.5v5M12 15.5v5M3.5 12h5M15.5 12h5" /></I>;
 export const Eye = (p) => <I {...p}><path d="M3 12s3.4-6.5 9-6.5 9 6.5 9 6.5-3.4 6.5-9 6.5S3 12 3 12z" /><circle cx="12" cy="12" r="2.75" /></I>;
 export const EyeOff = (p) => <I {...p}><path d="m4 4 16 16M10.2 5.7A9 9 0 0 1 12 5.5c5.6 0 9 6.5 9 6.5a16 16 0 0 1-2.8 3.7M6.6 6.7A15 15 0 0 0 3 12s3.4 6.5 9 6.5c1.3 0 2.5-.3 3.6-.8M10 10.1a2.75 2.75 0 0 0 3.9 3.9" /></I>;
-export const ModelDocs = (p) => <I {...p}><path className="ic-page-l" d="M12 6c-1.5-1.3-3.4-2-5.7-2-1.1 0-2 .1-2.8.4v14.4c.8-.3 1.7-.4 2.8-.4 2.3 0 4.2.7 5.7 2" /><path className="ic-page-r" d="M12 6c1.5-1.3 3.4-2 5.7-2 1.1 0 2 .1 2.8.4v14.4c-.8-.3-1.7-.4-2.8-.4-2.3 0-4.2.7-5.7 2" /><path d="M12 6v14.4" /></I>;
+export const ModelDocs = (p) => <I {...p}><path className="ic-page-l" d="M12 6c-1.5-1.3-3.4-2-5.7-2-1.1 0-2 .1-2.8.4v14.4c.8-.3 1.7-.4 2.8-.4 2.3 0 4.2.7 5.7 2" /><path className="ic-page-r" d="M12 6c1.5-1.3 3.4-2 5.7-2 1.1 0 2 .1 2.8.4v14.4c-.8-.3-1.7-.4-2.8-.4-2.3 0-4.2.7-5.7 2" /><path className="ic-page-turn" d="M12 6c1.5-1.3 3.4-2 5.7-2 1.1 0 2 .1 2.8.4v14.4c-.8-.3-1.7-.4-2.8-.4-2.3 0-4.2.7-5.7 2" /><path d="M12 6v14.4" /></I>;
 export const Expand = (p) => <I {...p}><path d="M9.5 3.5h-6v6M3.5 3.5 10 10M14.5 20.5h6v-6M20.5 20.5 14 14" /></I>;
 export const Collapse = (p) => <I {...p}><path d="M4 9.5h5.5V4M9.5 9.5l-6-6M20 14.5h-5.5V20M14.5 14.5l6 6" /></I>;
 export const CodeTag = (p) => <I {...p}><path className="ic-b1" d="M8.5 7.5 4 12l4.5 4.5" /><path className="ic-b2" d="M15.5 7.5 20 12l-4.5 4.5" /><path d="m13.5 5.5-3 13" /></I>;

@@ -72,6 +72,9 @@ a.cx-hbtn { text-decoration: none; }
   transition: background .06s ease, color .06s ease;
 }
 .cx-tag:hover { color: var(--text); background: color-mix(in srgb, var(--cx-chip) 100%, var(--cx-hover)); }
+.cx-from { gap: 4px; min-width: 0; max-width: 200px; }
+.cx-from svg { width: 12px; height: 12px; flex-shrink: 0; }
+.cx-from span { overflow: hidden; text-overflow: ellipsis; }
 
 .cx-scroll { flex: 1; min-height: 0; overflow: hidden auto; scrollbar-gutter: stable both-edges; }
 .cx-thread.thread {

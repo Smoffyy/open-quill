@@ -5,7 +5,7 @@ import ResizeHandle, { storedWidth } from '../ui/ResizeHandle.jsx';
 import { SegSlide } from '../ui/controls.jsx';
 import { ChatMenu, menuAtButton, menuAtPointer } from './ChatMenu.jsx';
 import DocsNav from './DocsNav.jsx';
-import { Plus, Search, Panel, Gear, Shield, Flask, Logout, DotsV, Trash, Heart, ChevDown, Box, Compact, Sliders, Check, Artifact, Briefcase, ModelDocs, Info, Clock, ArrowOut, QuickTask, Sparkles, Paper, Ghost, X, Chat, CodeTag, Laptop, Tag } from '../ui/icons.jsx';
+import { Plus, Search, Panel, Gear, Shield, Flask, Logout, DotsV, Trash, Heart, ChevDown, Box, Compact, Sliders, Check, Artifact, Briefcase, ModelDocs, Info, Clock, ArrowOut, Sparkles, Paper, Ghost, X, Chat, CodeTag, Laptop, Tag } from '../ui/icons.jsx';
 import { t } from '../../i18n.jsx';
 import { useThemeText } from '../../lib/theme/store.jsx';
 import ThemeSlot from '../builder/ThemeSlot.jsx';
@@ -172,14 +172,15 @@ function Sidebar({
   const navNew = useThemeText('nav.new', t('New'));
   const navProjects = useThemeText('nav.projects', t('Projects'));
   const navArtifacts = useThemeText('nav.artifacts', t('Artifacts'));
-  const navScheduled = useThemeText('nav.scheduled', t('Scheduled'));
+  const navSearch = useThemeText('nav.search', t('Search'));
   const navCustomize = useThemeText('nav.customize', t('Customize'));
   const allChats = useThemeText('nav.allChats', t('All chats'));
+  const browseAll = code ? t('Sessions') : allChats;
+  const onBrowse = dest === 'chats' || dest === 'sessions';
   const emptyChats = useThemeText('empty.chats', t('No chats yet'));
   const recentsLabel = useThemeText('nav.recents', t('Recents'));
   const brandText = appName || 'open-quill';
   const verText = version ? parseVersion(version)?.full || '' : '';
-  const [moreOpen, setMoreOpen] = useState(false);
   useFitText(brandRef, brandText, 0.6);
   useFitText(verRef, verText, 0.8);
   const busyIds = React.useMemo(() => new Set(busyChats), [busyChats]);
@@ -305,22 +306,19 @@ function Sidebar({
           aria-current={!activeId && !dest ? 'page' : undefined}
           onClick={(e) => { if (!plainClick(e)) return; e.preventDefault(); onNew(); }}><span className="nav-ic new-chat-plus"><Plus /></span> <span className="nav-label">{navNew}</span>
           {newChatCombo && <span className="nav-shortcut">{newChatCombo}</span>}</a>
-        {!code && (
-          <button className="new-quick" data-tip={t('Quick task')} aria-label={t('Quick task')}
-            onClick={(e) => { e.stopPropagation(); (onScheduled || onNew)(); }}><QuickTask /></button>
+        {!code && onScheduled && (
+          <button className={'new-quick' + (dest === 'scheduled' ? ' on' : '')} data-tip={t('Scheduled tasks')} aria-label={t('Scheduled tasks')}
+            aria-current={dest === 'scheduled' ? 'page' : undefined}
+            onClick={(e) => { e.stopPropagation(); onScheduled(); }}><Clock /></button>
         )}
         </div>
-        <button data-oq-item="nav.projects" className={'nav-item' + (dest === 'projects' ? ' on' : '')} data-tip={navProjects} aria-current={dest === 'projects' ? 'page' : undefined} onClick={onProjects}><span className="nav-ic"><Box /></span> <span className="nav-label">{navProjects}</span></button>
-        <button data-oq-item="nav.artifacts" className={'nav-item' + (dest === 'artifacts' ? ' on' : '')} data-tip={navArtifacts} aria-current={dest === 'artifacts' ? 'page' : undefined} onClick={() => onArtifacts && onArtifacts()}><span className="nav-ic"><Artifact /></span> <span className="nav-label">{navArtifacts}</span></button>
-        {!code && <button data-oq-item="nav.scheduled" className={'nav-item' + (dest === 'scheduled' ? ' on' : '')} data-tip={navScheduled} aria-current={dest === 'scheduled' ? 'page' : undefined} onClick={() => onScheduled && onScheduled()}><span className="nav-ic"><Clock /></span> <span className="nav-label">{navScheduled}</span></button>}
+        <button data-oq-item="nav.search" className="nav-item" data-tip={navSearch} onClick={onSearch}><span className="nav-ic"><Search /></span> <span className="nav-label">{navSearch}</span>
+          {searchCombo && <span className="nav-shortcut">{searchCombo}</span>}</button>
+        {code && <button data-oq-item="nav.chats" className={'nav-item' + (onBrowse ? ' on' : '')} data-tip={browseAll} aria-current={onBrowse ? 'page' : undefined} onClick={onChatsOverview}><span className="nav-ic"><Compact /></span> <span className="nav-label">{browseAll}</span></button>}
+        {!code && <button data-oq-item="nav.projects" className={'nav-item' + (dest === 'projects' ? ' on' : '')} data-tip={navProjects} aria-current={dest === 'projects' ? 'page' : undefined} onClick={onProjects}><span className="nav-ic"><Box /></span> <span className="nav-label">{navProjects}</span></button>}
+        {!code && <button data-oq-item="nav.artifacts" className={'nav-item' + (dest === 'artifacts' ? ' on' : '')} data-tip={navArtifacts} aria-current={dest === 'artifacts' ? 'page' : undefined} onClick={() => onArtifacts && onArtifacts()}><span className="nav-ic"><Artifact /></span> <span className="nav-label">{navArtifacts}</span></button>}
         <button data-oq-item="nav.customize" className="nav-item" data-tip={navCustomize} onClick={() => onCustomize && onCustomize()}><span className="nav-ic"><Briefcase /></span> <span className="nav-label">{navCustomize}</span></button>
-        <button className={'nav-item nav-more' + (moreOpen ? ' open' : '')} aria-expanded={moreOpen} onClick={() => setMoreOpen(o => !o)}>
-          <span className="nav-ic"><ChevDown /></span> <span className="nav-label">{moreOpen ? t('Less') : t('More')}</span>
-        </button>
-        {moreOpen && <>
-          {!code && <button className={'nav-item' + (dest === 'chats' ? ' on' : '')} data-tip={allChats} onClick={onChatsOverview}><span className="nav-ic"><Compact /></span> <span className="nav-label">{allChats}</span></button>}
-          {showModelDocs && <button className="nav-item" data-tip={t('Model docs')} onClick={() => onModelDocs && onModelDocs()}><span className="nav-ic"><ModelDocs /></span> <span className="nav-label">{t('Model docs')}</span></button>}
-        </>}
+        {showModelDocs && <button className="nav-item" data-tip={t('Model docs')} onClick={() => onModelDocs && onModelDocs()}><span className="nav-ic"><ModelDocs /></span> <span className="nav-label">{t('Model docs')}</span></button>}
       </div>
       <div className="chats-wrap">
       <div className="chats" ref={chatsRef}>
@@ -372,7 +370,7 @@ function Sidebar({
                   <Tag aria-hidden="true" /> <span className="rl-tag-name">{activeTag}</span> <X aria-hidden="true" />
                 </button>
               )}
-              {!code && <button className="rl-group" data-tip={t('All chats')} aria-label={t('All chats')} onClick={onChatsOverview}><ArrowOut /></button>}
+              <button className="rl-group" data-tip={browseAll} aria-label={browseAll} onClick={onChatsOverview}><ArrowOut /></button>
               <button className="rl-group" data-tip={t('Group by')} aria-label={t('Group by')} aria-haspopup="menu" aria-expanded={groupMenu}
                 onClick={() => setGroupMenu(o => !o)}><Sliders /></button>
               {groupMenu && (
@@ -406,8 +404,8 @@ function Sidebar({
                 {g.items.map(row)}
               </React.Fragment>
             ))}
-            {overflow && !code && (
-              <button className="all-chats-btn" onClick={onChatsOverview}><Compact style={{ width: 15, flexShrink: 0 }} /> <span>{allChats}</span></button>
+            {overflow && (
+              <button className="all-chats-btn" onClick={onChatsOverview}><Compact style={{ width: 15, flexShrink: 0 }} /> <span>{browseAll}</span></button>
             )}
           </>
         )}
@@ -440,9 +438,6 @@ function Sidebar({
             <button className="profile-apps" onClick={() => onVersion && onVersion()} aria-label={t('Version')}>
               <Info />
             </button>
-          </Tip>
-          <Tip label={t('Search')} keys={searchCombo}>
-            <button className="profile-apps" onClick={onSearch} aria-label={t('Search')}><Search /></button>
           </Tip>
         </span>
       </div>

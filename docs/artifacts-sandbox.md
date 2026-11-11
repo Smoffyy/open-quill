@@ -16,7 +16,7 @@ An admin can switch artifacts off for a model under **Admin Panel → Models →
 
 The sidebar has a **Chat / Code** switch. Chats are ordinary conversations. A **Code session** is a chat that also gets a sandbox: a workspace with a file system and a shell. The assistant can create and edit files, install packages, run builds and fix what fails.
 
-To start one, switch to **Code** and start a chat, or use **Build in Code** on a project page to start one with a copy of the project's files. Only models an admin has marked **Available in Code** can run Code sessions, and they are greyed out in the Code model picker otherwise.
+To start one, switch to **Code** and start a chat, or use the **+** on a project's **Code** card to start one with a copy of the project's files. A session started that way shows the project in its top bar, and **Add to project** on any of its files copies that file back into the project's knowledge. Only models an admin has marked **Available in Code** can run Code sessions, and they are greyed out in the Code model picker otherwise.
 
 Only Code sessions have a sandbox. Chats, including chats in a project, never run commands or change files on the server; a project's documents are read-only knowledge. See [Organizing your chats](organizing-chats.md#projects).
 
@@ -48,7 +48,7 @@ Every change to a file is kept.
 
 ## Downloading
 
-Download a single file, or **Download all** for the whole workspace as a zip. The **Artifacts** page in the sidebar lists chat artifacts, project knowledge and Code files in one place, each marked with where it lives.
+Download a single file, or **Download all** for the whole workspace as a zip. The **Artifacts** page in the sidebar lists the documents your chats have written; Code files stay in their session.
 
 ## Where it runs
 

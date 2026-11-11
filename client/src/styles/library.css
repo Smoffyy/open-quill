@@ -106,6 +106,12 @@
 .sched-item-acts .lib-icon-btn { width: 28px; height: 28px; border-radius: 7px; }
 .sched-item-acts .lib-icon-btn svg { width: 14px; height: 14px; }
 .lib-icon-btn.danger:hover { color: var(--danger); }
+@media (max-width: 480px) {
+  .lib-col { padding-left: 16px; padding-right: 16px; }
+  .lib-head { flex-wrap: wrap; }
+  .lib-actions { flex-wrap: wrap; }
+  .sched-grid { grid-template-columns: 1fr; }
+}
 .lib-card-ext {
   display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 6px;
   background: var(--cl-hover); color: var(--text-muted);
