@@ -19,6 +19,7 @@ import { syncedPrompt, draftFeatures, promptValues } from '../lib/systemprompt.j
 import { sanitizeConsultModels } from '../lib/consult.js';
 import { touchesBlocks, addBlocks, eligibleBlocks } from '../lib/promptblocks.js';
 import { presetById } from '../lib/presets.js';
+import { MODEL_WEAVE } from '../lib/brand.js';
 
 function sanitizeRouterRules(raw) {
   const list = Array.isArray(raw) ? raw : [];
@@ -268,7 +269,7 @@ export default function registerModelRoutes(app) {
       unavailable: b.unavailable ? 1 : 0, unavailable_reason: b.unavailable_reason || '',
       bg_enabled: b.bg_enabled ? 1 : 0, bg_image: b.bg_image || '',
       badges_off: badgesOff(b.badges_off),
-      static_icon: b.static_icon || '', generating_icon: b.generating_icon || '', thinking_icon: b.thinking_icon || '',
+      static_icon: b.static_icon || MODEL_WEAVE, generating_icon: b.generating_icon || MODEL_WEAVE, thinking_icon: b.thinking_icon || MODEL_WEAVE,
       icon_position: b.icon_position || look.icon_position,
       temperature: null, top_p: null, presence_penalty: null, frequency_penalty: null, repetition_penalty: null, min_p: null, top_k: null, seed: null,
       cost_in: preset ? preset.in : null, cost_out: preset ? preset.out : null,

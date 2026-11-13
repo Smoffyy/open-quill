@@ -1220,6 +1220,9 @@ test('a project chat reads its knowledge, keeps notes and writes an artifact tha
     const results = turns.at(-1).body.messages.flatMap(m => (Array.isArray(m.content) ? m.content : [])).filter(b => b.type === 'tool_result');
     assert.match(results[0].content, /brief\.md:1: The budget is 400 euros\./, 'knowledge search finds the document');
     assert.ok(frames.some(f => f.type === 'files' && f.files.some(x => x.path === 'trip-plan.md')), 'the panel hears about the new artifact');
+    const lastSystem = turns.at(-1).body.system.map(b => b.text).join('\n');
+    assert.match(lastSystem, /### trip-plan\.md \(v1\)/, 'the step after a write already sees the artifact it wrote');
+    assert.match(lastSystem, /The trip budget is 400 euros\./, 'and the notes it just added');
 
     const notes = (await browser('GET', `/api/projects/${project.id}`)).json.notes;
     assert.equal(notes, 'The trip budget is 400 euros.');

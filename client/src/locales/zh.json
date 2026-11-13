@@ -1386,7 +1386,6 @@
   "Now editing “{name}”.": "正在编辑“{name}”。",
   "Use this": "使用此项",
   "Duplicated.": "已复制。",
-  "Renaming, deleting, importing, exporting and version history all live inside build mode, next to the design you are working on.": "重命名、删除、导入、导出和版本历史都在构建模式中，就在你正在设计的内容旁边。",
   "Used in the browser tab, the sidebar, and the greeting.": "用于浏览器标签页、侧边栏和问候语。",
   "Support contact": "支持联系方式",
   "Who to reach about this instance. An email address or an https link. Shown on the 404 page; leave empty to hide it.": "就此实例应联系谁。可以是邮箱地址或 https 链接。显示在 404 页面上；留空则隐藏。",
@@ -3151,5 +3150,7 @@
   "Delete {n} sessions?": "删除 {n} 个会话？",
   "{n} selected": "已选择 {n} 项",
   "Scheduled tasks button": "定时任务按钮",
-  "Search label": "搜索标签"
+  "Search label": "搜索标签",
+  "Deleted “{name}”.": "已删除“{name}”。",
+  "Renaming, importing, exporting and version history live inside build mode, next to the design you are working on.": "重命名、导入、导出和版本历史都在构建模式中，就在你正在设计的内容旁边。"
 }

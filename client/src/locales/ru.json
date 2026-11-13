@@ -1279,7 +1279,6 @@
   "Rename anything the interface says. Leave a field empty to keep the built-in wording, which stays translated.": "Переименуйте любой текст интерфейса. Оставьте поле пустым, чтобы сохранить встроенную формулировку, которая продолжит переводиться.",
   "Rename chat": "Переименовать чат",
   "Rename theme": "Переименовать тему",
-  "Renaming, deleting, importing, exporting and version history all live inside build mode, next to the design you are working on.": "Переименование, удаление, импорт, экспорт и история версий — всё это находится внутри режима конструктора, рядом с дизайном, над которым вы работаете.",
   "Repeat penalty": "Штраф за повторение",
   "Repetition": "Повторение",
   "Repetition penalty": "Штраф за повторение",
@@ -3151,5 +3150,7 @@
   "Delete {n} sessions?": "Удалить сеансы ({n})?",
   "{n} selected": "Выбрано: {n}",
   "Scheduled tasks button": "Кнопка запланированных задач",
-  "Search label": "Подпись «Поиск»"
+  "Search label": "Подпись «Поиск»",
+  "Deleted “{name}”.": "«{name}» удалено.",
+  "Renaming, importing, exporting and version history live inside build mode, next to the design you are working on.": "Переименование, импорт, экспорт и история версий находятся внутри режима конструктора, рядом с дизайном, над которым вы работаете."
 }

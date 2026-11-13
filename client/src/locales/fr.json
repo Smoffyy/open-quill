@@ -1386,7 +1386,6 @@
   "Now editing “{name}”.": "Modification en cours de « {name} ».",
   "Use this": "Utiliser celui-ci",
   "Duplicated.": "Dupliqué.",
-  "Renaming, deleting, importing, exporting and version history all live inside build mode, next to the design you are working on.": "Le renommage, la suppression, l’importation, l’exportation et l’historique des versions se trouvent dans le mode création, à côté du design sur lequel vous travaillez.",
   "Used in the browser tab, the sidebar, and the greeting.": "Utilisée dans l’onglet du navigateur, la barre latérale et l’écran d’accueil.",
   "Support contact": "Contact du support",
   "Who to reach about this instance. An email address or an https link. Shown on the 404 page; leave empty to hide it.": "Qui contacter au sujet de cette instance. Une adresse e-mail ou un lien https. Affiché sur la page 404 ; laissez vide pour le masquer.",
@@ -3151,5 +3150,7 @@
   "Delete {n} sessions?": "Supprimer {n} sessions ?",
   "{n} selected": "{n} sélectionnées",
   "Scheduled tasks button": "Bouton des tâches planifiées",
-  "Search label": "Libellé Recherche"
+  "Search label": "Libellé Recherche",
+  "Deleted “{name}”.": "« {name} » supprimé.",
+  "Renaming, importing, exporting and version history live inside build mode, next to the design you are working on.": "Le renommage, l’importation, l’exportation et l’historique des versions se trouvent dans le mode création, à côté du design sur lequel vous travaillez."
 }

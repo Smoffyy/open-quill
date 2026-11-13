@@ -1645,7 +1645,6 @@
   "Removing {who} deletes their account and every chat, file, and artifact they own. This cannot be undone.": "Quitar a {who} elimina su cuenta y todos los chats, archivos y artefactos que le pertenecen. Esto no se puede deshacer.",
   "Rename anything the interface says. Leave a field empty to keep the built-in wording, which stays translated.": "Renombra cualquier texto que muestre la interfaz. Deja un campo vacío para conservar el texto original, que se mantiene traducido.",
   "Rename theme": "Renombrar tema",
-  "Renaming, deleting, importing, exporting and version history all live inside build mode, next to the design you are working on.": "Renombrar, eliminar, importar, exportar y el historial de versiones están dentro del modo de construcción, junto al diseño en el que trabajas.",
   "Replace": "Reemplazar",
   "Reply": "Responder",
   "Reporting window": "Periodo de reporte",
@@ -3151,5 +3150,7 @@
   "Delete {n} sessions?": "¿Eliminar {n} sesiones?",
   "{n} selected": "{n} seleccionados",
   "Scheduled tasks button": "Botón de tareas programadas",
-  "Search label": "Etiqueta de búsqueda"
+  "Search label": "Etiqueta de búsqueda",
+  "Deleted “{name}”.": "Se eliminó “{name}”.",
+  "Renaming, importing, exporting and version history live inside build mode, next to the design you are working on.": "Renombrar, importar, exportar y el historial de versiones están dentro del modo de construcción, junto al diseño en el que trabajas."
 }

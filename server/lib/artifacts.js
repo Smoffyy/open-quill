@@ -50,7 +50,7 @@ export function artifactPayload(call, r) {
 export function formatArtifactResult(call, r) {
   if (!r.ok) return `${call.tool} ${r.name || call.name || ''} → ERROR: ${r.error}`;
   if (call.tool === 'artifact_read') return `artifact_read ${r.name} (v${r.v}) →\n${r.content}`;
-  if (r.unchanged) return `${call.tool} ${r.name} → unchanged (already v${r.v}, identical content)`;
+  if (r.unchanged) return `${call.tool} ${r.name} → unchanged: v${r.v} already has exactly this content, so it is saved and nothing more is needed. Do not write it again.`;
   return `${call.tool} ${r.name} → saved as v${r.v} (+${r.adds ?? 0}/-${r.dels ?? 0}). The user sees it in the artifacts panel; do not paste it into your reply.`;
 }
 

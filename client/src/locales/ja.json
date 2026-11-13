@@ -1279,7 +1279,6 @@
   "Rename anything the interface says. Leave a field empty to keep the built-in wording, which stays translated.": "インターフェースの文言をすべて変更できます。フィールドを空欄にすると組み込みの文言が使われ、翻訳もそのまま適用されます。",
   "Rename chat": "チャット名を変更",
   "Rename theme": "テーマ名を変更",
-  "Renaming, deleting, importing, exporting and version history all live inside build mode, next to the design you are working on.": "名前の変更、削除、インポート、エクスポート、バージョン履歴はすべて、作業中のデザインの隣にあるビルドモード内で行います。",
   "Repeat penalty": "反復ペナルティ",
   "Repetition": "反復",
   "Repetition penalty": "反復ペナルティ",
@@ -3151,5 +3150,7 @@
   "Delete {n} sessions?": "{n} 件のセッションを削除しますか？",
   "{n} selected": "{n} 件を選択中",
   "Scheduled tasks button": "スケジュールされたタスクのボタン",
-  "Search label": "検索のラベル"
+  "Search label": "検索のラベル",
+  "Deleted “{name}”.": "「{name}」を削除しました。",
+  "Renaming, importing, exporting and version history live inside build mode, next to the design you are working on.": "名前の変更、インポート、エクスポート、バージョン履歴は、作業中のデザインの隣にあるビルドモード内で行います。"
 }

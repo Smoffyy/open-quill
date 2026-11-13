@@ -348,11 +348,8 @@
 .rb-steps {
   margin: 4px 0 0; padding: 0;
   color: var(--text-faint); font-family: var(--font-sans); font-size: 15px; line-height: 1.72;
-  max-height: 620px; overflow: hidden auto; overscroll-behavior: contain;
+  max-height: 620px; overflow: hidden auto; overscroll-behavior: contain; scrollbar-gutter: stable;
 }
-.rb-steps::-webkit-scrollbar { width: 8px; }
-.rb-steps::-webkit-scrollbar-thumb { background: var(--hover-mid); border-radius: 999px; }
-.rb-steps::-webkit-scrollbar-track { background: transparent; }
 .rb-step { position: relative; padding: 0 34px 16px 30px; }
 .rb-step:last-child { padding-bottom: 2px; }
 .rb-step::before {
@@ -440,7 +437,7 @@
 .rb-done::after { display: none; }
 
 .rb-copy {
-  position: absolute; top: 2px; right: 0; display: grid; place-items: center;
+  position: absolute; top: 2px; right: 14px; display: grid; place-items: center;
   width: 28px; height: 28px; border-radius: 7px; color: var(--text-faint);
   background: transparent; opacity: 0; transition: opacity .15s, color .15s, background .15s;
 }

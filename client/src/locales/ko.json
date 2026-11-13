@@ -1279,7 +1279,6 @@
   "Rename anything the interface says. Leave a field empty to keep the built-in wording, which stays translated.": "인터페이스에 표시되는 어떤 문구든 이름을 바꿀 수 있습니다. 필드를 비워 두면 기본 문구가 유지되며, 이 문구는 계속 번역된 상태로 표시됩니다.",
   "Rename chat": "채팅 이름 바꾸기",
   "Rename theme": "테마 이름 바꾸기",
-  "Renaming, deleting, importing, exporting and version history all live inside build mode, next to the design you are working on.": "이름 바꾸기, 삭제, 가져오기, 내보내기, 버전 기록은 모두 작업 중인 디자인 옆 빌드 모드 안에 있습니다.",
   "Repeat penalty": "반복 페널티",
   "Repetition": "반복",
   "Repetition penalty": "반복 페널티",
@@ -3151,5 +3150,7 @@
   "Delete {n} sessions?": "세션 {n}개를 삭제할까요?",
   "{n} selected": "{n}개 선택됨",
   "Scheduled tasks button": "예약된 작업 버튼",
-  "Search label": "검색 레이블"
+  "Search label": "검색 레이블",
+  "Deleted “{name}”.": "“{name}”을(를) 삭제했습니다.",
+  "Renaming, importing, exporting and version history live inside build mode, next to the design you are working on.": "이름 바꾸기, 가져오기, 내보내기, 버전 기록은 작업 중인 디자인 옆 빌드 모드 안에 있습니다."
 }

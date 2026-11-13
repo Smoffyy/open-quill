@@ -136,7 +136,7 @@ export function winTranslate(cmd) {
 // output, so `every` below refuses the shortcut.
 const MKDIR_WORDS = new Set(['mkdir', 'md']);
 const SEGMENT_SPLIT = /(?:&&|\|\||[;|&])/;
-const MKDIR_EXISTS = /^(?:a subdirectory or file .+ already exists\.?|mkdir: cannot create directory .+: file exists)$/i;
+const MKDIR_EXISTS = /^(?:a subdirectory or file .+ already exists\.?|mkdir: .+: file exists)$/i;
 
 function lastSegment(cmd) {
   const parts = String(cmd || '').split(SEGMENT_SPLIT);

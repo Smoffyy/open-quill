@@ -1279,7 +1279,6 @@
   "Rename anything the interface says. Leave a field empty to keep the built-in wording, which stays translated.": "Benennen Sie alles um, was die Oberfläche anzeigt. Lassen Sie ein Feld leer, um den eingebauten Wortlaut beizubehalten, der weiterhin übersetzt bleibt.",
   "Rename chat": "Chat umbenennen",
   "Rename theme": "Theme umbenennen",
-  "Renaming, deleting, importing, exporting and version history all live inside build mode, next to the design you are working on.": "Umbenennen, Löschen, Importieren, Exportieren und Versionsverlauf befinden sich alle im Bearbeitungsmodus, direkt neben dem Design, an dem Sie arbeiten.",
   "Repeat penalty": "Wiederholungsstrafe",
   "Repetition": "Wiederholung",
   "Repetition penalty": "Wiederholungsstrafe",
@@ -3151,5 +3150,7 @@
   "Delete {n} sessions?": "{n} Sitzungen löschen?",
   "{n} selected": "{n} ausgewählt",
   "Scheduled tasks button": "Schaltfläche für geplante Aufgaben",
-  "Search label": "Suche-Beschriftung"
+  "Search label": "Suche-Beschriftung",
+  "Deleted “{name}”.": "„{name}“ gelöscht.",
+  "Renaming, importing, exporting and version history live inside build mode, next to the design you are working on.": "Umbenennen, Importieren, Exportieren und Versionsverlauf befinden sich im Bearbeitungsmodus, direkt neben dem Design, an dem Sie arbeiten."
 }

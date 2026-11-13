@@ -21,11 +21,11 @@
     "better-sqlite3-multiple-ciphers": "^13.0.3",
     "cookie": "^2.0.2",
     "express": "^5.3.0",
-    "fontkit": "^2.0.4",
+    "fontkit": "^3.0.0",
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.5.0",
     "pdfjs-dist": "^6.5.438",
     "pdfkit": "^0.20.2",
-    "ws": "^8.22.2"
+    "ws": "^8.23.0"
   }
 }

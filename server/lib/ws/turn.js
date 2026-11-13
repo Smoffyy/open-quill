@@ -19,7 +19,7 @@ import {
 import { noteToolCall, classifyToolError } from '../toolstats.js';
 import { autoTitleEnabled } from '../autotitle.js';
 import { openFence, seamFor, steerInstruction } from '../steer.js';
-import { createLoopGuard, STUCK_NOTE } from '../loopguard.js';
+import { createLoopGuard, STUCK_NOTES, REPEAT_NOTE } from '../loopguard.js';
 import { changeMemory, memoryToolResult } from '../memory.js';
 import { toolState, systemPrompt, toolsFor } from '../systemprompt.js';
 import { runCalculator, formatCalculatorResult } from '../calculator.js';
@@ -72,6 +72,10 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   const systemText = () => systemPrompt(chat, model, flags, promptOpts).text;
   const rebuildBase = () => buildMessages(model, chatHistory(chat, model, assistantId), extended, systemText());
   let base = buildMessages(model, history, extended, systemText());
+  const refreshSystem = () => {
+    const [sys] = buildMessages(model, [], extended, systemText());
+    if (sys && base[0]?.role === 'system') base = [sys, ...base.slice(1)];
+  };
   let inTurn = []; // assistant/tool exchanges accumulated during this response
   const activity = resume && Array.isArray(resume.activity) ? resume.activity.slice() : [];
   const logEvent = (event) => activity.push({ at: Date.now(), ...event });
@@ -181,12 +185,16 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     if (ARTIFACT_TOOLS.has(call.tool)) {
       if (!flags.artifactsOn) return null;
       const r = runArtifactTool(chat.id, call);
-      if (r.ok && call.tool !== 'artifact_read') safeSend(JSON.stringify({ type: 'files', chatId: chat.id, files: listArtifacts(chat.id) }));
+      if (r.ok && call.tool !== 'artifact_read' && !r.unchanged) {
+        safeSend(JSON.stringify({ type: 'files', chatId: chat.id, files: listArtifacts(chat.id) }));
+        refreshSystem();
+      }
       return { payload: artifactPayload(call, r), formatted: formatArtifactResult(call, r), hide: false };
     }
     if (PROJECT_TOOLS.has(call.tool)) {
       if (!flags.projectOn) return null;
       const r = await runProjectTool(chat, call);
+      if (r.ok && call.tool === 'project_notes') refreshSystem();
       return { payload: projectPayload(call, r), formatted: formatProjectResult(call, r), hide: false };
     }
     if (call.tool === 'recall') {
@@ -294,6 +302,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   const stepCap = (model.agent_steps && model.agent_steps > 0) ? model.agent_steps : 1000;
   let maxSteps = toolsOn ? stepCap : 1;
   const callFails = new Map();
+  const seenResults = new Set();
   const loopGuard = createLoopGuard();
   let silentRetries = 0;
   let stepController = null;
@@ -754,7 +763,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       }
       const toolMsgs = [];
       const stepImages = [];
-      let stepOk = 0, stepFailed = 0;
+      let stepOk = 0, stepFailed = 0, stepRepeated = 0;
       const stepFailKinds = new Set();
       for (const tc of toolCalls) {
         // A stop during a chain of calls must not run the ones still queued.
@@ -806,7 +815,13 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
           stepFailKinds.add(call.tool + ':' + classifyToolError(out.payload && out.payload.error));
           const n = (callFails.get(sig) || 0) + 1; callFails.set(sig, n);
           if (n >= 2) formatted += `\n(NOTE: this identical call has failed ${n} times. Do not repeat it. Change the arguments or approach, or tell the user why it cannot be done.)`;
-        } else { stepOk++; callFails.delete(sig); }
+        } else {
+          stepOk++;
+          callFails.delete(sig);
+          const seen = sig + '\n' + formatted;
+          if (seenResults.has(seen)) { stepRepeated++; formatted += REPEAT_NOTE; }
+          else seenResults.add(seen);
+        }
         if (!out.hide) {
           const block = oqrBlock(call, out.payload);
           content += block; contentSinceReason = true;
@@ -833,9 +848,10 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
         { role: 'assistant', content: said, tool_calls: toolCalls.map(c => ({ id: c.id, name: c.name, argsText: c.argsText, ...(c.extra ? { extra: c.extra } : {}) })), ...(toolBlocks?.length ? { blocks: toolBlocks } : {}), ...(keepThinking && stepReasoning.trim() ? { reasoning: stepReasoning.trim() } : {}) },
         ...toolMsgs
       ];
-      if (loopGuard.note({ calls: toolCalls, ok: stepOk, failed: stepFailed, failKinds: stepFailKinds })) {
-        content += STUCK_NOTE;
-        safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: STUCK_NOTE }));
+      const stuck = loopGuard.note({ calls: toolCalls, ok: stepOk, failed: stepFailed, failKinds: stepFailKinds, repeated: stepRepeated });
+      if (stuck) {
+        content += STUCK_NOTES[stuck];
+        safeSend(JSON.stringify({ type: 'content', chatId: chat.id, text: STUCK_NOTES[stuck] }));
         break;
       }
       checkpoint();
