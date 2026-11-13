@@ -53,10 +53,6 @@
   color: var(--text-soft, var(--text)); font-size: 14px; line-height: 20px; text-align: left; width: 100%;
 }
 .nav-item:hover { background: var(--surface-hover); }
-.nav-item.nav-more .nav-label { color: var(--text-soft, var(--text-faint)); }
-.nav-item.nav-more svg { opacity: .5; transition: transform .2s ease, opacity .15s ease; }
-.nav-item.nav-more:hover svg { opacity: .8; }
-.nav-item.nav-more.open svg { transform: rotate(180deg); }
 .chat-row .row-session { width: 18px; height: 18px; flex-shrink: 0; color: var(--text-faint); }
 .chat-row:hover .row-session, .chat-row.active .row-session { color: var(--text-muted); }
 .nav-item svg { width: 20px; height: 20px; flex-shrink: 0; overflow: visible; color: var(--nav-icon); transition: color var(--fx-t, .15s) ease; }

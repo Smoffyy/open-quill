@@ -8,7 +8,7 @@ Each chat's menu (the **⋯** on hover, or the title in the top bar) has **Star*
 
 ## All chats
 
-**All chats** at the bottom of the sidebar list opens the full list, with **Active** and **Archived** tabs. Press **Select** to pick several chats, or **Select all**, then **Archive**, **Unarchive** or **Delete** them together. Archived chats leave the sidebar but are kept until you delete them.
+**Chats** in the sidebar opens the full list at `/chats`, with **Active** and **Archived** tabs. Press **Select** to pick several chats, or **Select all**, then **Archive**, **Unarchive** or **Delete** them together. Archived chats leave the sidebar but are kept until you delete them. In Code the same place in the sidebar reads **Sessions** and lists your Code sessions at `/sessions`.
 
 ## Search
 
@@ -24,18 +24,18 @@ Inside a project you get:
 - **Knowledge**: documents for the assistant to work from. Upload files or folders, drag them in, or create and edit text files in place. Every chat in the project can search and read them, PDFs and Office documents included, and says which document it used. Only you change them. A bar shows how much of the storage is used, and **Download all** saves everything as a zip.
 - **Notes**: a shared document every chat in the project reads. The assistant adds decisions, facts and open questions here as you work, so a new chat knows what earlier ones settled, and you can edit the notes yourself.
 - **Earlier chats**: the assistant can search the project's other chats and read one when you refer back to it.
-- **Build in Code**: when a project turns into building something, this starts a Code session with a copy of the project's files, where the assistant can edit and run them. The project itself is not changed.
+- **Code**: when a project turns into building something, the **+** on this card starts a Code session with a copy of the project's files, where the assistant can edit and run them. The project itself is not changed. The sessions started from the project are listed on the card, and each one shows the project's name in its top bar. **Add to project** on a file in the session copies it back into the project's knowledge.
 - A composer for starting a new chat in the project, and the list of chats already in it.
 
 Move a chat in or out with **Add to project** in its menu or in the composer's **+** menu. Deleting a project deletes its knowledge and notes but keeps its chats.
 
 ## Artifacts
 
-**Artifacts** in the sidebar lists the artifacts from your chats, your projects' knowledge and the files in your Code sessions, each marked with where it lives. Filter by file type, and click one to open it where it came from. See [Artifacts and Code sessions](artifacts-sandbox.md).
+**Artifacts** in the sidebar lists the documents your chats have written. Filter by file type, and click one to open it in its chat. A project's knowledge stays on the project page and a Code session's files stay in the session. See [Artifacts and Code sessions](artifacts-sandbox.md).
 
 ## Scheduled tasks
 
-**Scheduled** in the sidebar, or the small button beside **New**, lists tasks that run a prompt for you on a schedule. Each task runs on its own schedule, such as every day at 9:00 AM, weekdays at 8:00 AM or every Friday. **New task** opens a blank task. The cards at the bottom of the page, such as **Morning plan**, **Language practice** or **Weekly review**, open the same editor already filled in, so you can change anything before saving. Click a task in the list to edit it again.
+The clock button beside **New** in the sidebar, or **Scheduled tasks** in the command palette, lists tasks that run a prompt for you on a schedule. Each task runs on its own schedule, such as every day at 9:00 AM, weekdays at 8:00 AM or every Friday. **New task** opens a blank task. The cards at the bottom of the page, such as **Morning plan**, **Language practice** or **Weekly review**, open the same editor already filled in, so you can change anything before saving. Click a task in the list to edit it again.
 
 - **Name** and **Instructions**: the instructions are sent as your message on every run, so write them the way you would ask in a chat.
 - **Repeat**: every day, weekdays, on chosen days (any mix of days of the week), every few minutes, hours or days (5 minutes to 7 days, counted from the last run), or once at a date and time. Daily and weekly tasks run at the time you pick.

@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../../lib/api.js';
 import { useAdmin } from '../store.jsx';
-import { Card, Rows, Row, ToggleRow, Fields, Field, Input, Seg, Btn, Note, Badge, Acts } from '../ui.jsx';
+import { Card, Rows, Row, ToggleRow, Fields, Field, Input, Seg, Btn, IconBtn, Note, Badge } from '../ui.jsx';
 import { ImagePicker } from '../media.jsx';
 import { t, tk } from '../../../i18n.jsx';
 import { MODEL_WEAVE } from '../../../lib/brand.js';
-import { Palette, Sparkles } from '../../ui/icons.jsx';
+import { Palette, Sparkles, Trash } from '../../ui/icons.jsx';
 import { notify } from '../../../lib/notify.js';
 import { presetById } from '../../../lib/presets.js';
 
@@ -23,7 +23,7 @@ function fmt(ts) {
 }
 
 export default function InterfaceSection() {
-  const { workspace, onClose } = useAdmin();
+  const { workspace, onClose, confirm } = useAdmin();
   const { config, setCfg } = workspace;
   const [themes, setThemes] = useState({ themes: [], activeId: '', publishedActiveId: '' });
   const [busy, setBusy] = useState(false);
@@ -46,7 +46,7 @@ export default function InterfaceSection() {
   const run = async (fn, msg) => {
     setBusy(true);
     try { await fn(); await load(); if (msg) notify(msg); }
-    catch (e) { notify(e?.message || t('That did not work.')); }
+    catch (e) { notify(e?.message || t('That did not work.'), { kind: 'error' }); }
     finally { setBusy(false); }
   };
 
@@ -77,20 +77,33 @@ export default function InterfaceSection() {
                   {th.builtin ? ' · ' + t('Preset') : ''}
                 </span>
               </div>
-              <Acts end>
+              <span className="cp-theme-use">
                 {th.id === themes.activeId
                   ? <Badge>{t('Active')}</Badge>
                   : <Btn size="sm" disabled={busy} onClick={() => run(() => api.post(`/api/admin/themes/${th.id}/activate`, {}), t('Now editing “{name}”.', { name: th.name }))}>{t('Use this')}</Btn>}
-                <Btn size="sm" disabled={busy}
-                  onClick={() => run(() => api.post('/api/admin/themes', { from: th.id, name: th.name + ' copy' }), t('Duplicated.'))}>
-                  {t('Duplicate')}
-                </Btn>
-              </Acts>
+              </span>
+              <Btn size="sm" disabled={busy}
+                onClick={() => run(() => api.post('/api/admin/themes', { from: th.id, name: th.name + ' copy' }), t('Duplicated.'))}>
+                {t('Duplicate')}
+              </Btn>
+              {th.builtin
+                ? <span className="cp-theme-gap" aria-hidden="true" />
+                : (
+                  <IconBtn kind="danger" label={t('Delete')} disabled={busy}
+                    onClick={() => confirm({
+                      title: t('Delete “{name}”?', { name: th.name }),
+                      message: t('This cannot be undone. Export it first if you might want it back.'),
+                      confirm: t('Delete'),
+                      onConfirm: () => run(() => api.del(`/api/admin/themes/${th.id}`), t('Deleted “{name}”.', { name: th.name }))
+                    })}>
+                    <Trash />
+                  </IconBtn>
+                )}
             </div>
           ))}
         </div>
         <Note icon={<Sparkles />}>
-          {t('Renaming, deleting, importing, exporting and version history all live inside build mode, next to the design you are working on.')}
+          {t('Renaming, importing, exporting and version history live inside build mode, next to the design you are working on.')}
         </Note>
       </Card>
 

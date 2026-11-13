@@ -4,14 +4,8 @@
 }
 
 /* ============ chats overview ============ */
-.chats-overview { position: fixed; inset: 0; z-index: 60; background: var(--bg); display: flex; flex-direction: column; }
-.co-head { display: flex; align-items: center; justify-content: space-between; width: 100%; max-width: 900px; margin: 0 auto; padding: 32px 34px 12px; flex-shrink: 0; }
-.co-head h2 { margin: 0; font-family: var(--font-serif); font-size: 24px; line-height: 32px; font-weight: 500; }
-.co-close { width: 32px; height: 32px; flex-shrink: 0; display: grid; place-items: center; padding: 0; background: none; border: none; color: var(--text-muted); cursor: pointer; border-radius: 9px; transition: background var(--fx-t, .12s) ease, color var(--fx-t, .12s) ease; }
-.co-close:hover { background: var(--hover); color: var(--text); }
-.co-close svg { display: block; width: 16px; height: 16px; }
-.co-body { flex: 1; overflow: hidden auto; padding: 8px 34px 40px; }
-.co-grid { display: flex; flex-direction: column; max-width: 832px; margin: 0 auto; }
+.chats-overview .lib-body { margin-top: 16px; }
+.co-grid { display: flex; flex-direction: column; }
 .co-card { position: relative; text-align: left; background: transparent; border: 0; border-radius: 8px; padding: 0 12px; height: 48.8px; overflow: visible; cursor: pointer; font-family: var(--font-sans); color: var(--text); display: flex; flex-direction: row; align-items: center; gap: 12px; transition: background var(--fx-t, .14s) ease; }
 .co-card::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: .8px; background: var(--modal-line, var(--border-soft)); }
 .co-card:last-child::after { display: none; }

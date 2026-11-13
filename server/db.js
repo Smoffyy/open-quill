@@ -108,6 +108,7 @@ const listByUserStmt = sdb.prepare(`
     json_extract(data,'$.title') AS title, json_extract(data,'$.starred') AS starred,
     json_extract(data,'$.archived') AS archived, json_extract(data,'$.project_id') AS project_id,
     json_extract(data,'$.ended') AS ended, json_extract(data,'$.mode') AS mode,
+    json_extract(data,'$.origin_project_id') AS origin_project_id,
     json_extract(data,'$.tags') AS tags
   FROM chats WHERE user_id=? ORDER BY updated_at DESC`);
 chatsCol.listByUser = userId => listByUserStmt.all(userId);

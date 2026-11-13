@@ -4,7 +4,7 @@ import { api } from '../../lib/api.js';
 import { copyText } from '../../lib/clipboard.js';
 import Markdown from '../chat/Markdown.jsx';
 import FileChip from './FileChip.jsx';
-import { Download, Check, ChevDown, Chevron, Search, X, Up, Down, Plus, Minus, Expand, Eye, EyeOff, CodeTag, Pencil } from '../ui/icons.jsx';
+import { Download, Check, ChevDown, Chevron, Search, X, Up, Down, Plus, Minus, Expand, Eye, EyeOff, CodeTag, Pencil, Copy } from '../ui/icons.jsx';
 import { t } from '../../i18n.jsx';
 import { buildPreviewDoc } from '../../lib/preview.js';
 import { SegSlide } from '../ui/controls.jsx';
@@ -351,7 +351,7 @@ export default function Viewer({ chatId, apiBase, path, onBack, canBack, liveTex
               ]} />
           )}
           <span className="art-vname">{crumbs[crumbs.length - 1]}</span>
-          <span className="art-vkind">{isLive ? (liveEdit ? t('editing…') : (liveText && liveText.length ? t('writing…') : t('creating…'))) : ext.toUpperCase()}</span>
+          <span className={'art-vkind' + (isLive ? ' live' : '')}>{isLive ? (liveEdit ? t('editing…') : (liveText && liveText.length ? t('writing…') : t('creating…'))) : ext.toUpperCase()}</span>
           {!isLive && stale && <span className="art-vkind">{t('v{v} of {total}', { v: viewing, total: current })}</span>}
         </div>
         <div className="art-vactions">
@@ -368,11 +368,11 @@ export default function Viewer({ chatId, apiBase, path, onBack, canBack, liveTex
               </button>
             </>
           ) : canEdit && (
-            <button type="button" className="art-btn text" onClick={startEdit}><Pencil style={{ width: 14 }} /> {t('Edit')}</button>
+            <button type="button" className="art-btn text fold" onClick={startEdit} data-tip={t('Edit')} aria-label={t('Edit')}><Pencil style={{ width: 14 }} /> <span className="art-btn-label">{t('Edit')}</span></button>
           )}
           {!isLive && !editing && data?.text != null && (
             <div className="art-copy-wrap">
-              <button className="art-btn copy" onClick={copy}>{copied ? <Check style={{ width: 14 }} /> : null} {copied ? t('Copied') : t('Copy')}</button>
+              <button className="art-btn copy" onClick={copy} data-tip={copied ? t('Copied') : t('Copy')} aria-label={copied ? t('Copied') : t('Copy')}>{copied ? <Check style={{ width: 14 }} /> : <Copy className="art-btn-glyph" />} <span className="art-btn-label">{copied ? t('Copied') : t('Copy')}</span></button>
               <button className="art-btn caret" aria-label={t('More actions')} aria-expanded={menu} aria-haspopup="menu" onClick={() => setMenu(m => !m)}><ChevDown style={{ width: 13 }} /></button>
               {menu && (
                 <div className="art-menu" onMouseLeave={() => setMenu(false)}>

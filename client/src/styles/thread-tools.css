@@ -51,13 +51,19 @@
    the composer in a single frame, which resized the flex scroll area and jumped
    the conversation on every turn. */
 .es-slot {
-  position: absolute; left: 0; right: 0; bottom: 100%;
-  display: flex; justify-content: center; margin-bottom: 6px;
+  position: absolute; left: 0; right: 0; bottom: 100%; z-index: 4;
+  display: flex; justify-content: center; margin-bottom: 9px;
   pointer-events: none;
-  opacity: 0; transform: translateY(4px);
-  transition: opacity var(--fx-t, .24s) ease, transform var(--fx-t, .24s) var(--ease-out);
+  opacity: 0; transform: translateY(6px) scale(.96); transform-origin: 50% 100%;
+  transition: opacity var(--fx-t, .16s) ease-in, transform var(--fx-t, .2s) cubic-bezier(.4, 0, 1, 1);
 }
-.es-slot.open { opacity: 1; transform: none; pointer-events: auto; }
+.es-slot.open {
+  opacity: 1; transform: none; pointer-events: auto;
+  transition: opacity var(--fx-t, .22s) ease-out, transform var(--fx-t, .42s) cubic-bezier(.34, 1.4, .64, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .es-slot, .es-slot.open { transform: none; transition: opacity var(--fx-t, .2s) ease; }
+}
 .es-slot:not(.open) { pointer-events: none !important; }
 .engine-strip {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;

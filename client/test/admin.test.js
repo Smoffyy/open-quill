@@ -24,7 +24,7 @@ import {
 import { parseMcpConfig, joinArgs, nameFrom } from '../src/lib/mcpconfig.js';
 import { promptSegments } from '../src/lib/promptview.js';
 import { syncModelPrompt } from '../src/lib/promptblocks.js';
-import { logoFor, mentions, modelIconFor } from '../src/lib/logos.js';
+import { logoFor, mentions } from '../src/lib/logos.js';
 
 const c = (o) => ({ authors: [], ...o });
 
@@ -770,14 +770,14 @@ test('a provider falls back from the name an admin typed to the connection type'
   assert.equal(logoFor(['llama.cpp', 'llamacpp'], [...LOGOS, 'llamacpp.svg']).src, '/assets/llamacpp.svg');
 });
 
-test('the longest keyword wins, a colour file beats a plain one, and discovered models are stamped', () => {
+test('the longest keyword wins and a colour file beats a plain one', () => {
   assert.equal(logoFor('LM Studio', LOGOS).src, '/assets/lmstudio.svg');
   assert.equal(logoFor('LM Studio', LOGOS).color, false, 'a plain mark is tinted, not drawn as an image');
   assert.equal(logoFor('qwen3', LOGOS).color, true);
   assert.equal(logoFor('grok-4', [...LOGOS, 'grok-color.svg']).src, '/assets/grok-color.svg');
-  assert.equal(modelIconFor('qwen3-next-80b-a3b', LOGOS), '/assets/qwen-color.svg');
-  assert.equal(modelIconFor('gemma-3-27b', LOGOS), '/assets/gemma-color.svg');
-  assert.equal(modelIconFor('claude-opus-5', LOGOS), '/assets/anthropic.svg');
-  assert.equal(modelIconFor('kimi-k2', LOGOS), '/assets/moonshot.svg');
-  assert.equal(modelIconFor('some-local-finetune', LOGOS), null);
+  assert.equal(logoFor('qwen3-next-80b-a3b', LOGOS)?.src ?? null, '/assets/qwen-color.svg');
+  assert.equal(logoFor('gemma-3-27b', LOGOS)?.src ?? null, '/assets/gemma-color.svg');
+  assert.equal(logoFor('claude-opus-5', LOGOS)?.src ?? null, '/assets/anthropic.svg');
+  assert.equal(logoFor('kimi-k2', LOGOS)?.src ?? null, '/assets/moonshot.svg');
+  assert.equal(logoFor('some-local-finetune', LOGOS)?.src ?? null, null);
 });

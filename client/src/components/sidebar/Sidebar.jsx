@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Tip from '../ui/Tip.jsx';
+import ResizeHandle, { storedWidth } from '../ui/ResizeHandle.jsx';
 import { SegSlide } from '../ui/controls.jsx';
 import { ChatMenu, menuAtButton, menuAtPointer } from './ChatMenu.jsx';
 import DocsNav from './DocsNav.jsx';
-import { Plus, Search, Panel, Gear, Shield, Flask, Logout, DotsV, Trash, Heart, ChevDown, Box, Compact, Sliders, Check, Artifact, Briefcase, ModelDocs, Info, Clock, ArrowOut, QuickTask, Sparkles, Paper, Ghost, X, Chat, CodeTag, Laptop, Tag } from '../ui/icons.jsx';
+import { Plus, Search, Panel, Gear, Shield, Flask, Logout, DotsV, Trash, Heart, ChevDown, Box, Compact, Sliders, Check, Artifact, Briefcase, ModelDocs, Info, Clock, ArrowOut, Sparkles, Paper, Ghost, X, Chat, CodeTag, Laptop, Tag } from '../ui/icons.jsx';
 import { t } from '../../i18n.jsx';
 import { useThemeText } from '../../lib/theme/store.jsx';
 import ThemeSlot from '../builder/ThemeSlot.jsx';
@@ -57,98 +58,10 @@ const SIDE_MIN = 232;
 const SIDE_MAX = 440;
 const SIDE_KEY = 'oq-sidebar-w';
 
+const clampSide = (w) => Math.min(SIDE_MAX, Math.max(SIDE_MIN, w));
+
 export function storedSidebarWidth() {
-  try {
-    const n = parseInt(localStorage.getItem(SIDE_KEY), 10);
-    if (Number.isFinite(n)) return Math.min(SIDE_MAX, Math.max(SIDE_MIN, n));
-  } catch { }
-  return null;
-}
-
-function SideResize({ targetRef, onCommit, onHide }) {
-  const drag = useRef(null);
-  const tap = useRef(0);
-
-  useEffect(() => () => clearTimeout(tap.current), []);
-
-  useEffect(() => {
-    const move = (e) => {
-      const d = drag.current;
-      const el = targetRef.current;
-      if (!d || !el) return;
-      el.style.width = Math.min(SIDE_MAX, Math.max(SIDE_MIN, d.w + (e.clientX - d.x))) + 'px';
-    };
-    const up = (e) => {
-      const el = targetRef.current;
-      const d = drag.current;
-      if (!d || !el) return;
-      drag.current = null;
-      el.style.transition = '';
-      document.body.classList.remove('resizing-x');
-      if (e.type === 'pointerup' && Math.abs(e.clientX - d.x) < 3) {
-        if (onHide && !tap.current) tap.current = setTimeout(() => { tap.current = 0; onHide(); }, 260);
-        return;
-      }
-      const w = Math.round(el.getBoundingClientRect().width);
-      try { localStorage.setItem(SIDE_KEY, String(w)); } catch { }
-      if (onCommit) onCommit(w);
-    };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-    window.addEventListener('pointercancel', up);
-    return () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-      window.removeEventListener('pointercancel', up);
-    };
-  }, [targetRef, onCommit, onHide]);
-
-  const start = (e) => {
-    const el = targetRef.current;
-    if (!el || e.button !== 0) return;
-    e.preventDefault();
-    drag.current = { x: e.clientX, w: el.getBoundingClientRect().width };
-    el.style.transition = 'none';
-    document.body.classList.add('resizing-x');
-  };
-
-  const setWidth = (w) => {
-    const el = targetRef.current;
-    if (!el) return;
-    if (w == null) {
-      el.style.width = '';
-      try { localStorage.removeItem(SIDE_KEY); } catch { }
-    } else {
-      el.style.width = w + 'px';
-      try { localStorage.setItem(SIDE_KEY, String(w)); } catch { }
-    }
-    if (onCommit) onCommit(w);
-  };
-
-  const reset = () => {
-    clearTimeout(tap.current);
-    tap.current = 0;
-    setWidth(null);
-  };
-
-  const nudge = (e) => {
-    const el = targetRef.current;
-    if (e.key === 'Enter' && onHide) { e.preventDefault(); onHide(); return; }
-    if (!el || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
-    e.preventDefault();
-    const step = e.shiftKey ? 32 : 8;
-    setWidth(Math.min(SIDE_MAX, Math.max(SIDE_MIN,
-      Math.round(el.getBoundingClientRect().width) + (e.key === 'ArrowRight' ? step : -step))));
-  };
-
-  return (
-    <Tip label={t('Hide sidebar')} keys={t('Drag to resize')}>
-      <div className="side-resize" role="separator" aria-orientation="vertical" aria-label={t('Resize sidebar')}
-        tabIndex={0} onPointerDown={start} onDoubleClick={reset} onKeyDown={nudge}>
-        <span className="side-resize-grip" aria-hidden="true" />
-      </div>
-    </Tip>
-  );
+  return storedWidth(SIDE_KEY, clampSide);
 }
 
 const FOLD_KEY = 'oq-folded-sections';
@@ -259,14 +172,15 @@ function Sidebar({
   const navNew = useThemeText('nav.new', t('New'));
   const navProjects = useThemeText('nav.projects', t('Projects'));
   const navArtifacts = useThemeText('nav.artifacts', t('Artifacts'));
-  const navScheduled = useThemeText('nav.scheduled', t('Scheduled'));
+  const navSearch = useThemeText('nav.search', t('Search'));
   const navCustomize = useThemeText('nav.customize', t('Customize'));
   const allChats = useThemeText('nav.allChats', t('All chats'));
+  const browseAll = code ? t('Sessions') : allChats;
+  const onBrowse = dest === 'chats' || dest === 'sessions';
   const emptyChats = useThemeText('empty.chats', t('No chats yet'));
   const recentsLabel = useThemeText('nav.recents', t('Recents'));
   const brandText = appName || 'open-quill';
   const verText = version ? parseVersion(version)?.full || '' : '';
-  const [moreOpen, setMoreOpen] = useState(false);
   useFitText(brandRef, brandText, 0.6);
   useFitText(verRef, verText, 0.8);
   const busyIds = React.useMemo(() => new Set(busyChats), [busyChats]);
@@ -360,7 +274,8 @@ function Sidebar({
     <div className={'sidebar' + (collapsed ? ' collapsed' : '') + (mobileOpen ? ' mobile-open' : '') + (docs ? ' docs-mode' : '')}
       ref={sideRef} style={width && !collapsed ? { width } : undefined}
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
-      {!collapsed && <SideResize targetRef={sideRef} onCommit={setWidth} onHide={onToggle} />}
+      {!collapsed && <ResizeHandle className="side-resize" targetRef={sideRef} clamp={clampSide} storageKey={SIDE_KEY}
+        label={t('Resize sidebar')} hideLabel={t('Hide sidebar')} onCommit={setWidth} onHide={onToggle} />}
       {docs && <DocsNav tree={docs.tree} target={docs.target} onSelect={docs.onSelect} onExit={docs.onExit} appName={appName} appIcon={appIcon}
         editing={docs.editing} onAddTab={docs.onAddTab} onAddPage={docs.onAddPage} onRemoveTab={docs.onRemoveTab}
         onRemovePage={docs.onRemovePage} onRenameTab={docs.onRenameTab} />}
@@ -391,22 +306,19 @@ function Sidebar({
           aria-current={!activeId && !dest ? 'page' : undefined}
           onClick={(e) => { if (!plainClick(e)) return; e.preventDefault(); onNew(); }}><span className="nav-ic new-chat-plus"><Plus /></span> <span className="nav-label">{navNew}</span>
           {newChatCombo && <span className="nav-shortcut">{newChatCombo}</span>}</a>
-        {!code && (
-          <button className="new-quick" data-tip={t('Quick task')} aria-label={t('Quick task')}
-            onClick={(e) => { e.stopPropagation(); (onScheduled || onNew)(); }}><QuickTask /></button>
+        {!code && onScheduled && (
+          <button className={'new-quick' + (dest === 'scheduled' ? ' on' : '')} data-tip={t('Scheduled tasks')} aria-label={t('Scheduled tasks')}
+            aria-current={dest === 'scheduled' ? 'page' : undefined}
+            onClick={(e) => { e.stopPropagation(); onScheduled(); }}><Clock /></button>
         )}
         </div>
-        <button data-oq-item="nav.projects" className={'nav-item' + (dest === 'projects' ? ' on' : '')} data-tip={navProjects} aria-current={dest === 'projects' ? 'page' : undefined} onClick={onProjects}><span className="nav-ic"><Box /></span> <span className="nav-label">{navProjects}</span></button>
-        <button data-oq-item="nav.artifacts" className={'nav-item' + (dest === 'artifacts' ? ' on' : '')} data-tip={navArtifacts} aria-current={dest === 'artifacts' ? 'page' : undefined} onClick={() => onArtifacts && onArtifacts()}><span className="nav-ic"><Artifact /></span> <span className="nav-label">{navArtifacts}</span></button>
-        {!code && <button data-oq-item="nav.scheduled" className={'nav-item' + (dest === 'scheduled' ? ' on' : '')} data-tip={navScheduled} aria-current={dest === 'scheduled' ? 'page' : undefined} onClick={() => onScheduled && onScheduled()}><span className="nav-ic"><Clock /></span> <span className="nav-label">{navScheduled}</span></button>}
+        <button data-oq-item="nav.search" className="nav-item" data-tip={navSearch} onClick={onSearch}><span className="nav-ic"><Search /></span> <span className="nav-label">{navSearch}</span>
+          {searchCombo && <span className="nav-shortcut">{searchCombo}</span>}</button>
+        {code && <button data-oq-item="nav.chats" className={'nav-item' + (onBrowse ? ' on' : '')} data-tip={browseAll} aria-current={onBrowse ? 'page' : undefined} onClick={onChatsOverview}><span className="nav-ic"><Compact /></span> <span className="nav-label">{browseAll}</span></button>}
+        {!code && <button data-oq-item="nav.projects" className={'nav-item' + (dest === 'projects' ? ' on' : '')} data-tip={navProjects} aria-current={dest === 'projects' ? 'page' : undefined} onClick={onProjects}><span className="nav-ic"><Box /></span> <span className="nav-label">{navProjects}</span></button>}
+        {!code && <button data-oq-item="nav.artifacts" className={'nav-item' + (dest === 'artifacts' ? ' on' : '')} data-tip={navArtifacts} aria-current={dest === 'artifacts' ? 'page' : undefined} onClick={() => onArtifacts && onArtifacts()}><span className="nav-ic"><Artifact /></span> <span className="nav-label">{navArtifacts}</span></button>}
         <button data-oq-item="nav.customize" className="nav-item" data-tip={navCustomize} onClick={() => onCustomize && onCustomize()}><span className="nav-ic"><Briefcase /></span> <span className="nav-label">{navCustomize}</span></button>
-        <button className={'nav-item nav-more' + (moreOpen ? ' open' : '')} aria-expanded={moreOpen} onClick={() => setMoreOpen(o => !o)}>
-          <span className="nav-ic"><ChevDown /></span> <span className="nav-label">{moreOpen ? t('Less') : t('More')}</span>
-        </button>
-        {moreOpen && <>
-          {!code && <button className={'nav-item' + (dest === 'chats' ? ' on' : '')} data-tip={allChats} onClick={onChatsOverview}><span className="nav-ic"><Compact /></span> <span className="nav-label">{allChats}</span></button>}
-          {showModelDocs && <button className="nav-item" data-tip={t('Model docs')} onClick={() => onModelDocs && onModelDocs()}><span className="nav-ic"><ModelDocs /></span> <span className="nav-label">{t('Model docs')}</span></button>}
-        </>}
+        {showModelDocs && <button className="nav-item" data-tip={t('Model docs')} onClick={() => onModelDocs && onModelDocs()}><span className="nav-ic"><ModelDocs /></span> <span className="nav-label">{t('Model docs')}</span></button>}
       </div>
       <div className="chats-wrap">
       <div className="chats" ref={chatsRef}>
@@ -458,7 +370,7 @@ function Sidebar({
                   <Tag aria-hidden="true" /> <span className="rl-tag-name">{activeTag}</span> <X aria-hidden="true" />
                 </button>
               )}
-              {!code && <button className="rl-group" data-tip={t('All chats')} aria-label={t('All chats')} onClick={onChatsOverview}><ArrowOut /></button>}
+              <button className="rl-group" data-tip={browseAll} aria-label={browseAll} onClick={onChatsOverview}><ArrowOut /></button>
               <button className="rl-group" data-tip={t('Group by')} aria-label={t('Group by')} aria-haspopup="menu" aria-expanded={groupMenu}
                 onClick={() => setGroupMenu(o => !o)}><Sliders /></button>
               {groupMenu && (
@@ -492,8 +404,8 @@ function Sidebar({
                 {g.items.map(row)}
               </React.Fragment>
             ))}
-            {overflow && !code && (
-              <button className="all-chats-btn" onClick={onChatsOverview}><Compact style={{ width: 15, flexShrink: 0 }} /> <span>{allChats}</span></button>
+            {overflow && (
+              <button className="all-chats-btn" onClick={onChatsOverview}><Compact style={{ width: 15, flexShrink: 0 }} /> <span>{browseAll}</span></button>
             )}
           </>
         )}
@@ -526,9 +438,6 @@ function Sidebar({
             <button className="profile-apps" onClick={() => onVersion && onVersion()} aria-label={t('Version')}>
               <Info />
             </button>
-          </Tip>
-          <Tip label={t('Search')} keys={searchCombo}>
-            <button className="profile-apps" onClick={onSearch} aria-label={t('Search')}><Search /></button>
           </Tip>
         </span>
       </div>

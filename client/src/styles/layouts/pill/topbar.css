@@ -27,8 +27,10 @@
 [data-layout="pill"] .topbar-model .model-trigger:hover { background: var(--surface-hover); }
 [data-layout="pill"] .topbar-model .chat-ring { width: 32px; height: 32px; }
 [data-layout="pill"] .home-topbar { position: absolute; top: 14px; left: 20px; z-index: 20; }
-[data-layout="pill"] .topbar-model .model-menu, [data-layout="pill"] .home-topbar .model-menu {
-  bottom: auto; top: 42px; left: 0; right: auto; transform-origin: top left;
+@media (min-width: 769px) {
+  [data-layout="pill"] .topbar-model .model-menu, [data-layout="pill"] .home-topbar .model-menu {
+    bottom: auto; top: 42px; left: 0; right: auto; transform-origin: top left;
+  }
 }
 [data-layout="pill"] .incognito-bar { padding: 10px 18px 10px 14px; }
 [data-layout="pill"] .incog-left { gap: 12px; }

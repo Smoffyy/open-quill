@@ -103,7 +103,6 @@ body:has(.app.has-bg) > .model-submenu.pinned {
 .composer-project .cp-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .composer-project .cp-x { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 6px; color: var(--text-faint); flex-shrink: 0; transition: background var(--fx-t, .12s), color var(--fx-t, .12s); }
 .composer-project .cp-x:hover { background: var(--hover-mid); color: var(--text); }
-.app.sb-collapsed .pj-overview { left: 58px; }
 .pj-tile-skel .skeleton { height: 13px; }
 .pj-menu button.danger { color: var(--danger); }
 .pj-menu button.danger:hover { background: color-mix(in srgb, var(--danger) 13%, transparent); }
@@ -202,7 +201,7 @@ body:has(.app.has-bg) > .model-submenu.pinned {
 
   .artifacts {
     position: fixed; top: 0; right: 0; bottom: 0; z-index: 130;
-    width: min(92vw, 440px); max-width: 440px; height: 100%; flex-shrink: 0;
+    width: min(92vw, 440px); max-width: min(92vw, 440px); height: 100%; flex-shrink: 0;
   }
   .artifacts .art-resizer { display: none; }
 
@@ -282,7 +281,7 @@ body:has(.app.has-bg) > .model-submenu.pinned {
 
   /* safe-area aware bars + floating buttons */
   .topbar { padding-top: env(safe-area-inset-top); height: calc(48px + env(safe-area-inset-top)); }
-  .chats-overview .co-head, .co-head { padding-top: calc(14px + env(safe-area-inset-top)); }
+  .lib-col { padding-top: calc(56px + env(safe-area-inset-top)); }
   .incognito-bar { padding-top: calc(8px + env(safe-area-inset-top)); }
   .mobile-menu-btn.empty-menu { top: calc(8px + env(safe-area-inset-top)); }
   .home-actions, .topbar > .topbar-actions { top: calc(12px + env(safe-area-inset-top)); }
@@ -297,12 +296,13 @@ body:has(.app.has-bg) > .model-submenu.pinned {
   .active-composer { padding-bottom: calc(8px + env(safe-area-inset-bottom)) !important; }
   .qp-slot { padding-bottom: env(safe-area-inset-bottom); }
 
-  /* overview / projects header: stack so nothing overlaps */
-  .co-head { flex-wrap: wrap; gap: 10px; padding-left: 16px; padding-right: 16px; }
-  .co-head h2 { font-size: 22px; flex: 1 1 100%; }
-  .co-body { padding-left: 16px; padding-right: 16px; }
-
-  .model-scrim { display: none; }
+  :root:root .model-menu {
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto;
+    width: 100%; min-width: 0; max-width: 100%; overflow: hidden auto;
+    border-radius: 20px 20px 0 0; padding: 14px 12px calc(14px + env(safe-area-inset-bottom));
+    max-height: 78vh;
+  }
+  .model-scrim { display: block; position: fixed; inset: 0; z-index: 49; background: #00000070; }
 
   /* compactness + overlap guards */
   /* iOS Safari auto-zooms on focus when a control is under 16px, so every

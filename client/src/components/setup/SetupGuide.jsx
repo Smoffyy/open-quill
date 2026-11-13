@@ -4,7 +4,7 @@ import { api } from '../../lib/api.js';
 import { t } from '../../i18n.jsx';
 import { useTheme } from '../../lib/theme/store.jsx';
 import { isPreset, presetById } from '../../lib/presets.js';
-import { logoFor, modelIconFor, useLogos } from '../../lib/logos.js';
+import { logoFor, useLogos } from '../../lib/logos.js';
 import { reasoningSummary } from '../../lib/modelcatalog.js';
 import { Chat, Check, Cube, Gauge, Gear, Plug, Sliders, Terminal } from '../ui/icons.jsx';
 import { Skel, SkelRows } from '../ui/Skeleton.jsx';
@@ -272,7 +272,6 @@ function DoneStep({ appName, titlesOn, added }) {
 
 export default function SetupGuide({ appName, onDone }) {
   const { reload: reloadTheme } = useTheme();
-  const logos = useLogos();
   const alive = useRef(true);
   useEffect(() => () => { alive.current = false; }, []);
 
@@ -336,11 +335,9 @@ export default function SetupGuide({ appName, onDone }) {
     const wanted = discovered.filter(m => picked.has(m.id));
     const made = [];
     for (const m of wanted) {
-      const icon = modelIconFor(m.id, logos);
       try {
         const r = await api.post('/api/admin/models', {
-          display_name: m.id, internal_name: m.id, provider_id: providerId,
-          ...(icon ? { static_icon: icon, generating_icon: icon, thinking_icon: icon } : {})
+          display_name: m.id, internal_name: m.id, provider_id: providerId
         });
         if (r?.id) made.push({ id: r.id, name: m.id, cost_in: '', cost_out: '' });
       } catch { /* one bad row must not strand the rest */ }

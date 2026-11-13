@@ -1220,6 +1220,9 @@ test('a project chat reads its knowledge, keeps notes and writes an artifact tha
     const results = turns.at(-1).body.messages.flatMap(m => (Array.isArray(m.content) ? m.content : [])).filter(b => b.type === 'tool_result');
     assert.match(results[0].content, /brief\.md:1: The budget is 400 euros\./, 'knowledge search finds the document');
     assert.ok(frames.some(f => f.type === 'files' && f.files.some(x => x.path === 'trip-plan.md')), 'the panel hears about the new artifact');
+    const lastSystem = turns.at(-1).body.system.map(b => b.text).join('\n');
+    assert.match(lastSystem, /### trip-plan\.md \(v1\)/, 'the step after a write already sees the artifact it wrote');
+    assert.match(lastSystem, /The trip budget is 400 euros\./, 'and the notes it just added');
 
     const notes = (await browser('GET', `/api/projects/${project.id}`)).json.notes;
     assert.equal(notes, 'The trip budget is 400 euros.');
@@ -1241,13 +1244,21 @@ test('a project chat reads its knowledge, keeps notes and writes an artifact tha
     assert.deepEqual(knowledge, ['brief.md', 'trip-plan-2.md', 'trip-plan.md']);
 
     const library = (await browser('GET', '/api/artifacts')).json.artifacts;
-    assert.ok(library.some(a => a.source === 'chat' && a.chatId === chat.id && a.path === 'trip-plan.md'));
-    assert.ok(library.some(a => a.source === 'project' && a.projectId === project.id && a.path === 'brief.md'));
+    assert.ok(library.some(a => a.chatId === chat.id && a.path === 'trip-plan.md'));
+    assert.ok(!library.some(a => a.path === 'brief.md'), 'project knowledge is not an artifact');
 
     const code = (await browser('POST', `/api/projects/${project.id}/code`)).json;
     assert.equal(code.mode, 'code');
     assert.equal(code.copied, 3);
     assert.deepEqual((await browser('GET', `/api/chats/${code.id}/files`)).json.files.map(f => f.path).sort(), knowledge, 'Open in Code starts from a copy of the knowledge');
+    assert.equal(code.originProjectId, project.id);
+    assert.equal((await browser('GET', '/api/chats')).json.find(c => c.id === code.id).originProjectId, project.id, 'the session remembers its project');
+    assert.deepEqual((await browser('GET', `/api/projects/${project.id}`)).json.sessions.map(s => s.id), [code.id], 'and the project lists it');
+    assert.ok(!(await browser('GET', '/api/artifacts')).json.artifacts.some(a => a.chatId === code.id), 'session files are not artifacts');
+    const back = (await browser('POST', `/api/chats/${code.id}/files/save`, { body: { path: 'brief.md' } })).json;
+    assert.deepEqual([back.projectId, back.path], [project.id, 'brief-2.md'], 'a session file goes back to its project as a copy');
+    assert.equal((await browser('POST', `/api/chats/${chat.id}/files/save`, { body: { path: 'trip-plan.md' } })).status, 404, 'only a Code session has workspace files to save');
+    assert.equal((await browser('GET', '/api/chats-overview?mode=code')).json.chats.some(c => c.id === code.id), true, 'sessions have their own overview');
 
     const fork = (await browser('POST', `/api/chats/${chat.id}/fork`, { body: {} })).json;
     assert.deepEqual((await browser('GET', `/api/chats/${fork.id}/artifacts`)).json.files.map(f => f.path), ['trip-plan.md'], 'a fork keeps its artifacts');

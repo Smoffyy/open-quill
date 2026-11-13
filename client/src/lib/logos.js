@@ -79,11 +79,6 @@ export function logoFor(text, files) {
   return hit ? { src: '/assets/' + hit.file, color: isColor(hit.file) } : null;
 }
 
-export function modelIconFor(name, files) {
-  const hit = logoFor(name, files);
-  return hit ? hit.src : null;
-}
-
 let manifest = null;
 
 export function useLogos() {

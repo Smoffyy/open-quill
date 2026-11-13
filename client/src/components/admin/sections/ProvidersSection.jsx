@@ -4,7 +4,6 @@ import { Card, Fields, Field, Input, Select, Btn, IconBtn, Acts, Badge, KV, Empt
 import { Cube, Plus, Trash, Sliders } from '../../ui/icons.jsx';
 import { api } from '../../../lib/api.js';
 import { t } from '../../../i18n.jsx';
-import { modelIconFor, useLogos } from '../../../lib/logos.js';
 import { Skel, SkelRows } from '../../ui/Skeleton.jsx';
 import { reasoningSummary } from '../../../lib/modelcatalog.js';
 import { fmtTokens } from '../../../lib/modeldocs.js';
@@ -52,7 +51,6 @@ function Discover({ providerId, onClose, onAdded }) {
   const [state, setState] = useState({ loading: true, error: '', list: [] });
   const [bulk, setBulk] = useState(null);
   const [bulkError, setBulkError] = useState('');
-  const files = useLogos();
   const alive = useRef(true);
   useEffect(() => () => { alive.current = false; }, []);
 
@@ -71,13 +69,9 @@ function Discover({ providerId, onClose, onAdded }) {
 
   const mark = (id, patch) => setState(s => ({ ...s, list: s.list.map(x => (x.id === id ? { ...x, ...patch } : x)) }));
 
-  const createModel = useCallback((id) => {
-    const icon = modelIconFor(id, files);
-    return api.post('/api/admin/models', {
-      display_name: id, internal_name: id, provider_id: providerId,
-      ...(icon ? { static_icon: icon, generating_icon: icon, thinking_icon: icon } : {})
-    });
-  }, [files, providerId]);
+  const createModel = useCallback((id) => api.post('/api/admin/models', {
+    display_name: id, internal_name: id, provider_id: providerId
+  }), [providerId]);
 
   async function add(id) {
     mark(id, { busy: true });
@@ -159,6 +153,15 @@ export default function ProvidersSection() {
   const { providers, providerTypes, models, patchProvider, addProvider, removeProvider, probeProvider, probe, reload } = catalog;
   const [discover, setDiscover] = useState(null);
 
+  function changeType(p, type) {
+    const was = providerTypes[p.type] || {};
+    const next = providerTypes[type] || {};
+    const patch = { type };
+    if (!p.base_url || p.base_url === was.defaultBaseUrl) patch.base_url = next.defaultBaseUrl || '';
+    if (!p.name || p.name === was.label) patch.name = next.label || p.name;
+    patchProvider(p.id, patch);
+  }
+
   function del(p) {
     confirm({
       title: t('Delete connection'),
@@ -185,7 +188,7 @@ export default function ProvidersSection() {
         const attached = models.filter(m => (m.provider_id || providers[0]?.id) === p.id).length;
         return (
           <Card key={p.id}
-            title={<span className="cp-logo-row"><Logo name={[p.name, p.type]} size={18} />{p.name || t('Connection {n}', { n: i + 1 })}</span>}
+            title={<span className="cp-logo-row"><Logo name={p.type} size={18} />{p.name || t('Connection {n}', { n: i + 1 })}</span>}
             sub={t('{type} · {n} models bound', { type: type.label || p.type, n: attached })}
             actions={<>
               {state && !state.busy && (state.ok
@@ -204,7 +207,7 @@ export default function ProvidersSection() {
                   onChange={(e) => patchProvider(p.id, { name: e.target.value })} />
               </Field>
               <Field label={t('Type')} hint={t('Decides which request shape and endpoints the server uses.')}>
-                <Select value={p.type} onChange={(v) => patchProvider(p.id, { type: v })} label={t('Type')}
+                <Select value={p.type} onChange={(v) => changeType(p, v)} label={t('Type')}
                   options={Object.entries(providerTypes).map(([k, v]) => ({ value: k, label: v.label }))} />
               </Field>
               <Field label={t('Base URL')} hint={t('No trailing slash. The server appends the endpoint path itself.')}>

@@ -43,9 +43,11 @@ export default function registerProjectRoutes(app) {
   app.get('/api/projects/:id', authMiddleware, (req, res) => {
     const p = db.projects.byId(req.params.id);
     if (!p || p.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
-    const chats = db.chats.listByUser(req.user.id).filter(c => c.project_id === p.id)
-      .map(c => ({ id: c.id, title: c.title, updated_at: c.updated_at, starred: !!c.starred }));
-    res.json({ ...projectView(p), chats });
+    const row = c => ({ id: c.id, title: c.title, updated_at: c.updated_at, starred: !!c.starred });
+    const all = db.chats.listByUser(req.user.id);
+    const chats = all.filter(c => c.project_id === p.id).map(row);
+    const sessions = all.filter(c => c.mode === 'code' && c.origin_project_id === p.id && !c.archived).map(row);
+    res.json({ ...projectView(p), chats, sessions });
   });
 
   app.patch('/api/projects/:id', authMiddleware, (req, res) => {
@@ -137,9 +139,9 @@ export default function registerProjectRoutes(app) {
   app.post('/api/projects/:id/code', authMiddleware, (req, res) => {
     const pr = ownProject(req, res); if (!pr) return;
     const t = now();
-    const chat = db.chats.insert({ id: uid(), user_id: req.user.id, project_id: null, title: String(pr.name || 'Project').slice(0, 120), starred: 0, sandbox: 0, mode: 'code', created_at: t, updated_at: t });
+    const chat = db.chats.insert({ id: uid(), user_id: req.user.id, project_id: null, title: String(pr.name || 'Project').slice(0, 120), starred: 0, sandbox: 0, mode: 'code', origin_project_id: pr.id, created_at: t, updated_at: t });
     const copied = copyFiles(projectfiles.workspaceOfProject(pr.id), sandbox.wsKey(chat), capFor(req.user));
-    res.json({ id: chat.id, title: chat.title, mode: 'code', updated_at: t, copied });
+    res.json({ id: chat.id, title: chat.title, mode: 'code', originProjectId: pr.id, updated_at: t, copied });
   });
 
   app.delete('/api/projects/:id', authMiddleware, (req, res) => {
@@ -147,7 +149,10 @@ export default function registerProjectRoutes(app) {
     if (!p || p.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     try { projectfiles.removeAll(p.id); } catch {}
     try { sandbox.remove(sandbox.projectKey(p.id)); } catch {}
-    for (const c of db.chats.listByUser(req.user.id)) { if (c.project_id === p.id) db.chats.update(c.id, { project_id: null }); }
+    for (const c of db.chats.listByUser(req.user.id)) {
+      if (c.project_id === p.id) db.chats.update(c.id, { project_id: null });
+      else if (c.origin_project_id === p.id) db.chats.update(c.id, { origin_project_id: null });
+    }
     db.projects.removeById(p.id);
     res.json({ ok: true });
   });

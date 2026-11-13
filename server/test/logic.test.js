@@ -2138,16 +2138,16 @@ test('a steer tells the model whether anything is already on screen', () => {
 test('the loop guard stops a turn repeating one failing call', () => {
   const g = createLoopGuard();
   const call = [{ name: 'bash', argsText: '{"cmd":"nope"}' }];
-  assert.equal(g.note({ calls: call, ok: 0, failed: 1, failKinds: ['bash:not_found'] }), false, 'once is not a loop');
-  assert.equal(g.note({ calls: call, ok: 0, failed: 1, failKinds: ['bash:not_found'] }), true, 'the identical call twice is');
+  assert.equal(g.note({ calls: call, ok: 0, failed: 1, failKinds: ['bash:not_found'] }), '', 'once is not a loop');
+  assert.equal(g.note({ calls: call, ok: 0, failed: 1, failKinds: ['bash:not_found'] }), 'failing', 'the identical call twice is');
 });
 
 test('the loop guard catches the same failure behind wobbling arguments', () => {
   const g = createLoopGuard();
   const kinds = ['bash:not_found'];
-  assert.equal(g.note({ calls: [{ name: 'bash', argsText: 'a' }], ok: 0, failed: 1, failKinds: kinds }), false);
-  assert.equal(g.note({ calls: [{ name: 'bash', argsText: 'b' }], ok: 0, failed: 1, failKinds: kinds }), false);
-  assert.equal(g.note({ calls: [{ name: 'bash', argsText: 'c' }], ok: 0, failed: 1, failKinds: kinds }), true);
+  assert.equal(g.note({ calls: [{ name: 'bash', argsText: 'a' }], ok: 0, failed: 1, failKinds: kinds }), '');
+  assert.equal(g.note({ calls: [{ name: 'bash', argsText: 'b' }], ok: 0, failed: 1, failKinds: kinds }), '');
+  assert.equal(g.note({ calls: [{ name: 'bash', argsText: 'c' }], ok: 0, failed: 1, failKinds: kinds }), 'failing');
 });
 
 test('the loop guard resets the moment anything works', () => {
@@ -2155,24 +2155,42 @@ test('the loop guard resets the moment anything works', () => {
   const kinds = ['bash:not_found'];
   g.note({ calls: [{ name: 'bash', argsText: 'a' }], ok: 0, failed: 1, failKinds: kinds });
   g.note({ calls: [{ name: 'bash', argsText: 'b' }], ok: 0, failed: 1, failKinds: kinds });
-  assert.equal(g.note({ calls: [{ name: 'bash', argsText: 'c' }], ok: 1, failed: 0, failKinds: [] }), false,
+  assert.equal(g.note({ calls: [{ name: 'bash', argsText: 'c' }], ok: 1, failed: 0, failKinds: [] }), '',
     'a successful step is progress');
-  assert.equal(g.note({ calls: [{ name: 'bash', argsText: 'd' }], ok: 0, failed: 1, failKinds: kinds }), false,
+  assert.equal(g.note({ calls: [{ name: 'bash', argsText: 'd' }], ok: 0, failed: 1, failKinds: kinds }), '',
     'and the count started over');
 });
 
 test('the loop guard leaves a step that failed differently each time alone', () => {
   const g = createLoopGuard();
-  assert.equal(g.note({ calls: [{ name: 'bash', argsText: 'a' }], ok: 0, failed: 1, failKinds: ['bash:not_found'] }), false);
-  assert.equal(g.note({ calls: [{ name: 'bash', argsText: 'b' }], ok: 0, failed: 1, failKinds: ['bash:timeout'] }), false);
-  assert.equal(g.note({ calls: [{ name: 'bash', argsText: 'c' }], ok: 0, failed: 1, failKinds: ['bash:blocked'] }), false,
+  assert.equal(g.note({ calls: [{ name: 'bash', argsText: 'a' }], ok: 0, failed: 1, failKinds: ['bash:not_found'] }), '');
+  assert.equal(g.note({ calls: [{ name: 'bash', argsText: 'b' }], ok: 0, failed: 1, failKinds: ['bash:timeout'] }), '');
+  assert.equal(g.note({ calls: [{ name: 'bash', argsText: 'c' }], ok: 0, failed: 1, failKinds: ['bash:blocked'] }), '',
     'a model working through different problems is making progress');
 });
 
 test('the loop guard ignores a step that made no calls at all', () => {
   const g = createLoopGuard();
-  assert.equal(g.note({ calls: [], ok: 0, failed: 0, failKinds: [] }), false);
-  assert.equal(g.note({ calls: [], ok: 0, failed: 0, failKinds: [] }), false, 'no calls is not a failing loop');
+  assert.equal(g.note({ calls: [], ok: 0, failed: 0, failKinds: [] }), '');
+  assert.equal(g.note({ calls: [], ok: 0, failed: 0, failKinds: [] }), '', 'no calls is not a failing loop');
+});
+
+test('the loop guard stops a turn that keeps repeating a call with the same result', () => {
+  const g = createLoopGuard();
+  const read = [{ name: 'artifact_read', argsText: '{"name":"icon.svg"}' }];
+  assert.equal(g.note({ calls: read, ok: 1, failed: 0, repeated: 0 }), '', 'the first read is new');
+  assert.equal(g.note({ calls: read, ok: 1, failed: 0, repeated: 1 }), '');
+  assert.equal(g.note({ calls: read, ok: 1, failed: 0, repeated: 1 }), '');
+  assert.equal(g.note({ calls: read, ok: 1, failed: 0, repeated: 1 }), 'repeating', 'three idle steps in a row is a loop');
+});
+
+test('the loop guard lets a step with any new result reset the idle count', () => {
+  const g = createLoopGuard();
+  const calls = [{ name: 'a', argsText: '' }, { name: 'b', argsText: '' }];
+  g.note({ calls, ok: 2, failed: 0, repeated: 2 });
+  g.note({ calls, ok: 2, failed: 0, repeated: 2 });
+  assert.equal(g.note({ calls, ok: 2, failed: 0, repeated: 1 }), '', 'one fresh result is progress');
+  assert.equal(g.note({ calls, ok: 2, failed: 0, repeated: 2 }), '');
 });
 
 test('the libraries shared with the client are byte-identical copies', () => {
