@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [28.1.0] - TBD
+## [28.1.0] - 2026-11-12
 ### Added
 - **Sessions page** - Code has its own browse page at `/sessions`, with Active and Archived tabs and the same select, archive and delete tools as the chats list. Sessions used to have no full list at all.
 - **Code sessions remember their project** - a session started from a project shows the project's name in its top bar, and clicking it opens the project. The project page lists the sessions started from it on a new Code card.
