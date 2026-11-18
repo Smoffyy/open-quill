@@ -1790,7 +1790,7 @@ export default function App() {
         ) : libPage === 'artifacts' ? (
           <div className="lib-overlay" role="region" aria-label={t('Artifacts')}>
             {pageMenuBtn}
-            <ArtifactsLibrary onSearch={() => setShowSearch(true)}
+            <ArtifactsLibrary
               onOpen={(a) => {
                 setLibPage(null);
                 openChat(a.chatId);

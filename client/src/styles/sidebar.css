@@ -172,17 +172,7 @@ body.resizing-x { cursor: col-resize; user-select: none; }
 
 .new-row { position: relative; display: flex; align-items: center; }
 .new-row .nav-item { flex: 1; min-width: 0; }
-.new-quick {
-  position: absolute; right: 4px; top: 50%; margin-top: -12px;
-  display: grid; place-items: center; width: 24px; height: 24px; border-radius: 6px;
-  color: var(--sidebar-text, var(--text-muted)); opacity: .6;
-  transition: opacity var(--fx-t, .12s) ease, color var(--fx-t, .12s) ease, background var(--fx-t, .12s) ease;
-}
-.new-quick svg { width: 16px; height: 16px; }
-.new-row:hover .new-quick, .new-quick:focus-visible, .new-quick.on { opacity: 1; }
-.new-quick:hover, .new-quick.on { color: var(--text); background: var(--hover-mid); }
 :root:root .new-row:hover .nav-shortcut { opacity: 1; }
-:root:root .new-row .nav-item.new-chat { padding-right: 34px; }
 :root:root .new-row .nav-shortcut { margin-left: 4px; margin-right: auto; }
 
 .sec-head-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

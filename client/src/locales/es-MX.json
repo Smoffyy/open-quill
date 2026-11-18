@@ -860,7 +860,6 @@
   "Resize sidebar": "Redimensionar barra lateral",
   "Customize": "Personalizar",
   "Scheduled tasks": "Tareas programadas",
-  "Filter by": "Filtrar por",
   "Take a screenshot": "Hacer una captura",
   "Weekly review": "Repaso semanal",
   "Run tasks on a schedule or whenever you need them.": "Ejecuta tareas según un horario o cuando las necesites.",
@@ -3136,7 +3135,6 @@
   "Chats": "Chats",
   "Browse all sessions": "Explorar todas las sesiones",
   "Open Artifacts": "Abrir Artefactos",
-  "Documents your chats have written. Open one to keep editing it in its chat.": "Documentos escritos en tus chats. Abre uno para seguir editándolo en su chat.",
   "No artifacts yet. Ask for a document in any chat and it is kept here.": "Aún no hay artefactos. Pide un documento en cualquier chat y se guardará aquí.",
   "This session started from a copy of this project. Open the project.": "Esta sesión empezó con una copia de este proyecto. Abrir el proyecto.",
   "No archived sessions.": "No hay sesiones archivadas.",
@@ -3149,8 +3147,12 @@
   "Delete {n} session?": "¿Eliminar {n} sesión?",
   "Delete {n} sessions?": "¿Eliminar {n} sesiones?",
   "{n} selected": "{n} seleccionados",
-  "Scheduled tasks button": "Botón de tareas programadas",
   "Search label": "Etiqueta de búsqueda",
   "Deleted “{name}”.": "Se eliminó “{name}”.",
-  "Renaming, importing, exporting and version history live inside build mode, next to the design you are working on.": "Renombrar, importar, exportar y el historial de versiones están dentro del modo de construcción, junto al diseño en el que trabajas."
+  "Renaming, importing, exporting and version history live inside build mode, next to the design you are working on.": "Renombrar, importar, exportar y el historial de versiones están dentro del modo de construcción, junto al diseño en el que trabajas.",
+  "Search artifacts…": "Buscar artefactos…",
+  "Close search": "Cerrar búsqueda",
+  "No artifacts matching \"{query}\"": "Ningún artefacto coincide con «{query}»",
+  "Scheduled": "Programadas",
+  "Scheduled label": "Etiqueta Programadas"
 }

@@ -617,7 +617,6 @@
   "Files": "Файлы",
   "Filesystem": "Файловая система",
   "Filter": "Фильтр",
-  "Filter by": "Фильтровать по",
   "Filter by name or email": "Фильтр по имени или email",
   "Filters": "Фильтры",
   "Find a section or model": "Найти раздел или модель",
@@ -3136,7 +3135,6 @@
   "Chats": "Чаты",
   "Browse all sessions": "Просмотреть все сеансы",
   "Open Artifacts": "Открыть артефакты",
-  "Documents your chats have written. Open one to keep editing it in its chat.": "Документы, созданные в ваших чатах. Откройте любой, чтобы продолжить работу над ним в его чате.",
   "No artifacts yet. Ask for a document in any chat and it is kept here.": "Пока нет артефактов. Попросите документ в любом чате, и он сохранится здесь.",
   "This session started from a copy of this project. Open the project.": "Этот сеанс начат с копии этого проекта. Открыть проект.",
   "No archived sessions.": "Нет архивных сеансов.",
@@ -3149,8 +3147,12 @@
   "Delete {n} session?": "Удалить сеансы ({n})?",
   "Delete {n} sessions?": "Удалить сеансы ({n})?",
   "{n} selected": "Выбрано: {n}",
-  "Scheduled tasks button": "Кнопка запланированных задач",
   "Search label": "Подпись «Поиск»",
   "Deleted “{name}”.": "«{name}» удалено.",
-  "Renaming, importing, exporting and version history live inside build mode, next to the design you are working on.": "Переименование, импорт, экспорт и история версий находятся внутри режима конструктора, рядом с дизайном, над которым вы работаете."
+  "Renaming, importing, exporting and version history live inside build mode, next to the design you are working on.": "Переименование, импорт, экспорт и история версий находятся внутри режима конструктора, рядом с дизайном, над которым вы работаете.",
+  "Search artifacts…": "Поиск артефактов…",
+  "Close search": "Закрыть поиск",
+  "No artifacts matching \"{query}\"": "Нет артефактов по запросу «{query}»",
+  "Scheduled": "Запланированные",
+  "Scheduled label": "Подпись «Запланированные»"
 }

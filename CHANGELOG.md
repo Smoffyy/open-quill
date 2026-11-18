@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [28.1.1] - 2026-11-17
+### Added
+- **Artifact search** - the search button on the Artifacts page opens a field in the tab row instead of the global search dialog. It searches file names and chat titles as you type, shows a message when nothing matches, and closes with Escape or the X.
+- **Visual artifact previews** - SVG, HTML and Markdown artifacts show as rendered thumbnails on their cards instead of source code. HTML previews run with scripts disabled.
+### Changed
+- **Artifacts page** - rebuilt to a 960px column with a sticky tab row, file-type tabs (All plus one per type), and 304 by 212 cards with a preview area and a title and date footer. The cards fade in with a staggered entrance, as on Projects.
+- **Sidebar** - Scheduled replaces Customize in Chat mode and opens the scheduled tasks page. The clock button beside New is removed. Code mode keeps Customize.
+- **Dependencies** - eslint is updated to 10.15, the Anthropic SDK to 1.10 and better-sqlite3-multiple-ciphers to 13.2.
+### Fixed
+- **Engine telemetry over menus** - the strip no longer draws on top of the model picker, plus menu or slash menu when one is open above the message bar. It stays above the message bar and its shadow otherwise.
+- **Artifact tabs shifting** - switching between file-type tabs no longer nudges the page sideways when the scrollbar appears or disappears.
+
 ## [28.1.0] - 2026-11-12
 ### Added
 - **Sessions page** - Code has its own browse page at `/sessions`, with Active and Archived tabs and the same select, archive and delete tools as the chats list. Sessions used to have no full list at all.
