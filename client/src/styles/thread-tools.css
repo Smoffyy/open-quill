@@ -65,6 +65,7 @@
   .es-slot, .es-slot.open { transform: none; transition: opacity var(--fx-t, .2s) ease; }
 }
 .es-slot:not(.open) { pointer-events: none !important; }
+.composer-wrap:has(.model-menu, .model-submenu, .plus-menu, .slash-menu) .es-slot { z-index: -1; }
 .engine-strip {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
   padding: 5px 11px; width: fit-content; max-width: 100%;

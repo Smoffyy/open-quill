@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [28.1.1] - TBD
+### Fixed
+- **Engine telemetry over menus** - the strip no longer draws on top of the model picker, plus menu or slash menu when one is open above the message bar. It stays above the message bar and its shadow otherwise.
+
 ## [28.1.0] - 2026-11-12
 ### Added
 - **Sessions page** - Code has its own browse page at `/sessions`, with Active and Archived tabs and the same select, archive and delete tools as the chats list. Sessions used to have no full list at all.
