@@ -858,7 +858,6 @@
   "Resize sidebar": "Redimensionner la barre latérale",
   "Customize": "Personnaliser",
   "Scheduled tasks": "Tâches planifiées",
-  "Filter by": "Filtrer par",
   "Take a screenshot": "Faire une capture d’écran",
   "Weekly review": "Bilan hebdomadaire",
   "Run tasks on a schedule or whenever you need them.": "Exécutez des tâches selon un calendrier ou quand vous en avez besoin.",
@@ -3136,7 +3135,6 @@
   "Chats": "Conversations",
   "Browse all sessions": "Parcourir toutes les sessions",
   "Open Artifacts": "Ouvrir les artefacts",
-  "Documents your chats have written. Open one to keep editing it in its chat.": "Les documents rédigés dans vos conversations. Ouvrez-en un pour continuer à le modifier dans sa conversation.",
   "No artifacts yet. Ask for a document in any chat and it is kept here.": "Aucun artefact pour le moment. Demandez un document dans n’importe quelle conversation et il sera conservé ici.",
   "This session started from a copy of this project. Open the project.": "Cette session a démarré avec une copie de ce projet. Ouvrir le projet.",
   "No archived sessions.": "Aucune session archivée.",
@@ -3149,8 +3147,12 @@
   "Delete {n} session?": "Supprimer {n} session ?",
   "Delete {n} sessions?": "Supprimer {n} sessions ?",
   "{n} selected": "{n} sélectionnées",
-  "Scheduled tasks button": "Bouton des tâches planifiées",
   "Search label": "Libellé Recherche",
   "Deleted “{name}”.": "« {name} » supprimé.",
-  "Renaming, importing, exporting and version history live inside build mode, next to the design you are working on.": "Le renommage, l’importation, l’exportation et l’historique des versions se trouvent dans le mode création, à côté du design sur lequel vous travaillez."
+  "Renaming, importing, exporting and version history live inside build mode, next to the design you are working on.": "Le renommage, l’importation, l’exportation et l’historique des versions se trouvent dans le mode création, à côté du design sur lequel vous travaillez.",
+  "Search artifacts…": "Rechercher des artefacts…",
+  "Close search": "Fermer la recherche",
+  "No artifacts matching \"{query}\"": "Aucun artefact ne correspond à « {query} »",
+  "Scheduled": "Planifiées",
+  "Scheduled label": "Libellé Planifiées"
 }

@@ -617,7 +617,6 @@
   "Files": "파일",
   "Filesystem": "파일 시스템",
   "Filter": "필터",
-  "Filter by": "필터 기준",
   "Filter by name or email": "이름 또는 이메일로 필터링",
   "Filters": "필터",
   "Find a section or model": "섹션 또는 모델 찾기",
@@ -3136,7 +3135,6 @@
   "Chats": "채팅",
   "Browse all sessions": "모든 세션 찾아보기",
   "Open Artifacts": "아티팩트 열기",
-  "Documents your chats have written. Open one to keep editing it in its chat.": "채팅에서 작성된 문서입니다. 하나를 열면 해당 채팅에서 계속 편집할 수 있습니다.",
   "No artifacts yet. Ask for a document in any chat and it is kept here.": "아직 아티팩트가 없습니다. 아무 채팅에서나 문서를 요청하면 여기에 보관됩니다.",
   "This session started from a copy of this project. Open the project.": "이 세션은 이 프로젝트의 복사본으로 시작되었습니다. 프로젝트를 엽니다.",
   "No archived sessions.": "보관된 세션이 없습니다.",
@@ -3149,8 +3147,12 @@
   "Delete {n} session?": "세션 {n}개를 삭제할까요?",
   "Delete {n} sessions?": "세션 {n}개를 삭제할까요?",
   "{n} selected": "{n}개 선택됨",
-  "Scheduled tasks button": "예약된 작업 버튼",
   "Search label": "검색 레이블",
   "Deleted “{name}”.": "“{name}”을(를) 삭제했습니다.",
-  "Renaming, importing, exporting and version history live inside build mode, next to the design you are working on.": "이름 바꾸기, 가져오기, 내보내기, 버전 기록은 작업 중인 디자인 옆 빌드 모드 안에 있습니다."
+  "Renaming, importing, exporting and version history live inside build mode, next to the design you are working on.": "이름 바꾸기, 가져오기, 내보내기, 버전 기록은 작업 중인 디자인 옆 빌드 모드 안에 있습니다.",
+  "Search artifacts…": "아티팩트 검색…",
+  "Close search": "검색 닫기",
+  "No artifacts matching \"{query}\"": "\"{query}\"와(과) 일치하는 아티팩트가 없습니다",
+  "Scheduled": "예약됨",
+  "Scheduled label": "예약됨 라벨"
 }

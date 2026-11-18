@@ -858,7 +858,6 @@
   "Resize sidebar": "Redimensionar barra lateral",
   "Customize": "Personalizar",
   "Scheduled tasks": "Tarefas agendadas",
-  "Filter by": "Filtrar por",
   "Take a screenshot": "Fazer uma captura de tela",
   "Weekly review": "Revisão semanal",
   "Run tasks on a schedule or whenever you need them.": "Execute tarefas em um agendamento ou quando precisar.",
@@ -3136,7 +3135,6 @@
   "Chats": "Conversas",
   "Browse all sessions": "Ver todas as sessões",
   "Open Artifacts": "Abrir Artefatos",
-  "Documents your chats have written. Open one to keep editing it in its chat.": "Documentos escritos nas suas conversas. Abra um para continuar editando na conversa dele.",
   "No artifacts yet. Ask for a document in any chat and it is kept here.": "Ainda não há artefatos. Peça um documento em qualquer conversa e ele fica guardado aqui.",
   "This session started from a copy of this project. Open the project.": "Esta sessão começou com uma cópia deste projeto. Abrir o projeto.",
   "No archived sessions.": "Nenhuma sessão arquivada.",
@@ -3149,8 +3147,12 @@
   "Delete {n} session?": "Excluir {n} sessão?",
   "Delete {n} sessions?": "Excluir {n} sessões?",
   "{n} selected": "{n} selecionadas",
-  "Scheduled tasks button": "Botão de tarefas agendadas",
   "Search label": "Rótulo de Pesquisa",
   "Deleted “{name}”.": "“{name}” excluído.",
-  "Renaming, importing, exporting and version history live inside build mode, next to the design you are working on.": "Renomear, importar, exportar e o histórico de versões ficam no modo de criação, ao lado do design em que você está trabalhando."
+  "Renaming, importing, exporting and version history live inside build mode, next to the design you are working on.": "Renomear, importar, exportar e o histórico de versões ficam no modo de criação, ao lado do design em que você está trabalhando.",
+  "Search artifacts…": "Pesquisar artefatos…",
+  "Close search": "Fechar pesquisa",
+  "No artifacts matching \"{query}\"": "Nenhum artefato corresponde a \"{query}\"",
+  "Scheduled": "Agendadas",
+  "Scheduled label": "Rótulo Agendadas"
 }

@@ -23,6 +23,8 @@ function ownChat(req, res) {
 const LIBRARY_PAGE = 60;
 const LIBRARY_SCAN = 400;
 const PREVIEW_CHARS = 600;
+const VISUAL_EXT = new Set(['svg', 'html']);
+const VISUAL_MAX = 32 * 1024;
 
 export default function registerArtifactRoutes(app) {
   app.get('/api/artifacts', authMiddleware, (req, res) => {
@@ -42,13 +44,16 @@ export default function registerArtifactRoutes(app) {
         if (items.length >= limit) break;
         if (q && !f.path.toLowerCase().includes(q) && !title.toLowerCase().includes(q)) continue;
         let preview = '';
+        const rendered = VISUAL_EXT.has(f.ext) && f.size > 0 && f.size <= VISUAL_MAX;
         if (f.size > 0 && f.size < 512 * 1024) {
           try {
-            if (sandbox.isText(f.path)) preview = sandbox.readHead(key, f.path, PREVIEW_CHARS * 4).slice(0, PREVIEW_CHARS);
+            if (rendered) preview = sandbox.readHead(key, f.path, VISUAL_MAX);
+            else if (sandbox.isText(f.path)) preview = sandbox.readHead(key, f.path, PREVIEW_CHARS * 4).slice(0, PREVIEW_CHARS);
           } catch { preview = ''; }
         }
         items.push({
           preview,
+          rendered: rendered && !!preview,
           id: key + ':' + f.path,
           chatId: c.id,
           chatTitle: title,

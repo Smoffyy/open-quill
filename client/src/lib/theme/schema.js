@@ -162,7 +162,6 @@ export const ELEMENTS = [
   { id: 'navLabel', label: tk('Navigation label'), cat: 'nav', sel: '.nav-label', parent: 'navItem', caps: TEXTY },
   { id: 'navShortcut', label: tk('Navigation shortcut'), cat: 'nav', sel: '.nav-shortcut', parent: 'navItem', caps: TEXTY },
   { id: 'newChatBtn', label: tk('New chat button'), cat: 'nav', sel: '.nav-item.new-chat', parent: 'sidebarNav', caps: CTRL, slotKey: 'nav.new' },
-  { id: 'quickTaskBtn', label: tk('Scheduled tasks button'), cat: 'nav', sel: '.new-quick', parent: 'sidebarNav', caps: CTRL, icon: true },
   { id: 'sectionLabel', label: tk('Section label'), cat: 'sidebar', sel: '.section-label', parent: 'sidebar', caps: TEXTY },
   { id: 'chatList', label: tk('Chat list'), cat: 'sidebar', sel: '.chats', parent: 'sidebar', caps: ALL },
   { id: 'chatRow', label: tk('Chat list row'), cat: 'sidebar', sel: '.chat-row', parent: 'chatList', caps: CTRL },
@@ -390,6 +389,7 @@ export const CONTENT_KEYS = [
   { key: 'nav.search', label: tk('Search label'), group: tk('Navigation'), def: 'Search' },  { key: 'nav.projects', label: tk('Projects label'), group: tk('Navigation'), def: 'Projects' },
   { key: 'nav.artifacts', label: tk('Artifacts label'), group: tk('Navigation'), def: 'Artifacts' },
   { key: 'nav.customize', label: tk('Customize label'), group: tk('Navigation'), def: 'Customize' },
+  { key: 'nav.scheduled', label: tk('Scheduled label'), group: tk('Navigation'), def: 'Scheduled' },
   { key: 'nav.recents', label: tk('Recents heading'), group: tk('Navigation'), def: 'Recents' },
   { key: 'nav.allChats', label: tk('All chats label'), group: tk('Navigation'), def: 'All chats' },
   { key: 'composer.placeholder', label: tk('Composer placeholder'), group: tk('Composer'), def: 'How can I help you today?' },
@@ -506,6 +506,7 @@ export const ORDER_GROUPS = [
       { id: 'nav.chats', label: tk('Sessions'), sel: '[data-oq-item="nav.chats"]' },
       { id: 'nav.projects', label: tk('Projects'), sel: '[data-oq-item="nav.projects"]' },
       { id: 'nav.artifacts', label: tk('Artifacts'), sel: '[data-oq-item="nav.artifacts"]' },
+      { id: 'nav.scheduled', label: tk('Scheduled'), sel: '[data-oq-item="nav.scheduled"]' },
       { id: 'nav.customize', label: tk('Customize'), sel: '[data-oq-item="nav.customize"]' }
     ]
   },

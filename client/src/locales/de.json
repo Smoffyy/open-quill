@@ -617,7 +617,6 @@
   "Files": "Dateien",
   "Filesystem": "Dateisystem",
   "Filter": "Filter",
-  "Filter by": "Filtern nach",
   "Filter by name or email": "Nach Name oder E-Mail filtern",
   "Filters": "Filter",
   "Find a section or model": "Abschnitt oder Modell suchen",
@@ -3136,7 +3135,6 @@
   "Chats": "Chats",
   "Browse all sessions": "Alle Sitzungen durchsuchen",
   "Open Artifacts": "Artifacts öffnen",
-  "Documents your chats have written. Open one to keep editing it in its chat.": "Dokumente, die in deinen Chats entstanden sind. Öffne eines, um es in seinem Chat weiterzubearbeiten.",
   "No artifacts yet. Ask for a document in any chat and it is kept here.": "Noch keine Artifacts. Bitte in einem beliebigen Chat um ein Dokument, dann wird es hier aufbewahrt.",
   "This session started from a copy of this project. Open the project.": "Diese Sitzung wurde mit einer Kopie dieses Projekts gestartet. Projekt öffnen.",
   "No archived sessions.": "Keine archivierten Sitzungen.",
@@ -3149,8 +3147,12 @@
   "Delete {n} session?": "{n} Sitzung löschen?",
   "Delete {n} sessions?": "{n} Sitzungen löschen?",
   "{n} selected": "{n} ausgewählt",
-  "Scheduled tasks button": "Schaltfläche für geplante Aufgaben",
   "Search label": "Suche-Beschriftung",
   "Deleted “{name}”.": "„{name}“ gelöscht.",
-  "Renaming, importing, exporting and version history live inside build mode, next to the design you are working on.": "Umbenennen, Importieren, Exportieren und Versionsverlauf befinden sich im Bearbeitungsmodus, direkt neben dem Design, an dem Sie arbeiten."
+  "Renaming, importing, exporting and version history live inside build mode, next to the design you are working on.": "Umbenennen, Importieren, Exportieren und Versionsverlauf befinden sich im Bearbeitungsmodus, direkt neben dem Design, an dem Sie arbeiten.",
+  "Search artifacts…": "Artefakte durchsuchen…",
+  "Close search": "Suche schließen",
+  "No artifacts matching \"{query}\"": "Keine Artefakte für „{query}“",
+  "Scheduled": "Geplant",
+  "Scheduled label": "Bezeichnung „Geplant“"
 }

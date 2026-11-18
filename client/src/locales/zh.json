@@ -858,7 +858,6 @@
   "Resize sidebar": "调整侧边栏宽度",
   "Customize": "自定义",
   "Scheduled tasks": "定时任务",
-  "Filter by": "筛选方式",
   "Take a screenshot": "截屏",
   "Weekly review": "每周回顾",
   "Run tasks on a schedule or whenever you need them.": "按计划或随时运行任务。",
@@ -3136,7 +3135,6 @@
   "Chats": "对话",
   "Browse all sessions": "浏览所有会话",
   "Open Artifacts": "打开产物",
-  "Documents your chats have written. Open one to keep editing it in its chat.": "你的对话写出的文档。打开其中一个，即可在原对话中继续编辑。",
   "No artifacts yet. Ask for a document in any chat and it is kept here.": "还没有产物。在任意对话中让助手写一份文档，它就会保存在这里。",
   "This session started from a copy of this project. Open the project.": "此会话从该项目的副本开始。打开项目。",
   "No archived sessions.": "没有已归档的会话。",
@@ -3149,8 +3147,12 @@
   "Delete {n} session?": "删除 {n} 个会话？",
   "Delete {n} sessions?": "删除 {n} 个会话？",
   "{n} selected": "已选择 {n} 项",
-  "Scheduled tasks button": "定时任务按钮",
   "Search label": "搜索标签",
   "Deleted “{name}”.": "已删除“{name}”。",
-  "Renaming, importing, exporting and version history live inside build mode, next to the design you are working on.": "重命名、导入、导出和版本历史都在构建模式中，就在你正在设计的内容旁边。"
+  "Renaming, importing, exporting and version history live inside build mode, next to the design you are working on.": "重命名、导入、导出和版本历史都在构建模式中，就在你正在设计的内容旁边。",
+  "Search artifacts…": "搜索工件…",
+  "Close search": "关闭搜索",
+  "No artifacts matching \"{query}\"": "没有与“{query}”匹配的工件",
+  "Scheduled": "定时任务",
+  "Scheduled label": "定时任务标签"
 }

@@ -174,6 +174,7 @@ function Sidebar({
   const navArtifacts = useThemeText('nav.artifacts', t('Artifacts'));
   const navSearch = useThemeText('nav.search', t('Search'));
   const navCustomize = useThemeText('nav.customize', t('Customize'));
+  const navScheduled = useThemeText('nav.scheduled', t('Scheduled'));
   const allChats = useThemeText('nav.allChats', t('All chats'));
   const browseAll = code ? t('Sessions') : allChats;
   const onBrowse = dest === 'chats' || dest === 'sessions';
@@ -306,18 +307,14 @@ function Sidebar({
           aria-current={!activeId && !dest ? 'page' : undefined}
           onClick={(e) => { if (!plainClick(e)) return; e.preventDefault(); onNew(); }}><span className="nav-ic new-chat-plus"><Plus /></span> <span className="nav-label">{navNew}</span>
           {newChatCombo && <span className="nav-shortcut">{newChatCombo}</span>}</a>
-        {!code && onScheduled && (
-          <button className={'new-quick' + (dest === 'scheduled' ? ' on' : '')} data-tip={t('Scheduled tasks')} aria-label={t('Scheduled tasks')}
-            aria-current={dest === 'scheduled' ? 'page' : undefined}
-            onClick={(e) => { e.stopPropagation(); onScheduled(); }}><Clock /></button>
-        )}
         </div>
         <button data-oq-item="nav.search" className="nav-item" data-tip={navSearch} onClick={onSearch}><span className="nav-ic"><Search /></span> <span className="nav-label">{navSearch}</span>
           {searchCombo && <span className="nav-shortcut">{searchCombo}</span>}</button>
         {code && <button data-oq-item="nav.chats" className={'nav-item' + (onBrowse ? ' on' : '')} data-tip={browseAll} aria-current={onBrowse ? 'page' : undefined} onClick={onChatsOverview}><span className="nav-ic"><Compact /></span> <span className="nav-label">{browseAll}</span></button>}
         {!code && <button data-oq-item="nav.projects" className={'nav-item' + (dest === 'projects' ? ' on' : '')} data-tip={navProjects} aria-current={dest === 'projects' ? 'page' : undefined} onClick={onProjects}><span className="nav-ic"><Box /></span> <span className="nav-label">{navProjects}</span></button>}
         {!code && <button data-oq-item="nav.artifacts" className={'nav-item' + (dest === 'artifacts' ? ' on' : '')} data-tip={navArtifacts} aria-current={dest === 'artifacts' ? 'page' : undefined} onClick={() => onArtifacts && onArtifacts()}><span className="nav-ic"><Artifact /></span> <span className="nav-label">{navArtifacts}</span></button>}
-        <button data-oq-item="nav.customize" className="nav-item" data-tip={navCustomize} onClick={() => onCustomize && onCustomize()}><span className="nav-ic"><Briefcase /></span> <span className="nav-label">{navCustomize}</span></button>
+        {!code && <button data-oq-item="nav.scheduled" className={'nav-item' + (dest === 'scheduled' ? ' on' : '')} data-tip={navScheduled} aria-current={dest === 'scheduled' ? 'page' : undefined} onClick={() => onScheduled && onScheduled()}><span className="nav-ic"><Clock /></span> <span className="nav-label">{navScheduled}</span></button>}
+        {code && <button data-oq-item="nav.customize" className="nav-item" data-tip={navCustomize} onClick={() => onCustomize && onCustomize()}><span className="nav-ic"><Briefcase /></span> <span className="nav-label">{navCustomize}</span></button>}
         {showModelDocs && <button className="nav-item" data-tip={t('Model docs')} onClick={() => onModelDocs && onModelDocs()}><span className="nav-ic"><ModelDocs /></span> <span className="nav-label">{t('Model docs')}</span></button>}
       </div>
       <div className="chats-wrap">

@@ -617,7 +617,6 @@
   "Files": "ファイル",
   "Filesystem": "ファイルシステム",
   "Filter": "フィルター",
-  "Filter by": "絞り込み",
   "Filter by name or email": "名前またはメールアドレスで絞り込み",
   "Filters": "フィルター",
   "Find a section or model": "セクションまたはモデルを検索",
@@ -3136,7 +3135,6 @@
   "Chats": "チャット",
   "Browse all sessions": "すべてのセッションを見る",
   "Open Artifacts": "アーティファクトを開く",
-  "Documents your chats have written. Open one to keep editing it in its chat.": "チャットで作成されたドキュメントです。開くと、元のチャットで編集を続けられます。",
   "No artifacts yet. Ask for a document in any chat and it is kept here.": "まだアーティファクトはありません。チャットでドキュメントを頼むと、ここに保存されます。",
   "This session started from a copy of this project. Open the project.": "このセッションは、このプロジェクトのコピーから始まりました。プロジェクトを開きます。",
   "No archived sessions.": "アーカイブされたセッションはありません。",
@@ -3149,8 +3147,12 @@
   "Delete {n} session?": "{n} 件のセッションを削除しますか？",
   "Delete {n} sessions?": "{n} 件のセッションを削除しますか？",
   "{n} selected": "{n} 件を選択中",
-  "Scheduled tasks button": "スケジュールされたタスクのボタン",
   "Search label": "検索のラベル",
   "Deleted “{name}”.": "「{name}」を削除しました。",
-  "Renaming, importing, exporting and version history live inside build mode, next to the design you are working on.": "名前の変更、インポート、エクスポート、バージョン履歴は、作業中のデザインの隣にあるビルドモード内で行います。"
+  "Renaming, importing, exporting and version history live inside build mode, next to the design you are working on.": "名前の変更、インポート、エクスポート、バージョン履歴は、作業中のデザインの隣にあるビルドモード内で行います。",
+  "Search artifacts…": "アーティファクトを検索…",
+  "Close search": "検索を閉じる",
+  "No artifacts matching \"{query}\"": "「{query}」に一致するアーティファクトはありません",
+  "Scheduled": "スケジュール",
+  "Scheduled label": "スケジュールのラベル"
 }
