@@ -1,14 +1,14 @@
 import { db, uid, tx, getSetting, setSetting } from '../db.js';
 import { authMiddleware } from '../auth.js';
 import { requirePermission } from '../lib/authz/middleware.js';
-import { can } from '../lib/authz/effective.js';
 import { getProviders, resolveProvider, providerSpec, isLocalType } from '../lib/providers.js';
 import { cloudPreset, rememberListing, listingFor } from '../lib/cloudmodels.js';
 import { matchPreset, presetList, setCustomPresets, getCustomPresets } from '../lib/pricing.js';
 import { logAudit } from '../lib/audit.js';
 import { staged } from '../lib/releases.js';
 import { draftGet } from '../lib/draft.js';
-import { draftModels, publicModels, probeCtx, knownCtx, timedFetch } from '../lib/models.js';
+import { probeCtx, knownCtx, timedFetch, modelsFor } from '../lib/models.js';
+import { cleanGroupIds } from '../lib/authz/access.js';
 import { sanitizeKwargs } from '../lib/kwargs.js';
 import { listAnthropicModels } from '../llm/index.js';
 import { sanitizeBadgesOff } from '../lib/badges.js';
@@ -74,6 +74,7 @@ function modelPatch(b, cur) {
   if ('kwargs' in b) patch.kwargs = sanitizeKwargs(b.kwargs);
   if ('badges_off' in b) patch.badges_off = badgesOff(b.badges_off);
   if ('consult_models' in b) patch.consult_models = sanitizeConsultModels(b.consult_models);
+  if ('access_groups' in b) patch.access_groups = cleanGroupIds(b.access_groups);
   if ('mcp_servers_off' in b) patch.mcp_servers_off = Array.isArray(b.mcp_servers_off) ? [...new Set(b.mcp_servers_off.filter(id => typeof id === 'string' && id.length <= 64))].slice(0, 100) : [];
   if ('effort_levels' in b) {
     const arr = Array.isArray(b.effort_levels) ? b.effort_levels : String(b.effort_levels || '').split(',');
@@ -201,7 +202,7 @@ function applyPatch(cur, patch) {
 }
 
 export default function registerModelRoutes(app) {
-  app.get('/api/models', authMiddleware, (req, res) => res.json(can(req.user, 'admin.panel') ? draftModels() : publicModels()));
+  app.get('/api/models', authMiddleware, (req, res) => res.json(modelsFor(req.user)));
 
   app.get('/api/admin/models', authMiddleware, requirePermission('admin.models'), (req, res) =>
     res.json(db.models.all().sort((a, b) => a.sort_order - b.sort_order).map(m => ({ ...m, known_ctx: knownCtx(m) }))));

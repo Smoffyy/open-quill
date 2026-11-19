@@ -296,6 +296,21 @@ qualityCol.byMessage = mid => qualityByMessageStmt.all(mid).map(r => JSON.parse(
 const feedbackRatedChatStmt = sdb.prepare(`SELECT 1 AS hit FROM feedback WHERE json_extract(data,'$.chat_id') = ? AND ${IS_SAFETY} = 0 LIMIT 1`);
 feedbackCol.ratedChat = chatId => !!feedbackRatedChatStmt.get(chatId);
 
+const groupsCol = collection('user_groups');
+const groupMembersCol = collection('group_members');
+const directGroupsStmt = sdb.prepare("SELECT group_id FROM group_members WHERE member_type='user' AND member_id=?");
+const groupLinksStmt = sdb.prepare("SELECT group_id, member_id FROM group_members WHERE member_type='group'");
+const groupUsersStmt = sdb.prepare("SELECT member_id FROM group_members WHERE group_id=? AND member_type='user'");
+const groupCountsStmt = sdb.prepare('SELECT group_id, member_type, count(*) AS n FROM group_members GROUP BY group_id, member_type');
+const groupLinkStmt = sdb.prepare('SELECT data FROM group_members WHERE group_id=? AND member_type=? AND member_id=?');
+const dropMemberStmt = sdb.prepare('DELETE FROM group_members WHERE member_type=? AND member_id=?');
+groupMembersCol.directGroups = userId => directGroupsStmt.all(userId).map(r => r.group_id);
+groupMembersCol.groupLinks = () => groupLinksStmt.all();
+groupMembersCol.usersOf = groupId => groupUsersStmt.all(groupId).map(r => r.member_id);
+groupMembersCol.counts = () => groupCountsStmt.all();
+groupMembersCol.link = (groupId, type, memberId) => { const r = groupLinkStmt.get(groupId, type, memberId); return r ? JSON.parse(r.data) : null; };
+groupMembersCol.dropMember = (type, memberId) => { if (dropMemberStmt.run(type, memberId).changes) bumpTable('group_members'); };
+
 const repliesBetweenStmt = sdb.prepare("SELECT data FROM messages WHERE created_at >= ? AND created_at <= ? AND json_extract(data,'$.role') = 'assistant' ORDER BY created_at DESC LIMIT ?");
 messagesCol.repliesBetween = (from, to, limit) => repliesBetweenStmt.all(from, to, limit).map(r => JSON.parse(r.data));
 
@@ -319,7 +334,9 @@ export const db = {
   evalVersions: evalVersionsCol,
   evalRuns: evalRunsCol,
   qualityChecks: qualityCol,
-  roles: collection('roles')
+  roles: collection('roles'),
+  groups: groupsCol,
+  groupMembers: groupMembersCol
 };
 
 const sGet = sdb.prepare('SELECT value FROM settings WHERE key=?');

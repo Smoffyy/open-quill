@@ -51,6 +51,8 @@ function snapshot() {
   return cache;
 }
 
+export const rolesKey = () => snapshot().key;
+
 export const isBuiltinRole = (id) => typeof id === 'string' && id in BUILTIN_ROLES;
 
 export function roleExists(id) {

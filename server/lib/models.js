@@ -6,6 +6,7 @@ import { catalogCtx, listingFor } from './cloudmodels.js';
 import { llamaContext } from './llamacpp.js';
 import { anthropicModelInfo } from '../llm/index.js';
 import { can } from './authz/effective.js';
+import { modelAllowed, defaultModelFor } from './authz/access.js';
 
 let sunsetCheckedAt = 0;
 let sunsetCheckedVersion = -1;
@@ -166,7 +167,8 @@ export function resolveModel(modelId, viewer) {
   applySunsets();
   const snap = getSetting('published_models', null);
   const m = draftView(viewer) || !Array.isArray(snap) ? db.models.byId(modelId) : publishedById(snap, modelId);
-  return m && m.enabled ? m : null;
+  if (!m || !m.enabled) return null;
+  return typeof viewer === 'object' && viewer && !modelAllowed(viewer, m) ? null : m;
 }
 
 export function resolveModelOrDefault(modelId, viewer) {
@@ -175,7 +177,18 @@ export function resolveModelOrDefault(modelId, viewer) {
   const snap = getSetting('published_models', null);
   const pool = (!draftView(viewer) && Array.isArray(snap)) ? snap : db.models.all();
   const live = pool.filter(x => x.enabled).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+  if (typeof viewer === 'object' && viewer) return defaultModelFor(viewer, live.filter(x => modelAllowed(viewer, x)));
   return live.find(x => x.is_default) || live[0] || null;
+}
+
+export function modelsFor(user) {
+  const draft = can(user, 'admin.panel');
+  const snap = getSetting('published_models', null);
+  const rows = draft || !Array.isArray(snap) ? db.models.all() : snap;
+  const byId = new Map(rows.map(m => [m.id, m]));
+  const list = (draft ? draftModels() : publicModels()).filter(m => modelAllowed(user, byId.get(m.id)));
+  const pick = defaultModelFor(user, list.map(m => byId.get(m.id)));
+  return list.map(m => (m.isDefault === (m.id === pick?.id) ? m : { ...m, isDefault: m.id === pick?.id }));
 }
 
 export function roleLimit(key, isAdmin, fallback) {

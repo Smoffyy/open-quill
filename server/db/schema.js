@@ -109,7 +109,13 @@ INSERT OR IGNORE INTO roles (id, rank, data)
   WHERE EXISTS (SELECT 1 FROM users WHERE json_extract(data, '$.role') = 'editor');
 INSERT OR IGNORE INTO settings (key, value)
   SELECT 'auth_signup_policy', CASE WHEN value = '"0"' THEN '"closed"' ELSE '"open"' END FROM settings WHERE key = 'allow_signups';
-DELETE FROM settings WHERE key IN ('allow_signups', 'draft:allow_signups');`
+DELETE FROM settings WHERE key IN ('allow_signups', 'draft:allow_signups');`,
+
+  `CREATE TABLE IF NOT EXISTS user_groups (id TEXT PRIMARY KEY, name_key TEXT, source TEXT, updated_at INTEGER, data TEXT NOT NULL);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_groups_name ON user_groups(source, name_key);
+CREATE TABLE IF NOT EXISTS group_members (id TEXT PRIMARY KEY, group_id TEXT, member_type TEXT, member_id TEXT, source TEXT, data TEXT NOT NULL, FOREIGN KEY(group_id) REFERENCES user_groups(id) ON DELETE CASCADE);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_group_members_link ON group_members(group_id, member_type, member_id);
+CREATE INDEX IF NOT EXISTS idx_group_members_member ON group_members(member_type, member_id);`
 ];
 
 export const LATEST_VERSION = MIGRATIONS.length + 1;
