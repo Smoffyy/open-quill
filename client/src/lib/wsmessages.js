@@ -42,6 +42,14 @@ export const handlers = {
     ctx.actions.presence(Array.isArray(m.admins) ? m.admins : []);
   },
 
+  eval_job(m, ctx) {
+    if (m.job && typeof m.job.id === 'string') ctx.actions.evalJob?.(m.job);
+  },
+
+  mcp_status(m, ctx) {
+    if (typeof m.id === 'string') ctx.actions.mcpStatus?.({ id: m.id, status: String(m.status || ''), error: String(m.error || ''), toolCount: Number(m.toolCount) || 0 });
+  },
+
   // Sent on connect: every turn this user has running, so a reload picks them up.
   resume(m, ctx) {
     const list = Array.isArray(m.turns) ? m.turns : [];

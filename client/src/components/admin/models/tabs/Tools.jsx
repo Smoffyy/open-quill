@@ -1,8 +1,51 @@
+import { useState, useEffect } from 'react';
 import { useAdmin } from '../../store.jsx';
 import { Card, Rows, Fields } from '../../ui.jsx';
-import { Flag, NumberField, Levels, Chips, When, ModelPicks, useEditor } from '../bind.jsx';
+import { Flag, NumberField, Levels, Chips, When, ModelPicks, useEditor, useChange, Revert } from '../bind.jsx';
 import { t } from '../../../../i18n.jsx';
 import { LEVELS, usesTools } from '../../../../lib/modelcatalog.js';
+import { api } from '../../../../lib/api.js';
+
+const offOf = (m) => (Array.isArray(m.mcp_servers_off) ? m.mcp_servers_off : []);
+
+function McpServers() {
+  const { models, editEach } = useEditor();
+  const change = useChange('mcp_servers_off');
+  const [servers, setServers] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    api.get('/api/admin/mcp')
+      .then(d => { if (alive) setServers((d.servers || []).filter(s => s.enabled !== false)); })
+      .catch(() => { if (alive) setServers([]); });
+    return () => { alive = false; };
+  }, []);
+  if (!servers?.length) return null;
+  const label = t('Servers it may use');
+  const toggle = (id, all) => editEach(m => ({ mcp_servers_off: all ? [...new Set([...offOf(m), id])] : offOf(m).filter(x => x !== id) }));
+  return (
+    <Card title={t('MCP servers')} sub={t('New servers are offered to this model until you switch them off here. Servers members add for themselves are always offered.')}>
+      <Rows>
+        <div className={'cp-row mc-chip-row' + (change.changed ? ' mc-changed' : '')}>
+          <div className="cp-row-main">
+            <span className="cp-row-label"><span className="mc-label">{label}<Revert change={change} label={label} /></span></span>
+          </div>
+          <div className="mc-chips" role="group" aria-label={label}>
+            {servers.map(s => {
+              const on = models.filter(m => !offOf(m).includes(s.id)).length;
+              const all = on === models.length;
+              return (
+                <button key={s.id} type="button" aria-pressed={all ? true : on ? 'mixed' : false}
+                  className={'mc-chip' + (on && !all ? ' part' : '')} onClick={() => toggle(s.id, all)}>
+                  {s.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </Rows>
+    </Card>
+  );
+}
 
 export default function Tools() {
   const { workspace, catalog } = useAdmin();
@@ -18,7 +61,7 @@ export default function Tools() {
   const extras = [
     ['artifacts_allowed', t('Artifacts'), t('Lets the model write documents, pages, diagrams and scripts that open in a panel beside the chat, with versions the member can edit and download.')],
     ['skills_allowed', t('Skills'), t('Offers the skills defined under Tools.')],
-    ['mcp_allowed', t('MCP tools'), t('Exposes tools from every enabled MCP server.')],
+    ['mcp_allowed', t('MCP tools'), t('Exposes tools from the enabled MCP servers you choose below.')],
     ...(chatSearch ? [['chat_search_allowed', t('Past-chat search'), t('Lets the model search the member’s own earlier chats.')]] : []),
     ['memory_allowed', t('Memory'), t('Lets the model save, update and delete facts about the member. Only works for members with memory turned on.')],
     ['calculator_allowed', t('Calculator'), t('Lets the model evaluate math expressions exactly instead of computing them itself.')],
@@ -53,6 +96,10 @@ export default function Tools() {
               note={t('Lets the model forward the images from the member’s latest message to a chosen model that can see images.')} />
           </Rows>
         </Card>
+      </When>
+
+      <When k="mcp_allowed" keep={['mcp_servers_off']}>
+        <McpServers />
       </When>
 
       <When test={m => usesTools(m, { webSearch, chatSearch })} keep={['agent_steps', 'hide_tool_calls']}>

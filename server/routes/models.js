@@ -72,6 +72,7 @@ function modelPatch(b, cur) {
   if ('kwargs' in b) patch.kwargs = sanitizeKwargs(b.kwargs);
   if ('badges_off' in b) patch.badges_off = badgesOff(b.badges_off);
   if ('consult_models' in b) patch.consult_models = sanitizeConsultModels(b.consult_models);
+  if ('mcp_servers_off' in b) patch.mcp_servers_off = Array.isArray(b.mcp_servers_off) ? [...new Set(b.mcp_servers_off.filter(id => typeof id === 'string' && id.length <= 64))].slice(0, 100) : [];
   if ('effort_levels' in b) {
     const arr = Array.isArray(b.effort_levels) ? b.effort_levels : String(b.effort_levels || '').split(',');
     const clean = arr.map(s => String(s).trim().toLowerCase()).filter(Boolean).slice(0, 8);

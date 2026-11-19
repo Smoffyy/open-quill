@@ -5,7 +5,7 @@ import { Wrench, FileText, Trash, Folder, Download, Search, Copy, Check, Termina
 import { baseName, dirOf } from '../../lib/files.js';
 import { extOf } from '../../lib/artifacts.js';
 import FileChip from '../artifacts/FileChip.jsx';
-import { t, tk } from '../../i18n.jsx';
+import { t, tk, tp, fmtNumber } from '../../i18n.jsx';
 import { safeUrl } from '../../lib/safeurl.js';
 
 const VERBS = {
@@ -65,7 +65,7 @@ const FILE_TOOLS = new Set(['create_file', 'str_replace', 'delete_file', 'rename
 
 function stripAnsi(s) { return String(s || '').replace(/\u001b\[[0-9;]*m/g, ''); }
 function countLines(s) { return s ? s.split('\n').length : 0; }
-function plural(n, one, many) { return t(n === 1 ? one : many, { n }); }
+function plural(n, one, many) { return tp(n, one, many); }
 
 function openPathFor(call) {
   if (!call) return null;
@@ -355,7 +355,7 @@ function WebSearchCard({ call, result }) {
                         <span className="ws-title">{r.title || host || r.url}</span>
                         <span className="ws-meta">
                           <span className="ws-host">{host}</span>
-                          {r.chars != null && <span className="ws-chars">{t('{n} chars read', { n: r.chars.toLocaleString() })}</span>}
+                          {r.chars != null && <span className="ws-chars">{t('{n} chars read', { n: fmtNumber(r.chars) })}</span>}
                         </span>
                       </span>
                     </a>

@@ -176,10 +176,15 @@ function Sessions() {
   );
 }
 
-export default function SecurityTab({ user, onUpdated }) {
+export default function SecurityTab({ user, onUpdated, reviewNotice = false }) {
   return (
     <>
       <div className="hint">{t("Change your password and manage two-factor authentication.")}</div>
+      {reviewNotice && (
+        <div className="muted-note review-notice" role="note">
+          {t('Replies on this workspace are reviewed automatically for quality. An admin can open one of your conversations only when a reply in it is flagged by a check, rated, or saved as a test case, and every time they do it is recorded. Incognito chats are never reviewed.')}
+        </div>
+      )}
       <div className="me-section-h">{t("Password")}</div>
       <PasswordForm email={user.email} />
       <TwoFactor user={user} onUpdated={onUpdated} />

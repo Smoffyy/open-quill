@@ -5,6 +5,7 @@ import { attachmentUrlsOf, purgeUnreferencedUploads } from '../../lib/uploads.js
 import { stopTurn } from '../../lib/ws/index.js';
 import { cleanTags } from '../../lib/chattags.js';
 import { removeArtifacts } from '../../lib/artifacts.js';
+import { forgetChats } from '../../lib/quality.js';
 
 const MAX_PINS = 40;
 
@@ -25,6 +26,7 @@ export default function registerCrudRoutes(app) {
       const urls = attachmentUrlsOf(c.id);
       db.messages.removeWhere('chat_id', c.id);
       db.chats.removeById(c.id);
+      forgetChats([c.id]);
       if (!c.project_id) sandbox.remove(c.id);
       removeArtifacts(c.id);
       purgeUnreferencedUploads(urls);
@@ -51,6 +53,7 @@ export default function registerCrudRoutes(app) {
       }
       if (req.user.is_admin && 'systemOverride' in req.body) patch.system_override = String(req.body.systemOverride || '').slice(0, 24000);
       if ('instructions' in req.body) patch.instructions = String(req.body.instructions || '').slice(0, 8000);
+      if ('mcpOff' in req.body) patch.mcp_off = (Array.isArray(req.body.mcpOff) ? req.body.mcpOff : []).filter(id => typeof id === 'string' && /^[\w-]{1,64}$/.test(id)).slice(0, 100);
       if ('projectId' in req.body && c.mode !== 'code') {
         const pid = req.body.projectId;
         if (pid === null || pid === '') patch.project_id = null;

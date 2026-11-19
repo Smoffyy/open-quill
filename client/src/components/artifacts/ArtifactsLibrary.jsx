@@ -4,7 +4,7 @@ import Markdown from '../chat/Markdown.jsx';
 import { LibraryEmpty, LibraryGridSkeleton } from '../pages/LibraryPage.jsx';
 import { Search, Paper, X } from '../ui/icons.jsx';
 import Tip from '../ui/Tip.jsx';
-import { t } from '../../i18n.jsx';
+import { t, fmtDate } from '../../i18n.jsx';
 import { useSkeleton } from '../../lib/skeleton.js';
 
 const MINUTE = 60000;
@@ -16,7 +16,7 @@ function dateLabel(ms) {
   if (age < MINUTE) return new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }).format(0, 'second');
   const d = new Date(ms);
   const opts = age > 300 * DAY ? { month: 'short', day: 'numeric', year: 'numeric' } : { month: 'short', day: 'numeric' };
-  return d.toLocaleDateString(undefined, opts);
+  return fmtDate(d, opts);
 }
 
 const DESIGN_WIDTH = { html: 1280, md: 720 };

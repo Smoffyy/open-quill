@@ -4,6 +4,10 @@ export function decodeOqr(b64) {
   try { return JSON.parse(Buffer.from(b64, 'base64').toString('utf8')); } catch { return null; }
 }
 
+export function plainSnippet(text, cap = 400) {
+  return stripToolSyntax(text).replace(/\[\[OQ[RT]:[^\]]*(?:\]\]|$)/g, '').replace(/\s+/g, ' ').trim().slice(0, cap);
+}
+
 export function stripToolSyntax(text) {
   let s = String(text || '');
   const { calls, live } = toolproto.scanTools(s);

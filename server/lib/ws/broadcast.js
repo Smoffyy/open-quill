@@ -37,6 +37,16 @@ export function killSessionSockets(sessionId) {
   }
 }
 
+export function setSocketRole(userId, isAdmin) {
+  for (const st of clients.values()) if (st.userId === userId) st.isAdmin = !!isAdmin;
+}
+
+export function closeUserSockets(userId) {
+  const sessions = new Set();
+  for (const st of clients.values()) if (st.userId === userId) sessions.add(st.sessionId);
+  for (const id of sessions) killSessionSockets(id);
+}
+
 export function broadcastToUser(userId, payload) {
   broadcastToUsers([userId], payload);
 }

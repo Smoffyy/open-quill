@@ -4,6 +4,8 @@ import path from 'path';
 import { db, getSetting, setSetting, uid } from '../db.js';
 import { RAW_ARGS } from '../tools/args.js';
 import { lineNames } from './secrets.js';
+import { memberRequest, isBlockedError, memberPolicy } from './mcpnet.js';
+import { broadcastAdmins, broadcastToUser } from './ws/broadcast.js';
 
 const PROTOCOL_VERSION = '2025-06-18';
 const CALL_TIMEOUT = 30000;
@@ -39,12 +41,56 @@ function save(arr, userId = null) {
   if (userId) db.users.update(userId, { mcp_servers: arr });
   else setSetting('mcp_servers', arr);
 }
-export function getEnabled(userId = null) {
+export function getEnabled(userId = null, { off = [] } = {}) {
   const workspace = list().filter(s => s.enabled);
-  if (!userId) return workspace;
-  return [...workspace, ...list(userId).filter(s => s.enabled)];
+  const own = userId && memberPolicy().allowed ? list(userId).filter(s => s.enabled) : [];
+  return [...workspace, ...own].filter(s => !off.includes(s.id));
+}
+
+export const TOOL_MODES = ['on', 'ask', 'off'];
+
+export function defaultMode(tool) {
+  const a = tool?.annotations || {};
+  return a.destructiveHint === true && a.readOnlyHint !== true ? 'ask' : 'on';
+}
+
+export function toolMode(server, tool) {
+  const set = server?.tool_modes?.[tool?.name];
+  return TOOL_MODES.includes(set) ? set : defaultMode(tool);
+}
+
+export function setToolModes(id, modes, userId = null) {
+  const server = byId(id, userId);
+  if (!server) return { error: 'Server not found.' };
+  const known = new Set((server.tools || []).map(t => t.name));
+  const next = { ...(server.tool_modes || {}) };
+  for (const [name, mode] of Object.entries(modes && typeof modes === 'object' ? modes : {})) {
+    if (!known.has(name) || !TOOL_MODES.includes(mode)) continue;
+    if (mode === defaultMode(server.tools.find(t => t.name === name))) delete next[name];
+    else next[name] = mode;
+  }
+  patchServer(id, { tool_modes: next }, userId);
+  return { server: byId(id, userId) };
 }
 export function byId(id, userId = null) { return list(userId).find(s => s.id === id) || null; }
+
+function isMember(server) { return !list().some(s => s.id === server.id); }
+function via(server) { return isMember(server) ? memberRequest(server.url) : {}; }
+
+export function failureText(e) {
+  const blocked = isBlockedError(e);
+  if (blocked) return blocked.message;
+  const cause = e?.cause;
+  if (e?.message === 'fetch failed' && cause) {
+    const code = cause.code || cause.errors?.[0]?.code || '';
+    if (code === 'ECONNREFUSED') return 'Nothing is listening at that address. Check that the MCP server is running and the port is right.';
+    if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') return 'That host name did not resolve.';
+    if (code === 'ETIMEDOUT' || code === 'UND_ERR_CONNECT_TIMEOUT') return 'The connection timed out.';
+    if (/CERT|SSL|TLS/.test(code)) return 'The server certificate was not accepted.';
+    return `Could not connect: ${code || cause.message || 'unknown error'}.`;
+  }
+  return String(e?.message || e);
+}
 
 function parseHeaders(raw) {
   const out = {};
@@ -146,6 +192,7 @@ function validate(b, existingId, userId = null) {
     env: userId ? '' : String(b.env || '').slice(0, 4000),
     url: String(b.url || '').trim().slice(0, 500),
     headers: String(b.headers || '').slice(0, 2000),
+    timeout_s: Math.min(300, Math.max(0, parseInt(b.timeout_s, 10) || 0)),
     enabled: b.enabled !== false
   };
   if (transport === 'stdio' && !out.command) return { error: 'A command is required for stdio servers.' };
@@ -168,7 +215,11 @@ export function create(b, userId = null) {
 export function publicServer(s) {
   if (!s) return s;
   const { headers, env, ...rest } = s;
-  return { ...rest, headers: '', env: '', headerNames: lineNames(headers, ':'), envNames: lineNames(env, '=') };
+  return { ...rest, tools: publicTools(s), headers: '', env: '', headerNames: lineNames(headers, ':'), envNames: lineNames(env, '=') };
+}
+
+export function publicTools(s) {
+  return (s.tools || []).map(t => ({ ...t, mode: toolMode(s, t), defaultMode: defaultMode(t) }));
 }
 
 export function update(id, b, userId = null) {
@@ -192,7 +243,42 @@ export function remove(id, userId = null) {
 }
 
 function patchServer(id, patch, userId = null) {
+  const before = byId(id, userId);
   save(list(userId).map(s => s.id === id ? { ...s, ...patch } : s), userId);
+  const after = byId(id, userId);
+  if (before && after && ('status' in patch) && (before.status !== after.status || before.error !== after.error)) announce(after, userId);
+}
+
+function announce(server, userId) {
+  const frame = { type: 'mcp_status', id: server.id, status: server.status || 'new', error: server.error || '', toolCount: (server.tools || []).length };
+  if (userId) broadcastToUser(userId, frame);
+  else broadcastAdmins(frame);
+}
+
+const HEALTH_MS = 60000;
+const BACKOFF_MAX = 30 * 60000;
+const retries = new Map();
+
+export function retryDelay(failures) {
+  return Math.min(BACKOFF_MAX, HEALTH_MS * 2 ** Math.max(0, failures - 1));
+}
+
+export async function checkHealth(at = Date.now()) {
+  for (const server of list().filter(s => s.enabled && s.status === 'error')) {
+    const r = retries.get(server.id) || { failures: 0, next: 0 };
+    if (at < r.next) continue;
+    const refreshed = await refreshTools(server.id).catch(() => ({ error: true }));
+    if (refreshed.error) {
+      const failures = r.failures + 1;
+      retries.set(server.id, { failures, next: at + retryDelay(failures) });
+    } else retries.delete(server.id);
+  }
+}
+
+export function startHealthChecks(intervalMs = HEALTH_MS) {
+  const timer = setInterval(() => { checkHealth().catch(() => {}); }, intervalMs);
+  if (typeof timer.unref === 'function') timer.unref();
+  return timer;
 }
 
 const stdioClients = new Map();
@@ -222,7 +308,7 @@ function disconnect(id, sync = false) {
   }
   const session = httpSessions.get(id);
   if (session?.sessionId && session.url && !sync) {
-    fetch(session.url, { method: 'DELETE', headers: session.headers, signal: AbortSignal.timeout(NOTIFY_TIMEOUT) }).catch(() => {});
+    fetch(session.url, { ...session.via, method: 'DELETE', headers: session.headers, signal: AbortSignal.timeout(NOTIFY_TIMEOUT) }).catch(() => {});
   }
   httpSessions.delete(id);
   const sse = sseClients.get(id);
@@ -279,7 +365,7 @@ function stdioClient(server) {
         const { resolve, reject, timer } = client.pending.get(msg.id);
         client.pending.delete(msg.id);
         clearTimeout(timer);
-        if (msg.error) reject(new Error(msg.error.message || 'MCP error'));
+        if (msg.error) reject(Object.assign(new Error(msg.error.message || 'MCP error'), { rpc: true }));
         else resolve(msg.result);
       }
     }
@@ -384,13 +470,13 @@ async function httpRequest(server, method, params, session, timeoutMs) {
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const id = ++httpSeq;
   try {
-    const res = await fetch(server.url, {
+    const res = await fetch(server.url, { ...via(server),
       method: 'POST', headers: httpHeaders(server, session), signal: controller.signal,
       body: JSON.stringify({ jsonrpc: '2.0', id, method, params: params || {} })
     });
     const newSession = res.headers.get('mcp-session-id') || session?.sessionId || null;
     const text = await res.text();
-    if (!res.ok) throw httpFailure(res.status, text);
+    if (!res.ok) throw httpFailure(res.status, isMember(server) ? '' : text);
     const msg = pickResponse(text, res.headers.get('content-type'), id);
     if (!msg) throw new Error('MCP server returned an unreadable response.');
     if (msg.error) throw Object.assign(new Error(msg.error.message || 'MCP error'), { rpc: true });
@@ -405,7 +491,7 @@ async function httpNotify(server, method, session) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), NOTIFY_TIMEOUT);
   try {
-    await fetch(server.url, { method: 'POST', headers: httpHeaders(server, session), signal: controller.signal, body: JSON.stringify({ jsonrpc: '2.0', method, params: {} }) });
+    await fetch(server.url, { ...via(server), method: 'POST', headers: httpHeaders(server, session), signal: controller.signal, body: JSON.stringify({ jsonrpc: '2.0', method, params: {} }) });
   } catch {} finally { clearTimeout(timer); }
 }
 
@@ -415,7 +501,7 @@ async function httpEnsureSession(server) {
   const { result, sessionId } = await httpRequest(server, 'initialize', { protocolVersion: PROTOCOL_VERSION, capabilities: {}, clientInfo: CLIENT_INFO }, null, INIT_TIMEOUT);
   serverCaps.set(server.id, result?.capabilities || {});
   const negotiated = typeof result?.protocolVersion === 'string' && result.protocolVersion ? result.protocolVersion : PROTOCOL_VERSION;
-  const session = { sessionId, protocolVersion: negotiated, url: server.url };
+  const session = { sessionId, protocolVersion: negotiated, url: server.url, via: via(server) };
   session.headers = httpHeaders(server, session);
   await httpNotify(server, 'notifications/initialized', session);
   httpSessions.set(server.id, session);
@@ -437,15 +523,15 @@ async function sseOpen(server, userId) {
   const timer = setTimeout(() => ctl.abort(), INIT_TIMEOUT);
   let res;
   try {
-    res = await fetch(server.url, { headers: { Accept: 'text/event-stream', ...parseHeaders(server.headers) }, signal: ctl.signal });
+    res = await fetch(server.url, { ...via(server), headers: { Accept: 'text/event-stream', ...parseHeaders(server.headers) }, signal: ctl.signal });
   } catch (e) {
     clearTimeout(timer);
     throw e?.name === 'AbortError' ? new Error('MCP server did not open an event stream in time.') : e;
   }
-  if (!res.ok) { clearTimeout(timer); throw httpFailure(res.status, await res.text().catch(() => '')); }
+  if (!res.ok) { clearTimeout(timer); throw httpFailure(res.status, isMember(server) ? '' : await res.text().catch(() => '')); }
   if (!(res.headers.get('content-type') || '').includes('text/event-stream')) { clearTimeout(timer); ctl.abort(); throw new Error('MCP server did not answer with an event stream.'); }
-  let found;
-  const endpoint = new Promise((resolve) => { found = resolve; });
+  let found, lost;
+  const endpoint = new Promise((resolve, reject) => { found = resolve; lost = reject; });
   (async () => {
     const reader = res.body.getReader();
     const dec = new TextDecoder();
@@ -461,27 +547,34 @@ async function sseOpen(server, userId) {
         buf = buf.slice(cut + 2);
         for (const e of parseSse(ready)) {
           if (e.event === 'endpoint') {
-            client.endpoint = new URL(e.data.trim(), server.url).href;
+            const named = new URL(e.data.trim(), server.url);
+            if (named.origin !== new URL(server.url).origin) throw new Error('The MCP server named a message endpoint on another host.');
+            client.endpoint = named.href;
             found();
             continue;
           }
           let msg;
           try { msg = JSON.parse(e.data); } catch { continue; }
           if (msg.method && msg.id != null) {
-            answerServer(msg, (reply) => { fetch(client.endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', ...parseHeaders(server.headers) }, body: JSON.stringify(reply) }).catch(() => {}); });
+            answerServer(msg, (reply) => { fetch(client.endpoint, { ...via(server), method: 'POST', headers: { 'Content-Type': 'application/json', ...parseHeaders(server.headers) }, body: JSON.stringify(reply) }).catch(() => {}); });
           } else if (msg.method === 'notifications/tools/list_changed') scheduleRefresh(server.id, userId);
           else if (msg.id != null && client.pending.has(msg.id)) {
             const p = client.pending.get(msg.id);
             client.pending.delete(msg.id);
             clearTimeout(p.timer);
-            if (msg.error) p.reject(new Error(msg.error.message || 'MCP error'));
+            if (msg.error) p.reject(Object.assign(new Error(msg.error.message || 'MCP error'), { rpc: true }));
             else p.resolve(msg.result);
           }
         }
       }
-      fail(new Error('The MCP event stream closed.'));
+      const closed = new Error('The MCP event stream closed.');
+      fail(closed);
+      lost(closed);
     } catch (e) {
-      fail(e?.name === 'AbortError' ? new Error('The MCP connection was closed.') : e);
+      const err = e?.name === 'AbortError' ? new Error('The MCP connection was closed.') : e;
+      fail(err);
+      lost(err);
+      ctl.abort();
     }
   })();
   await Promise.race([endpoint, new Promise((_, reject) => { ctl.signal.addEventListener('abort', () => reject(new Error('MCP server opened an event stream but never named its message endpoint.')), { once: true }); })]);
@@ -495,13 +588,13 @@ function sseRequest(server, client, method, params, timeoutMs) {
     const id = ++client.seq;
     const timer = setTimeout(() => { client.pending.delete(id); reject(new Error(`MCP request timed out after ${Math.round(timeoutMs / 1000)}s.`)); }, timeoutMs);
     client.pending.set(id, { resolve, reject, timer });
-    fetch(client.endpoint, {
+    fetch(client.endpoint, { ...via(server),
       method: 'POST', headers: { 'Content-Type': 'application/json', ...parseHeaders(server.headers) },
       body: JSON.stringify({ jsonrpc: '2.0', id, method, params: params || {} })
     }).then(async (res) => {
       if (!res.ok) {
         const p = client.pending.get(id);
-        if (p) { client.pending.delete(id); clearTimeout(p.timer); p.reject(httpFailure(res.status, await res.text().catch(() => ''))); }
+        if (p) { client.pending.delete(id); clearTimeout(p.timer); p.reject(httpFailure(res.status, isMember(server) ? '' : await res.text().catch(() => ''))); }
       }
     }).catch((e) => {
       const p = client.pending.get(id);
@@ -519,7 +612,7 @@ async function sseEnsureReady(server, userId) {
     entry.client = client;
     const result = await sseRequest(server, client, 'initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: CLIENT_INFO }, INIT_TIMEOUT);
     serverCaps.set(server.id, result?.capabilities || {});
-    fetch(client.endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', ...parseHeaders(server.headers) }, body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) }).catch(() => {});
+    fetch(client.endpoint, { ...via(server), method: 'POST', headers: { 'Content-Type': 'application/json', ...parseHeaders(server.headers) }, body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) }).catch(() => {});
     return client;
   })();
   sseClients.set(server.id, entry);
@@ -621,6 +714,16 @@ async function listOptional(server, method, key, userId) {
 
 const text = (v, cap) => String(v ?? '').slice(0, cap);
 
+const HINTS = ['readOnlyHint', 'destructiveHint', 'idempotentHint', 'openWorldHint'];
+
+function shapeAnnotations(a) {
+  const out = {};
+  if (!a || typeof a !== 'object') return out;
+  if (typeof a.title === 'string' && a.title.trim()) out.title = a.title.trim().slice(0, 120);
+  for (const k of HINTS) if (typeof a[k] === 'boolean') out[k] = a[k];
+  return out;
+}
+
 function shapeResources(list) {
   return list.map(r => ({ uri: text(r?.uri, 500), name: text(r?.name || r?.title || r?.uri, 120), description: text(r?.description, 300), mimeType: text(r?.mimeType, 80) })).filter(r => r.uri);
 }
@@ -646,7 +749,8 @@ export async function refreshTools(id, userId = null) {
     const tools = all.slice(0, TOOL_CAP).map(t => ({
       name: String(t?.name || '').slice(0, 80),
       description: String(t?.description || t?.annotations?.title || '').slice(0, 800),
-      inputSchema: t?.inputSchema && typeof t.inputSchema === 'object' ? t.inputSchema : { type: 'object', properties: {} }
+      inputSchema: t?.inputSchema && typeof t.inputSchema === 'object' ? t.inputSchema : { type: 'object', properties: {} },
+      annotations: shapeAnnotations(t?.annotations)
     })).filter(t => t.name);
     const live = byId(id, userId);
     const resources = shapeResources(await listOptional(live, 'resources/list', 'resources', userId));
@@ -654,8 +758,8 @@ export async function refreshTools(id, userId = null) {
     patchServer(id, { tools, resources, prompts, status: 'connected', error: '', refreshed_at: Date.now() }, userId);
     return { server: byId(id, userId) };
   } catch (e) {
-    patchServer(id, { status: 'error', error: String(e.message || e).slice(0, 400) }, userId);
-    return { server: byId(id, userId), error: String(e.message || e) };
+    patchServer(id, { status: 'error', error: failureText(e).slice(0, 400) }, userId);
+    return { server: byId(id, userId), error: failureText(e) };
   }
 }
 
@@ -708,11 +812,12 @@ function resourceSchema(server) {
   };
 }
 
-export function toolSchemas(userId = null) {
+export function toolSchemas(userId = null, scope = {}) {
   const out = [];
-  for (const server of getEnabled(userId)) {
+  for (const server of getEnabled(userId, scope)) {
     if ((server.resources || []).length) out.push(resourceSchema(server));
     for (const t of (server.tools || [])) {
+      if (toolMode(server, t) === 'off') continue;
       out.push({
         type: 'function',
         function: {
@@ -726,10 +831,16 @@ export function toolSchemas(userId = null) {
   return out;
 }
 
-export function isMcpTool(name, userId = null) { return typeof name === 'string' && name.startsWith('mcp_') && !!resolveTool(name, userId); }
+export function isMcpTool(name, userId = null, scope = {}) { return typeof name === 'string' && name.startsWith('mcp_') && !!resolveTool(name, userId, scope); }
 
-function resolveTool(name, userId = null) {
-  for (const server of getEnabled(userId)) {
+export function toolInfo(name, userId = null, scope = {}) {
+  const r = resolveTool(name, userId, scope);
+  if (!r) return null;
+  return { server: r.server, tool: r.tool || null, mode: r.resource ? 'on' : toolMode(r.server, r.tool) };
+}
+
+function resolveTool(name, userId = null, scope = {}) {
+  for (const server of getEnabled(userId, scope)) {
     if (name === resourceToolName(server.slug) && (server.resources || []).length) return { server, resource: true };
     const prefix = `mcp_${server.slug}_`;
     if (name.startsWith(prefix)) {
@@ -738,16 +849,16 @@ function resolveTool(name, userId = null) {
       // shortened still resolves. The bare-name fallback covers a model that
       // answers with the tool's own name rather than the prefixed one.
       const t = (server.tools || []).find(x => mcpToolName(server.slug, x.name) === name || x.name === toolName);
-      if (t) return { server, tool: t };
+      if (t && toolMode(server, t) !== 'off') return { server, tool: t };
     }
   }
   return null;
 }
 
-export function toolsText(userId = null) {
-  return getEnabled(userId)
-    .filter(s => (s.tools || []).length)
-    .map(s => `- ${s.name}: ${[...(s.tools || []).map(t => mcpToolName(s.slug, t.name)), ...((s.resources || []).length ? [resourceToolName(s.slug)] : [])].join(', ')}`)
+export function toolsText(userId = null, scope = {}) {
+  return getEnabled(userId, scope)
+    .filter(s => (s.tools || []).some(t => toolMode(s, t) !== 'off'))
+    .map(s => `- ${s.name}: ${[...(s.tools || []).filter(t => toolMode(s, t) !== 'off').map(t => mcpToolName(s.slug, t.name)), ...((s.resources || []).length ? [resourceToolName(s.slug)] : [])].join(', ')}`)
     .join('\n');
 }
 
@@ -779,23 +890,44 @@ export function callArguments(call) {
   return args;
 }
 
-export async function execTool(call, userId = null) {
-  const resolved = resolveTool(call.tool, userId);
+export async function execTool(call, userId = null, scope = {}) {
+  const resolved = resolveTool(call.tool, userId, scope);
   if (!resolved) return { ok: false, tool: call.tool, error: 'Unknown MCP tool.' };
   const { server, tool } = resolved;
   if (resolved.resource) return readResource(server, callArguments(call).uri, call.tool, userId);
+  return callTool(server, tool, callArguments(call), call.tool, userId);
+}
+
+export async function tryTool(id, name, args, userId = null) {
+  const server = byId(id, userId);
+  if (!server) return { error: 'Server not found.' };
+  const tool = (server.tools || []).find(t => t.name === name);
+  if (!tool) return { error: 'That tool is not on this server.' };
+  const given = args && typeof args === 'object' && !Array.isArray(args) ? args : {};
+  return callTool(server, tool, given, mcpToolName(server.slug, name), userId);
+}
+
+const timeoutOf = (server) => (Number(server.timeout_s) > 0 ? Number(server.timeout_s) * 1000 : CALL_TIMEOUT);
+
+async function callTool(server, tool, args, label, userId) {
+  const call = { tool: label };
+  const started = Date.now();
   try {
-    const result = await rpc(server, 'tools/call', { name: tool.name, arguments: callArguments(call) }, CALL_TIMEOUT, userId);
+    const result = await rpc(server, 'tools/call', { name: tool.name, arguments: args }, timeoutOf(server), userId);
     let text = '';
     if (Array.isArray(result?.content)) text = result.content.map(contentText).filter(Boolean).join('\n');
     if (!text && result?.structuredContent !== undefined) text = JSON.stringify(result.structuredContent, null, 2);
     else if (!text && result != null && !Array.isArray(result?.content)) text = JSON.stringify(result);
     if (text.length > RESULT_CAP) text = text.slice(0, RESULT_CAP) + '\n... [truncated]';
-    if (result?.isError) return { ok: false, tool: call.tool, server: server.name, error: text || 'The MCP tool reported an error.' };
+    const ms = Date.now() - started;
+    if (server.status === 'error') patchServer(server.id, { status: 'connected', error: '' }, isMember(server) ? userId : null);
+    if (result?.isError) return { ok: false, tool: call.tool, server: server.name, ms, error: text || 'The MCP tool reported an error.' };
     const images = imagesOf(result?.content);
-    return { ok: true, tool: call.tool, server: server.name, content: text || '(empty result)', ...(images.length ? { images } : {}) };
+    return { ok: true, tool: call.tool, server: server.name, ms, content: text || '(empty result)', ...(images.length ? { images } : {}) };
   } catch (e) {
-    return { ok: false, tool: call.tool, server: server.name, error: String(e.message || e).slice(0, 500) };
+    const error = failureText(e).slice(0, 500);
+    if (!e?.rpc && !/timed out/.test(error)) patchServer(server.id, { status: 'error', error: error.slice(0, 400) }, isMember(server) ? userId : null);
+    return { ok: false, tool: call.tool, server: server.name, ms: Date.now() - started, error };
   }
 }
 

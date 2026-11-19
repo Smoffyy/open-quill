@@ -2,13 +2,15 @@ import { useState, useEffect, useMemo } from 'react';
 import { api } from '../../../lib/api.js';
 import { useAdmin } from '../store.jsx';
 import { Card, Rows, ToggleRow, Fields, Field, Input, Area, Seg, Btn, IconBtn, Acts, Table, Badge, Switch, Empty, Dialog, Note } from '../ui.jsx';
-import { Plus, Trash, Pencil, Refresh, Plug } from '../../ui/icons.jsx';
+import { Plus, Trash, Pencil, Refresh, Plug, Wrench } from '../../ui/icons.jsx';
 import { t } from '../../../i18n.jsx';
 import { Skel, SkelRows } from '../../ui/Skeleton.jsx';
 import { parseMcpConfig } from '../../../lib/mcpconfig.js';
 import { statusOf } from '../../settings/McpCard.jsx';
+import McpTools from '../../settings/McpTools.jsx';
+import { onFrame } from '../../../lib/wsbus.js';
 
-const BLANK = { name: '', transport: 'stdio', command: '', args: '', env: '', url: '', headers: '', enabled: true };
+const BLANK = { name: '', transport: 'stdio', command: '', args: '', env: '', url: '', headers: '', timeout_s: 0, enabled: true };
 const TONE = { __proto__: null, connected: 'good', error: 'bad', new: undefined };
 
 const savedNote = (names, touched) => (names?.length && !touched ? t('Saved: {names}. Values stay on the server.', { names: names.join(', ') }) : '');
@@ -20,16 +22,45 @@ export default function McpSection() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState('');
   const [paste, setPaste] = useState('');
+  const [inspect, setInspect] = useState('');
+  const [policy, setPolicy] = useState(null);
+  const [hostsText, setHostsText] = useState('');
+  const [policyNote, setPolicyNote] = useState('');
   const imported = useMemo(() => parseMcpConfig(paste), [paste]);
 
   useEffect(() => {
     let alive = true;
-    (async () => {
-      try { const d = await api.get('/api/admin/mcp'); if (alive) setServers(d.servers || []); }
-      catch { if (alive) setServers([]); }
-    })();
-    return () => { alive = false; };
+    let first = true;
+    const load = async () => {
+      try {
+        const d = await api.get('/api/admin/mcp');
+        if (!alive) return;
+        setServers(d.servers || []);
+        if (first && d.policy) { setPolicy(d.policy); setHostsText((d.policy.hosts || []).join('\n')); }
+        first = false;
+      } catch { if (alive) setServers(s => s || []); }
+    };
+    load();
+    const off = onFrame('mcp_status', load);
+    return () => { alive = false; off(); };
   }, []);
+
+  const replace = (server) => setServers(list => list.map(x => (x.id === server.id ? server : x)));
+  async function setMode(sv, name, mode) {
+    try { replace((await api.put('/api/admin/mcp/' + sv.id + '/tools', { modes: { [name]: mode } })).server); } catch {}
+  }
+  async function tryTool(sv, name, args) {
+    return (await api.post('/api/admin/mcp/' + sv.id + '/try', { tool: name, args })).result;
+  }
+  async function savePolicy(patch) {
+    setPolicyNote('');
+    try {
+      const r = await api.put('/api/admin/mcp/policy', patch);
+      setPolicy(r.policy);
+      setHostsText(r.policy.hosts.join('\n'));
+      setPolicyNote(t('Saved.'));
+    } catch (e) { setPolicyNote(e.message || t('Could not save.')); }
+  }
 
   function open(next) {
     setDraft(next);
@@ -131,17 +162,22 @@ export default function McpSection() {
               <tr key={sv.id}>
                 <td>
                   {sv.name}
-                  {sv.status === 'error' && sv.error && <div className="mcp-row-error">{sv.error}</div>}
+                  {sv.status === 'error' && sv.error && <div className="mcp-row-error">{t(sv.error)}</div>}
                 </td>
                 <td className="mono dim">{sv.transport === 'http' ? 'http' : 'stdio'}</td>
                 <td className="mono dim wrap">{sv.transport === 'http' ? sv.url : [sv.command, sv.args].filter(Boolean).join(' ')}</td>
-                <td className="num mono">{sv.tools?.length ?? sv.toolCount ?? 0}</td>
+                <td className="num mono">
+                  {sv.tools?.length
+                    ? <button type="button" className="mcp-count-btn" data-tip={t('Inspect tools')} onClick={() => setInspect(sv.id)}>{sv.tools.length}</button>
+                    : 0}
+                </td>
                 <td className="fit">
                   {sv.enabled === false ? <Badge>{t('off')}</Badge> : <Badge tone={TONE[statusOf(sv).key]}>{statusOf(sv).label}</Badge>}
                 </td>
                 <td className="fit"><Switch on={sv.enabled} label={t('Enabled')} onToggle={() => toggle(sv)} /></td>
                 <td className="acts">
                   <Acts end>
+                    <IconBtn label={t('Inspect tools')} disabled={!sv.tools?.length} onClick={() => setInspect(sv.id)}><Wrench /></IconBtn>
                     <IconBtn label={t('Reconnect')} disabled={busy === sv.id} onClick={() => refresh(sv.id)}><Refresh /></IconBtn>
                     <IconBtn label={t('Edit')} onClick={() => open({ ...BLANK, ...sv })}><Pencil /></IconBtn>
                     <IconBtn kind="danger" label={t('Remove')} onClick={() => del(sv)}><Trash /></IconBtn>
@@ -152,6 +188,40 @@ export default function McpSection() {
           </Table>
         )}
       </Card>
+
+      <Card title={t('Member connectors')}
+        sub={t('Members can attach HTTP servers of their own. They can never reach link-local or cloud metadata addresses, or this server itself.')}>
+        <Skel when={policy == null}><SkelRows count={2} /></Skel>
+        {policy && (
+          <>
+            <Rows>
+              <ToggleRow label={t('Members can add their own servers')} on={policy.allowed}
+                note={t('When off, servers members already added stop being offered to models.')}
+                onToggle={() => savePolicy({ allowed: !policy.allowed })} />
+            </Rows>
+            <Fields>
+              <Field label={t('Allowed hosts')} optional
+                hint={t('One host per line, such as mcp.internal or *.lab.local. Leave empty to allow any host the network rules permit.')}>
+                <Area mono rows={3} value={hostsText} placeholder="mcp.internal" onChange={(e) => setHostsText(e.target.value)} />
+                <Acts>
+                  <Btn size="sm" onClick={() => savePolicy({ hosts: hostsText.split(/[\n,]+/).map(h => h.trim()).filter(Boolean) })}>{t('Save hosts')}</Btn>
+                  <span className="cp-note-line" role="status">{policyNote}</span>
+                </Acts>
+              </Field>
+            </Fields>
+          </>
+        )}
+      </Card>
+
+      {inspect && servers?.find(s => s.id === inspect) && (
+        <Dialog title={t('Tools on {name}', { name: servers.find(s => s.id === inspect).name })} onClose={() => setInspect('')}
+          foot={<Btn onClick={() => setInspect('')}>{t('Done')}</Btn>}>
+          <Note>{t('Pick a tool to read its arguments, choose whether models may call it freely, must ask the member first, or never see it, and try it with your own arguments.')}</Note>
+          <McpTools server={servers.find(s => s.id === inspect)}
+            onSetMode={(name, mode) => setMode(servers.find(s => s.id === inspect), name, mode)}
+            onTry={(name, args) => tryTool(servers.find(s => s.id === inspect), name, args)} />
+        </Dialog>
+      )}
 
       {draft && (
         <Dialog title={draft.id ? t('Edit server') : t('Add server')} onClose={() => setDraft(null)}
@@ -226,6 +296,12 @@ export default function McpSection() {
                 </Field>
               </>
             )}
+          </Fields>
+          <Fields>
+            <Field label={t('Timeout (seconds)')} optional hint={t('How long a tool call may run. Leave empty for 30 seconds.')}>
+              <Input type="number" min={0} max={300} value={draft.timeout_s || ''} placeholder="30"
+                onChange={(e) => setDraft(d => ({ ...d, timeout_s: Number(e.target.value) || 0 }))} />
+            </Field>
           </Fields>
           <Rows>
             <ToggleRow label={t('Expose these tools to models')} on={draft.enabled}

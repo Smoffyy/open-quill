@@ -67,7 +67,8 @@ export function toolState(chat, model, { sandboxOn = false, webSearchOn = false,
   const chatSearchOn = !!model.chat_search_allowed && getSetting('chat_search_enabled', '0') === '1';
   const userSkills = userId ? userskills.enabledFor(userId).map(s => ({ name: s.name, description: s.description, content: s.body })) : [];
   const skillsOn = !!model.skills_allowed && (workspaceSkills.getEnabled().length + userSkills.length) > 0;
-  const mcpSchemas = model.mcp_allowed ? mcp.toolSchemas(userId) : [];
+  const mcpScope = { off: [...(Array.isArray(row?.mcp_off) ? row.mcp_off : []), ...(Array.isArray(model.mcp_servers_off) ? model.mcp_servers_off : [])] };
+  const mcpSchemas = model.mcp_allowed ? mcp.toolSchemas(userId, mcpScope) : [];
   const mcpOn = mcpSchemas.length > 0;
   const endChatOn = !!model.end_chat_allowed;
   const user = userId ? db.users.byId(userId) : null;
@@ -83,7 +84,7 @@ export function toolState(chat, model, { sandboxOn = false, webSearchOn = false,
   const toolsOn = sandboxOn || webSearchOn || membankOn || chatSearchOn || skillsOn || mcpOn || endChatOn || memoryOn
     || calculatorOn || todoOn || askUserOn || consultOn || projectOn || artifactsOn;
   return {
-    sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, userSkills, mcpSchemas, mcpOn, mcpUser: userId, recallOn: toolsOn && !!row?.summary,
+    sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, userSkills, mcpSchemas, mcpOn, mcpUser: userId, mcpScope, mcpAsk: canAsk, recallOn: toolsOn && !!row?.summary,
     endChatOn, memoryAllowed, memoryOn, calculatorOn, todoOn, askUserOn, consultOn, consultWith, projectOn, artifactsOn, toolsOn
   };
 }
@@ -126,7 +127,7 @@ export function promptVarMap(chat, model, state, { userId = null, styleText = ''
     sandboxWorkspace: () => (row ? sandboxWorkspaceText(projectfiles.workspaceFor(row), String(project?.name || '')) : ''),
     referenceFiles: () => referenceFiles.filesText(),
     skills: () => workspaceSkills.skillsText(state.userSkills),
-    mcpTools: () => mcp.toolsText(state.mcpUser),
+    mcpTools: () => mcp.toolsText(state.mcpUser, state.mcpScope),
     todoList: () => todoText(row ? todosOf(row.id) : []),
     consultModels: () => consultTargetsText(model, state.consultWith || [])
   };

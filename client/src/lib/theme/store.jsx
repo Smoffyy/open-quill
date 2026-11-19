@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { docToCss, injectCss, clearCss } from './css.js';
 import { emptyDoc, migrateDoc, fillPlaceholders, CONTENT_INDEX } from './schema.js';
 import { DEFAULT_PRESET } from '../presets.js';
+import { fmtDate, fmtDateTime } from '../../i18n.jsx';
 
 const Ctx = createContext(null);
 export const useTheme = () => useContext(Ctx);
@@ -318,8 +319,8 @@ export function ThemeProvider({ user, cfg, children }) {
     'workspace.name': cfg?.appName || 'open-quill',
     'model.name': '',
     'conversation.title': '',
-    currentDate: new Date().toLocaleDateString(),
-    currentTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    currentDate: fmtDate(new Date()),
+    currentTime: fmtDateTime(new Date(), { hour: '2-digit', minute: '2-digit' }),
     version: cfg?.version || ''
   }), [user, cfg]);
 

@@ -1097,7 +1097,7 @@ test('consult settings are admin-only, sanitised and add their block', async () 
   await browser('POST', '/api/admin/changes/publish', { body: {} });
 });
 
-function chatTurn(send, { timeoutMs = 20000 } = {}) {
+function chatTurn(send, { timeoutMs = 20000, onFrame = null } = {}) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`, { headers: { Cookie: cookie, Origin: ORIGIN } });
     const got = [];
@@ -1109,6 +1109,7 @@ function chatTurn(send, { timeoutMs = 20000 } = {}) {
       try { m = JSON.parse(raw); } catch { return; }
       if (SESSION_FRAMES.has(m?.type)) return;
       got.push(m);
+      if (onFrame) onFrame(m, ws);
       if (m.type === 'done' && m.chatId === send.chatId) finish(resolve, got);
     });
     ws.on('error', (e) => finish(reject, e));
@@ -1503,4 +1504,197 @@ test('a code session keeps its mode and its workspace files can be managed from 
   assert.equal((await browser('GET', base)).json.chat.projectId, null, 'a session never joins a project and its workspace');
   await browser('DELETE', base);
   await browser('DELETE', '/api/chats/' + plain.id);
+});
+
+test('every response carries the isolation and permission headers', async () => {
+  for (const pathname of ['/', '/api/auth/context']) {
+    const res = await request('GET', pathname);
+    assert.equal(res.headers['x-frame-options'], 'SAMEORIGIN');
+    assert.equal(res.headers['cross-origin-opener-policy'], 'same-origin');
+    assert.equal(res.headers['cross-origin-resource-policy'], 'same-origin');
+    assert.match(res.headers['permissions-policy'], /camera=\(\)/);
+    assert.match(res.headers['permissions-policy'], /microphone=\(self\)/);
+    assert.equal(res.headers['strict-transport-security'], undefined, 'HSTS only over TLS');
+  }
+  const proxied = await request('GET', '/api/auth/context', { headers: { 'x-forwarded-proto': 'https' } });
+  assert.match(proxied.headers['strict-transport-security'], /max-age=\d+/);
+});
+
+test('deleting an account needs the password, and password checks are throttled per account', async () => {
+  const res = await request('POST', '/api/auth/register', { origin: ORIGIN, secFetchSite: 'same-origin', body: { email: 'leaver@example.com', password: PASSWORD } });
+  assert.equal(res.status, 200, res.text);
+  const who = String(res.headers['set-cookie']?.[0] || '').split(';')[0];
+  const as = (method, url, opts = {}) => browser(method, url, { ...opts, cookie: who });
+
+  assert.equal((await as('DELETE', '/api/me')).status, 401);
+  assert.equal((await as('DELETE', '/api/me', { body: { password: 'wrong' } })).status, 401);
+  assert.equal((await as('GET', '/api/me')).status, 200, 'still there');
+  for (let i = 0; i < 8; i++) await as('POST', '/api/me/password', { body: { current: 'wrong', next: 'another-password' } });
+  const limited = await as('DELETE', '/api/me', { body: { password: PASSWORD } });
+  assert.equal(limited.status, 429, 'the right password is refused once the account is throttled');
+  assert.match(limited.json.error, /Too many attempts/);
+});
+
+test('an MCP tool that asks first waits for the member, and a refusal never reaches the server', async () => {
+  const os = await import('node:os');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'oq-e2e-approve-'));
+  const fixture = path.join(dir, 'server.mjs');
+  const calls = path.join(dir, 'calls.log');
+  fs.writeFileSync(fixture, String.raw`
+import fs from 'node:fs';
+let buf = '';
+const out = o => process.stdout.write(JSON.stringify(o) + '\n');
+process.stdin.on('data', c => {
+  buf += c;
+  for (let i; (i = buf.indexOf('\n')) !== -1;) {
+    const m = JSON.parse(buf.slice(0, i)); buf = buf.slice(i + 1);
+    if (m.method === 'initialize') out({ jsonrpc: '2.0', id: m.id, result: { protocolVersion: m.params.protocolVersion, capabilities: { tools: {} } } });
+    else if (m.method === 'tools/list') out({ jsonrpc: '2.0', id: m.id, result: { tools: [{ name: 'delete_file', description: 'Delete a file', annotations: { destructiveHint: true }, inputSchema: { type: 'object', properties: { path: { type: 'string' } } } }] } });
+    else if (m.method === 'tools/call') { fs.appendFileSync(process.argv[2], m.params.arguments.path + '\n'); out({ jsonrpc: '2.0', id: m.id, result: { content: [{ type: 'text', text: 'deleted ' + m.params.arguments.path }] } }); }
+  }
+});
+`);
+  const added = await browser('POST', '/api/admin/mcp', { body: { name: 'Files', transport: 'stdio', command: process.execPath, args: `"${fixture}" "${calls}"` } });
+  assert.equal(added.json.server.status, 'connected', added.json.warning);
+  const server = added.json.server;
+  assert.equal(server.tools[0].mode, 'ask');
+  const toolName = `mcp_${server.slug}_delete_file`;
+
+  const { mockAnthropic } = await import('./mockapis.js');
+  const mock = await mockAnthropic({
+    key: 'sk-ant-approve',
+    respond: (body) => {
+      if (!body.stream) return { text: 'Cleanup' };
+      const last = body.messages.at(-1);
+      const result = Array.isArray(last.content) && last.content.find(b => b.type === 'tool_result');
+      return result ? { text: 'Result: ' + JSON.stringify(result.content) } : { tools: [{ id: 'toolu_del', name: toolName, input: { path: 'notes.txt' } }] };
+    }
+  });
+  try {
+    const provider_id = await connection('anthropic', mock.url, 'sk-ant-approve');
+    const model = (await browser('POST', '/api/admin/models', { body: { display_name: 'Claude Approve', internal_name: 'claude-opus-5-5', provider_id, mcp_allowed: true } })).json.id;
+    const chat = (await browser('POST', '/api/chats', { body: {} })).json;
+    const answering = (text) => (m, ws) => {
+      if (m.type === 'ask' && m.question?.approval) ws.send(JSON.stringify({ type: 'answer', chatId: chat.id, text }));
+    };
+
+    const denied = await chatTurn({ type: 'chat', chatId: chat.id, modelId: model, content: 'Delete notes.txt' }, { onFrame: answering('deny') });
+    const ask = denied.find(f => f.type === 'ask');
+    assert.equal(ask.question.approval.name, toolName);
+    assert.match(ask.question.approval.args, /notes\.txt/);
+    assert.ok(!fs.existsSync(calls), 'a refused call never reaches the server');
+    assert.match(lastAssistant((await browser('GET', `/api/chats/${chat.id}`)).json).content, /declined/);
+
+    await chatTurn({ type: 'chat', chatId: chat.id, modelId: model, content: 'Delete it, really' }, { onFrame: answering('allow_chat') });
+    assert.equal(fs.readFileSync(calls, 'utf8').trim(), 'notes.txt');
+    const again = await chatTurn({ type: 'chat', chatId: chat.id, modelId: model, content: 'And once more' });
+    assert.equal(again.find(f => f.type === 'ask'), undefined, 'allowed for this chat, so it is not asked again');
+    assert.equal(fs.readFileSync(calls, 'utf8').trim().split('\n').length, 2);
+
+    const other = (await browser('POST', '/api/chats', { body: {} })).json;
+    await browser('PATCH', `/api/chats/${other.id}`, { body: { mcpOff: [server.id] } });
+    assert.deepEqual((await browser('GET', `/api/chats/${other.id}`)).json.chat.mcpOff, [server.id]);
+    await chatTurn({ type: 'chat', chatId: other.id, modelId: model, content: 'Delete notes.txt' });
+    const offered = mock.requests.filter(r => r.body.stream).at(-1).body.tools || [];
+    assert.ok(!offered.some(t => t.name === toolName), 'a server switched off for a chat is not offered there');
+    await browser('POST', '/api/admin/models/remove', { body: { ids: [model] } });
+    await browser('DELETE', `/api/admin/providers/${provider_id}`);
+  } finally {
+    await browser('DELETE', `/api/admin/mcp/${server.id}`);
+    await mock.close();
+    await new Promise(r => { setTimeout(r, 300); });
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  }
+});
+
+test('a regression run grades both sides, and a sampled reply is checked and opens for review', async () => {
+  const graded = (body) => {
+    const user = body.messages.at(-1).content;
+    const said = (Array.isArray(user) ? user.map(b => b.text || '').join('') : String(user)).match(/<reply_to_judge>\n([\s\S]*?)\n<\/reply_to_judge>/)?.[1] || '';
+    if (/<criterion>[\s\S]*unresolved/.test(Array.isArray(user) ? user.map(b => b.text || '').join('') : String(user))) {
+      return JSON.stringify({ verdict: 'fail', score: 20, explanation: 'It only promised to look later.', evidence: said.slice(0, 20) });
+    }
+    return JSON.stringify(/precise/.test(said) ? { verdict: 'pass', score: 90, explanation: 'Matches the reference.', evidence: 'precise' } : { verdict: 'fail', score: 30, explanation: 'Vague.', evidence: '' });
+  };
+  const { mockAnthropic } = await import('./mockapis.js');
+  const mock = await mockAnthropic({
+    key: 'sk-ant-eval',
+    respond: (body) => {
+      if (!body.stream && /careful evaluator/.test(JSON.stringify(body.system || ''))) return { text: graded(body) };
+      if (!body.stream) return { text: 'Title' };
+      return { text: body.model === 'claude-sonnet-5-5' ? 'A precise answer.' : 'I will look into it later.' };
+    }
+  });
+  try {
+    const provider_id = await connection('anthropic', mock.url, 'sk-ant-eval');
+    const base = (await browser('POST', '/api/admin/models', { body: { display_name: 'Eval Base', internal_name: 'claude-opus-5-5', provider_id, cost_in: 1, cost_out: 2 } })).json.id;
+    const cand = (await browser('POST', '/api/admin/models', { body: { display_name: 'Eval Candidate', internal_name: 'claude-sonnet-5-5', provider_id, cost_in: 1, cost_out: 2 } })).json.id;
+    assert.equal((await browser('PUT', '/api/admin/evals/judge', { body: { modelId: cand } })).json.judge.modelId, cand);
+
+    const made = await browser('POST', '/api/admin/evals', { body: { name: 'Support answers' } });
+    assert.equal(made.status, 200, made.text);
+    const cid = made.json.collection.id;
+    await browser('POST', `/api/admin/evals/${cid}/cases`, { body: { messages: [{ role: 'user', content: 'How long do refunds take?' }], reference: 'Five business days.' } });
+    const added = await browser('POST', `/api/admin/evals/${cid}/cases`, { body: { messages: [{ role: 'user', content: 'Can I change my plan?' }] } });
+    assert.equal(added.json.collection.version, 2);
+
+    const started = await browser('POST', `/api/admin/evals/${cid}/runs`, { body: { baseline: { source: 'draft', modelId: base }, candidate: { source: 'draft', modelId: cand } } });
+    assert.equal(started.status, 202, started.text);
+    assert.equal((await browser('POST', `/api/admin/evals/${cid}/runs`, { body: { baseline: { source: 'draft', modelId: base }, candidate: { source: 'draft', modelId: cand } } })).status, 409, 'one run per collection at a time');
+    let run;
+    for (let i = 0; i < 100; i++) {
+      run = (await browser('GET', `/api/admin/evals/runs/${started.json.run.id}`)).json.run;
+      if (run.status !== 'running') break;
+      await new Promise(r => { setTimeout(r, 100); });
+    }
+    assert.equal(run.status, 'done');
+    assert.equal(run.version, 2);
+    assert.equal(run.summary.improved, 2);
+    assert.equal(run.summary.baseline.score, 30);
+    assert.equal(run.summary.candidate.score, 90);
+    assert.ok(run.summary.candidate.cost > 0, 'cost comes from the model prices');
+    assert.ok(Number.isFinite(run.summary.candidate.medianMs));
+    assert.equal(run.results[0].cand.explanation, 'Matches the reference.');
+    assert.equal((await browser('GET', `/api/admin/evals/${cid}`)).json.runs.length, 1);
+
+    const settings = await browser('PUT', '/api/admin/quality/settings', { body: { enabled: true, sampleRate: 100, criteria: [{ kind: 'resolution' }] } });
+    assert.equal(settings.json.settings.criteria[0].name, 'Leaves the request unresolved');
+    const chat = (await browser('POST', '/api/chats', { body: {} })).json;
+    assert.equal((await browser('GET', `/api/admin/review/chats/${chat.id}`)).status, 404, 'nothing flagged yet, so the chat stays private');
+    await chatTurn({ type: 'chat', chatId: chat.id, modelId: base, content: 'Fix my invoice please' });
+    let results;
+    for (let i = 0; i < 100; i++) {
+      results = (await browser('GET', '/api/admin/quality/results?verdict=fail')).json;
+      if (results.total) break;
+      await new Promise(r => { setTimeout(r, 100); });
+    }
+    const flagged = results.results[0];
+    assert.equal(flagged.chat_id, chat.id);
+    assert.equal(flagged.explanation, 'It only promised to look later.');
+    assert.match(flagged.question, /Fix my invoice/);
+    const report = (await browser('GET', '/api/admin/quality')).json.report;
+    assert.ok(report.recurring.some(r => r.model === 'Eval Base' && r.n >= 1));
+
+    const review = await browser('GET', `/api/admin/review/chats/${chat.id}?message=${flagged.message_id}`);
+    assert.equal(review.status, 200);
+    assert.equal(review.json.messages.at(-1).checks[0].verdict, 'fail');
+    const audit = (await browser('GET', '/api/admin/audit?action=review.view')).json;
+    assert.ok(JSON.stringify(audit).includes(chat.id), 'every view of a member chat is logged');
+
+    const copied = await browser('POST', `/api/admin/evals/${cid}/from-message`, { body: { messageId: flagged.message_id, reference: 'Open the invoice and correct it.', kind: 'quality' } });
+    assert.equal(copied.status, 200, copied.text);
+    const kase = copied.json.collection.cases.at(-1);
+    assert.equal(kase.source.kind, 'quality');
+    assert.equal(kase.observed, 'I will look into it later.');
+
+    assert.equal((await browser('GET', '/api/app-config')).json.reviewNotice, true, 'members are told review is on');
+    await browser('PUT', '/api/admin/quality/settings', { body: { enabled: false } });
+    await browser('DELETE', `/api/chats/${chat.id}`);
+    assert.equal((await browser('GET', '/api/admin/quality/results')).json.results.filter(r => r.chat_id === chat.id).length, 0, 'deleting the chat removes its checks');
+    await browser('DELETE', `/api/admin/evals/${cid}`);
+    await browser('POST', '/api/admin/models/remove', { body: { ids: [base, cand] } });
+    await browser('DELETE', `/api/admin/providers/${provider_id}`);
+  } finally {
+    await mock.close();
+  }
 });

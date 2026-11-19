@@ -65,6 +65,12 @@ import { ChangeRow, fieldLabel } from '../src/components/admin/changes/ChangeRow
 import ProvidersSection from '../src/components/admin/sections/ProvidersSection.jsx';
 import QuotasSection from '../src/components/admin/sections/QuotasSection.jsx';
 import RatingsSection from '../src/components/admin/sections/RatingsSection.jsx';
+import EvalsSection from '../src/components/admin/sections/EvalsSection.jsx';
+import QualitySection from '../src/components/admin/sections/QualitySection.jsx';
+import McpTools from '../src/components/settings/McpTools.jsx';
+import McpCard from '../src/components/settings/McpCard.jsx';
+import AgentPanel from '../src/components/composer/AgentPanel.jsx';
+import SecurityTab from '../src/components/settings/SecurityTab.jsx';
 import SearchSection from '../src/components/admin/sections/SearchSection.jsx';
 import SkillsSection from '../src/components/admin/sections/SkillsSection.jsx';
 import StorageSection from '../src/components/admin/sections/StorageSection.jsx';
@@ -256,7 +262,7 @@ const ADMIN_SECTIONS = [
   ['Network', NetworkSection], ['Overview', OverviewSection], ['Providers', ProvidersSection],
   ['Quotas', QuotasSection], ['Ratings', RatingsSection], ['Search', SearchSection],
   ['Skills', SkillsSection], ['Storage', StorageSection], ['Usage', UsageSection],
-  ['Voice', VoiceSection], ['Releases', ReleasesSection],
+  ['Voice', VoiceSection], ['Releases', ReleasesSection], ['Evaluations', EvalsSection], ['Quality', QualitySection],
 ];
 const adminUser = { id: 'u1', displayName: 'Admin', email: 'a@b.c', isAdmin: true, isOwner: true, prefs: {} };
 for (const [name, Section] of ADMIN_SECTIONS) {
@@ -307,6 +313,20 @@ cases.push(['ChangeRows:history', () => React.createElement('ul', null, SAMPLE_C
 cases.push(['ModelsInspector:idle', () => inAdmin(React.createElement(Inspector, { models: [] }))]);
 cases.push(['ModelsInspector:single', () => inAdmin(React.createElement(Inspector, { models: [kwargModel] }))]);
 cases.push(['ModelsInspector:mixed', () => inAdmin(React.createElement(Inspector, { models: mixedModels }))]);
+
+const mcpServer = {
+  id: 's1', name: 'Notes', slug: 'notes', transport: 'http', url: 'http://localhost:8931/mcp', status: 'connected', enabled: true,
+  tools: [
+    { name: 'read_note', description: 'Read a note', mode: 'on', annotations: { readOnlyHint: true }, inputSchema: { type: 'object', required: ['name'], properties: { name: { type: 'string' } } } },
+    { name: 'delete_note', description: 'Delete a note', mode: 'ask', annotations: { destructiveHint: true }, inputSchema: { type: 'object', properties: {} } },
+    { name: 'save_note', mode: 'off', inputSchema: {} }
+  ]
+};
+cases.push(['McpTools', () => React.createElement(McpTools, { server: mcpServer, onSetMode: noop, onTry: noop })]);
+cases.push(['McpCard:own', () => React.createElement(McpCard, { server: mcpServer, onSetMode: noop, onTry: noop })]);
+cases.push(['McpCard:workspace', () => React.createElement(McpCard, { server: { ...mcpServer, status: 'error', error: 'Nothing is listening at that address.' }, readOnly: true })]);
+cases.push(['AgentPanel:approval', () => React.createElement(AgentPanel, { question: { id: 'q', approval: { server: 'Notes', tool: 'delete_note', name: 'mcp_notes_delete_note', args: '{"name":"groceries"}' } }, onAnswer: noop, onSkip: noop })]);
+cases.push(['SecurityTab:review', () => React.createElement(SecurityTab, { user: adminUser, onUpdated: noop, reviewNotice: true })]);
 
 let failed = 0;
 for (const [name, make] of cases) {

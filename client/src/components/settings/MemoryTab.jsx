@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '../../lib/api.js';
 import { notify } from '../../lib/notify.js';
-import { t } from '../../i18n.jsx';
+import { t, fmtDate } from '../../i18n.jsx';
 import { Pencil, Plus, Trash } from '../ui/icons.jsx';
 import { SetRow, SwitchRow } from '../ui/controls.jsx';
 import { Skel, SkelRows } from '../ui/Skeleton.jsx';
@@ -9,7 +9,7 @@ import { Skel, SkelRows } from '../ui/Skeleton.jsx';
 const MEMORY_MAX_ITEMS = 100;
 const MEMORY_MAX_CHARS = 500;
 
-const dateOf = (ms) => (ms ? new Date(ms).toLocaleDateString(undefined, { dateStyle: 'medium' }) : '');
+const dateOf = (ms) => (ms ? fmtDate(ms, { dateStyle: 'medium' }) : '');
 
 function MemoryItem({ item, onSave, onRemove }) {
   const [editing, setEditing] = useState(false);

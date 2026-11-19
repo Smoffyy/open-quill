@@ -5,10 +5,16 @@ function noteExpiry(url, status) {
   window.dispatchEvent(new CustomEvent(SESSION_EXPIRED));
 }
 
+let translate = (s) => s;
+
+export function setErrorTranslator(fn) {
+  translate = typeof fn === 'function' ? fn : (s) => s;
+}
+
 async function failure(url, res, fallback) {
   noteExpiry(url, res.status);
   const body = await res.json().catch(() => ({}));
-  return new Error(body.error || fallback || res.statusText);
+  return new Error(translate(body.error || fallback || res.statusText));
 }
 
 export const TAB_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);

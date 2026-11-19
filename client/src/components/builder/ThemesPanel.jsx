@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { t } from '../../i18n.jsx';
+import { t, fmtDate, fmtDateTime } from '../../i18n.jsx';
 import { api } from '../../lib/api.js';
 import { useTheme } from '../../lib/theme/store.jsx';
 import { presetById } from '../../lib/presets.js';
@@ -54,7 +54,7 @@ export function useThemes() {
 function fmt(ts) {
   if (!ts) return '';
   const d = new Date(ts);
-  return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return fmtDate(d) + ' ' + fmtDateTime(d, { hour: '2-digit', minute: '2-digit' });
 }
 
 export default function ThemesPanel({ compact }) {

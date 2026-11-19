@@ -1,4 +1,4 @@
-import { Panel, Upload, Cube, Sliders, Users, Chat, Globe, Mic, FileText, Bulb, Plug, Shield, Eye, Wave, Star, Box, Gear, Clock, Palette } from '../ui/icons.jsx';
+import { Panel, Upload, Cube, Sliders, Users, Chat, Globe, Mic, FileText, Bulb, Plug, Shield, Eye, Wave, Star, Box, Gear, Clock, Palette, Flask, Gauge } from '../ui/icons.jsx';
 import { tk } from '../../i18n.jsx';
 
 /* Each section declares everything the shell needs to render it:
@@ -77,6 +77,16 @@ export const NAV = [
       blurb: tk('Upload ceilings, sandbox storage, request queueing, spend caps, and automatic chat titles.'),
       find: tk('limits budgets caps uploads sandbox queue sessions chat titles auto-title'),
       index: [tk('Attachments'), tk('Sandbox storage'), tk('Scheduling'), tk('Spend caps'), tk('Sessions'), tk('Chat titles')] }
+  ] },
+  { group: tk('Quality'), items: [
+    { id: 'evaluations', label: tk('Evaluations'), Icon: Flask, title: tk('Evaluations'),
+      blurb: tk('Versioned test collections from real conversations and expert corrections. Rerun them before changing a model or a prompt and compare the results.'),
+      find: tk('regression testing test cases benchmark compare judge eval collection corrections'),
+      index: [tk('Judge'), tk('Test collections'), tk('Compare two configurations'), tk('Versions')] },
+    { id: 'quality', label: tk('Quality checks'), Icon: Gauge, title: tk('Quality checks'),
+      blurb: tk('Automatic review of replies against your criteria, with an explanation for every result and a link to the conversation.'),
+      find: tk('monitoring policy grounding unresolved review sample audit criteria'),
+      index: [tk('Automatic review'), tk('Review past chats'), tk('Trends'), tk('Recurring problems'), tk('Results')] }
   ] },
   { group: tk('Records'), items: [
     { id: 'usage', label: tk('Usage'), Icon: Wave, title: tk('Usage'),

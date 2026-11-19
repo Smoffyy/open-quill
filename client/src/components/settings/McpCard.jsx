@@ -1,9 +1,7 @@
-import { useState } from 'react';
 import { Trash, Pencil, Refresh, Terminal, Globe, Info } from '../ui/icons.jsx';
 import { Switch } from '../ui/controls.jsx';
-import { t } from '../../i18n.jsx';
-
-const TOOL_PREVIEW = 8;
+import { t, tp } from '../../i18n.jsx';
+import McpTools from './McpTools.jsx';
 
 export function endpointOf(sv) {
   return sv.transport === 'http' ? (sv.url || '') : `${sv.command || ''} ${sv.args || ''}`.trim();
@@ -14,7 +12,7 @@ export function statusOf(sv) {
   if (sv.status === 'connected') {
     const n = (sv.tools || []).length;
     if (!n) return { key: 'new', label: t('No tools') };
-    return { key: 'connected', label: n === 1 ? t('1 tool') : `${n} ${t('tools')}` };
+    return { key: 'connected', label: tp(n, '{n} tool', '{n} tools') };
   }
   return { key: 'new', label: t('Not connected') };
 }
@@ -22,11 +20,8 @@ export function statusOf(sv) {
 // One server row, shared by the admin panel and a user's own connector list. `readOnly`
 // is what a user sees for a workspace server: the same card, without the controls only
 // an admin may use.
-export default function McpCard({ server: sv, busy, readOnly, onRefresh, onToggle, onEdit, onDelete }) {
-  const [showAll, setShowAll] = useState(false);
+export default function McpCard({ server: sv, busy, readOnly, onRefresh, onToggle, onEdit, onDelete, onSetMode, onTry }) {
   const status = statusOf(sv);
-  const tools = sv.tools || [];
-  const shown = showAll ? tools : tools.slice(0, TOOL_PREVIEW);
   const endpoint = endpointOf(sv);
 
   return (
@@ -58,19 +53,10 @@ export default function McpCard({ server: sv, busy, readOnly, onRefresh, onToggl
       </div>
 
       {sv.status === 'error' && sv.error && (
-        <div className="mcp-card-error"><Info style={{ width: 14, flexShrink: 0 }} /><span>{sv.error}</span></div>
+        <div className="mcp-card-error"><Info style={{ width: 14, flexShrink: 0 }} /><span>{t(sv.error)}</span></div>
       )}
 
-      {shown.length > 0 && (
-        <div className="mcp-tools">
-          {shown.map(tool => <span key={tool.name} className="mcp-tool" data-tip={`mcp_${sv.slug}_${tool.name}${tool.description ? '\n\n' + tool.description : ''}`}>{tool.name}</span>)}
-          {tools.length > TOOL_PREVIEW && (
-            <button className="mcp-tool-more" onClick={() => setShowAll(v => !v)}>
-              {showAll ? t("Show fewer") : `+${tools.length - TOOL_PREVIEW} ${t("more")}`}
-            </button>
-          )}
-        </div>
-      )}
+      <McpTools server={sv} readOnly={readOnly} onSetMode={onSetMode} onTry={onTry} />
     </div>
   );
 }

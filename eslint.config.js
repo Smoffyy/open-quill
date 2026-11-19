@@ -68,6 +68,16 @@ export default [
   },
 
   {
+    files: ['client/src/**/*.jsx'],
+    rules: {
+      'no-restricted-syntax': ['error',
+        { selector: 'JSXText[value=/[A-Za-z]{2,}[ ,]+[A-Za-z]{2,}/]', message: 'Visible text must go through t() so it can be translated.' },
+        { selector: 'JSXAttribute[name.name=/^(aria-label|placeholder|alt|data-tip|label|title|hint|note|sub)$/] > Literal[value=/^[A-Z][a-z]+( [a-z]+)+/]', message: 'Visible text must go through t() so it can be translated.' }
+      ]
+    }
+  },
+
+  {
     files: ['server/**/*.js'],
     languageOptions: {
       ecmaVersion: 2024,

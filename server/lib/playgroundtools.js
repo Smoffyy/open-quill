@@ -56,8 +56,8 @@ export async function runPlaygroundTool(call, { model, state, userId, signal }) 
     const r = await runConsult({ model, targets: state.consultWith, call, chatId: null, userId, signal });
     return { ok: !!r.ok, formatted: formatConsult(r) };
   }
-  if (state.mcpOn && mcp.isMcpTool(tool, userId)) {
-    const r = await mcp.execTool(call, userId);
+  if (state.mcpOn && mcp.isMcpTool(tool, userId, state.mcpScope)) {
+    const r = await mcp.execTool(call, userId, state.mcpScope);
     return { ok: !!r.ok, formatted: mcp.formatResult(call, r), images: r.images || [] };
   }
   return { ok: false, formatted: `${tool} → ERROR: there is no tool called "${tool}" here.` };

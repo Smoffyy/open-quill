@@ -147,6 +147,8 @@ body:has(.app.has-bg) > .model-submenu.pinned {
 .action-btn.on { color: var(--pop-blue); }
 
 .pm-empty { font-size: 12px; color: var(--text-faint); padding: 7px 10px; }
+.pm-conn-dot { flex: none; width: 8px; height: 8px; margin: 0 5px; border-radius: 50%; background: var(--success); }
+.pm-conn-dot.down { background: var(--danger); }
 
 /* ---- message jump flash ---- */
 .msg-speed {

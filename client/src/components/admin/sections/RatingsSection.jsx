@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../../../lib/api.js';
-import { Card, Btn, Seg, Table, Stats, Badge, Empty, fmtInt, fmtAgo } from '../ui.jsx';
-import { Star } from '../../ui/icons.jsx';
+import { Card, Btn, Seg, Table, Stats, Badge, Empty, IconBtn, Acts, fmtInt, fmtAgo } from '../ui.jsx';
+import { Star, Chat, Flask } from '../../ui/icons.jsx';
+import { ReviewDialog, AddToCollection } from './EvalShared.jsx';
 import { t } from '../../../i18n.jsx';
 import { Skel, SkelTable } from '../../ui/Skeleton.jsx';
 
@@ -12,6 +13,8 @@ export default function RatingsSection() {
   const [counts, setCounts] = useState({ up: 0, down: 0 });
   const [offset, setOffset] = useState(0);
   const [only, setOnly] = useState('all');
+  const [review, setReview] = useState(null);
+  const [adding, setAdding] = useState('');
 
   const load = useCallback(async (off) => {
     try {
@@ -61,7 +64,8 @@ export default function RatingsSection() {
             { label: t('Member'), mono: true },
             { label: t('Model'), mono: true },
             { label: t('Reply') },
-            { label: t('Comment') }
+            { label: t('Comment') },
+            { label: '', fit: true }
           ]}>
             {shown.map(f => (
               <tr key={f.id}>
@@ -71,11 +75,21 @@ export default function RatingsSection() {
                 <td className="mono dim">{f.model}</td>
                 <td className="wrap">{f.snippet || <span className="dim">{t('(empty)')}</span>}</td>
                 <td className="dim wrap">{f.comment || '—'}</td>
+                <td className="acts">
+                  {f.messageId && (
+                    <Acts end>
+                      <IconBtn label={t('Open conversation')} onClick={() => setReview({ chatId: f.chatId, messageId: f.messageId })}><Chat /></IconBtn>
+                      <IconBtn label={t('Add to a test collection')} onClick={() => setAdding(f.messageId)}><Flask /></IconBtn>
+                    </Acts>
+                  )}
+                </td>
               </tr>
             ))}
           </Table>
         )}
       </Card>
+      {review && <ReviewDialog chatId={review.chatId} messageId={review.messageId} onClose={() => setReview(null)} />}
+      {adding && <AddToCollection messageId={adding} kind="rating" onClose={() => setAdding('')} />}
     </>
   );
 }

@@ -81,7 +81,17 @@ CREATE TABLE IF NOT EXISTS draft_edits (id TEXT PRIMARY KEY, updated_at INTEGER,
 UPDATE settings SET value = (
   SELECT json_group_array(json(json_set(e.value, '$.num_ctx', 0)))
   FROM (SELECT value FROM json_each(settings.value) ORDER BY key) e
-) WHERE key = 'published_models' AND json_valid(value) AND json_type(value) = 'array' AND json_array_length(value) > 0;`
+) WHERE key = 'published_models' AND json_valid(value) AND json_type(value) = 'array' AND json_array_length(value) > 0;`,
+
+  `CREATE TABLE IF NOT EXISTS eval_collections (id TEXT PRIMARY KEY, updated_at INTEGER, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS eval_versions (id TEXT PRIMARY KEY, collection_id TEXT, version INTEGER, created_at INTEGER, data TEXT NOT NULL);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_eval_versions ON eval_versions(collection_id, version);
+CREATE TABLE IF NOT EXISTS eval_runs (id TEXT PRIMARY KEY, collection_id TEXT, created_at INTEGER, data TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_eval_runs ON eval_runs(collection_id, created_at);
+CREATE TABLE IF NOT EXISTS quality_checks (id TEXT PRIMARY KEY, ts INTEGER, criterion_id TEXT, chat_id TEXT, verdict TEXT, data TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_quality_ts ON quality_checks(ts);
+CREATE INDEX IF NOT EXISTS idx_quality_criterion ON quality_checks(criterion_id, ts);
+CREATE INDEX IF NOT EXISTS idx_quality_chat ON quality_checks(chat_id);`
 ];
 
 export const LATEST_VERSION = MIGRATIONS.length + 1;

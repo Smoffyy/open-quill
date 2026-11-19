@@ -5,7 +5,7 @@ import { notify } from '../../lib/notify.js';
 import Markdown from '../chat/Markdown.jsx';
 import { Search, X, ChevDown, Chevron, Plus, Trash, Info, Wand, FileText, Upload, Eye, CodeTag, DotsV, Chat } from '../ui/icons.jsx';
 import { Switch } from '../ui/controls.jsx';
-import { t, tk } from '../../i18n.jsx';
+import { t, tk, fmtDate } from '../../i18n.jsx';
 import { useAnchoredMenu, menuStyleOf } from '../../lib/anchor.js';
 import { Skel, SkelTable } from '../ui/Skeleton.jsx';
 import Dialog from '../ui/Dialog.jsx';
@@ -22,7 +22,7 @@ const STARTERS = [
 
 const BLANK = { name: '', description: '', body: '' };
 
-const shortDate = (ms) => new Date(ms).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric', year: '2-digit' });
+const shortDate = (ms) => fmtDate(ms, { month: 'numeric', day: 'numeric', year: '2-digit' });
 
 function useSkills() {
   const [skills, setSkills] = useState([]);

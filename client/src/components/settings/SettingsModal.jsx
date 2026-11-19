@@ -54,7 +54,7 @@ export default function SettingsModal({ user, cfg, initialTab, browseSkills = fa
   let content = null;
   if (tab === 'general') content = <GeneralTab user={user} draft={draft} onExportChats={onExportChats} onImportChats={onImportChats} onDeleted={onDeleted} />;
   else if (tab === 'interface') content = <InterfaceTab prefs={prefs} setPref={setPref} cfg={cfg} />;
-  else if (tab === 'security') content = <SecurityTab user={user} onUpdated={onUpdated} />;
+  else if (tab === 'security') content = <SecurityTab user={user} onUpdated={onUpdated} reviewNotice={!!cfg?.reviewNotice} />;
   else if (tab === 'keybinds') content = <KeybindsPanel prefs={prefs} setPref={setPref} />;
   else if (tab === 'memory') content = <MemoryTab prefs={prefs} setPref={setPref} />;
   else if (tab === 'usage') content = <UsageTab />;

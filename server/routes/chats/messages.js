@@ -37,7 +37,7 @@ export default function registerMessageRoutes(app) {
         siblings: sibs.map(s => s.id)
       };
     });
-    res.json({ chat: { id: c.id, title: c.title, starred: !!c.starred, mode: c.mode === 'code' ? 'code' : 'chat', summary: c.summary || '', hasSummary: !!c.summary, projectId: c.project_id || null, instructions: c.instructions || '', pinnedFiles: Array.isArray(c.pinned_files) ? c.pinned_files : [], ended: !!c.ended, endedReason: c.ended_reason || '', genParams: c.gen_params || null, systemOverride: c.system_override || '', planDismissed: c.plan_dismissed || null }, messages });
+    res.json({ chat: { id: c.id, title: c.title, starred: !!c.starred, mode: c.mode === 'code' ? 'code' : 'chat', summary: c.summary || '', hasSummary: !!c.summary, projectId: c.project_id || null, instructions: c.instructions || '', pinnedFiles: Array.isArray(c.pinned_files) ? c.pinned_files : [], ended: !!c.ended, endedReason: c.ended_reason || '', genParams: c.gen_params || null, systemOverride: c.system_override || '', planDismissed: c.plan_dismissed || null, mcpOff: Array.isArray(c.mcp_off) ? c.mcp_off : [] }, messages });
   });
 
   app.get('/api/chats/:id/siblings/:mid', authMiddleware, (req, res) => {

@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [28.2.0] - TBD
+### Added
+- **Evaluations** - a new admin section for regression testing. Test collections are versioned sets of conversations, each ending on a member message with an optional expert correction. Every edit is a version, so a run can be repeated on the exact same tests, and any version can be restored. A run sends every case to a baseline and a candidate (published or draft configuration, any model, and optionally a different system prompt), then a judge model scores each reply against the correction and explains its score. Results show which cases got better or worse, the average score, the median response time and the cost on each side, with both replies side by side.
+- **Real conversations as tests** - a rated reply (under Ratings) or a reply flagged by a quality check can be added to a test collection in one step, with an expert correction. The playground's test sets now live in the same collections, so existing sets carry over.
+- **Quality checks** - a new admin section that reviews replies automatically. Ready-made checks cover following an internal policy, using the supplied documents (attachments and tool results) and leaving a request unresolved, and custom checks can be written in plain words and limited to some models. A share of new replies is checked in the background after it is saved, and past chats can be reviewed over 7, 30 or 90 days. Each result has the judge's explanation and a quoted piece of evidence, and the section shows a daily trend, the failure rate per check and recurring problems by check and model.
+- **Reviewing a flagged conversation** - an admin can open a read-only transcript only when one of its replies was flagged by a check, rated, or saved as a test case. Every view is written to the Event log, members are told under Settings, Security when review is on, and incognito chats are never reviewed.
+- **Tool approval** - each MCP tool can be on, off, or ask first. A tool its server marks as destructive asks first by default. The chat shows the call and its arguments with Allow once, Always allow in this chat and Deny, and typing a message denies the call and tells the model why. A scheduled task never runs a tool that needs approval.
+- **Connectors in the composer** - the plus menu lists the connectors available to you with their status, and any of them can be switched off for the current chat.
+- **Tool inspector** - every MCP tool shows its description, its arguments and its hints (read-only, can change data, reaches outside services), and can be run with your own arguments from Settings or Admin, MCP servers.
+- **MCP servers per model** - a model's Tools tab lists the workspace MCP servers it may use. New servers are offered until you switch them off there.
+- **Member connector policy** - under Admin, MCP servers, admins can stop members from adding servers or limit them to a list of hosts.
+- **MCP timeouts and live status** - each server has its own tool call timeout. A server that goes down is retried in the background with a growing delay, and status changes reach open lists without a reload. Connection errors say what went wrong, such as nothing listening on the port or a name that did not resolve.
+### Changed
+- **Translated errors** - errors sent by the server, including MCP connection errors, appear in the member's language. Numbers, prices, dates and short times in the admin panel and chat follow the app's language instead of the browser's, and plural forms follow each language's rules.
+- **Deleting your account** - asks for your password.
+### Security
+- **Outbound requests** - with Local only on, every redirect is checked again before it is followed, credentials are dropped when a redirect leaves the original host, and the address is checked again when the connection opens, which closes a DNS rebinding gap.
+- **Member MCP servers** - can never reach link-local and cloud metadata addresses or this server's own port, and their error messages no longer include the response body. An SSE server that names a message endpoint on another host is refused.
+- **Response headers** - every response carries X-Frame-Options, Cross-Origin-Opener-Policy, Cross-Origin-Resource-Policy and a Permissions-Policy, and Strict-Transport-Security over HTTPS.
+- **Password checks** - changing your password, turning off two-factor, new recovery codes and deleting your account are throttled per account.
+- **Role changes** - demoting an admin stops admin updates to their open tabs at once, and removing an account closes its open connections.
+- **Signing out** - unsent drafts and playground runs are cleared from the browser when you sign out, and when a different account signs in on the same browser.
+- **Connector requests** - adding, editing, refreshing and trying member connectors is rate limited.
+### Fixed
+- **Ratings** - reply snippets no longer show raw tool markers.
+
+
 ## [28.1.1] - 2026-11-17
 ### Added
 - **Artifact search** - the search button on the Artifacts page opens a field in the tab row instead of the global search dialog. It searches file names and chat titles as you type, shows a message when nothing matches, and closes with Escape or the X.

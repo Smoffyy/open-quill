@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../lib/api.js';
 import { copyText } from '../../lib/clipboard.js';
-import { t } from '../../i18n.jsx';
+import { t, fmtNumber } from '../../i18n.jsx';
 import Dialog from '../ui/Dialog.jsx';
 import CloseButton from '../ui/CloseButton.jsx';
 import { Skel, SkelRows } from '../ui/Skeleton.jsx';
@@ -15,7 +15,7 @@ function Section({ label, role, tokens, text, open, onToggle, color }) {
         {color && <span className="pl-swatch" style={{ background: color }} aria-hidden="true" />}
         <span className="pl-role">{role}</span>
         <span className="pl-name">{label}</span>
-        {tokens != null && <span className="pl-tok">{tokens.toLocaleString()} {t('tok')}</span>}
+        {tokens != null && <span className="pl-tok">{fmtNumber(tokens)} {t('tok')}</span>}
       </button>
       {open && <div className="pl-body">{text || t('(empty)')}</div>}
     </div>
@@ -78,7 +78,7 @@ export default function PromptLedger({ chatId, modelId, onClose }) {
                 <div>
                   <label>{data.modelName}</label>
                   <div className="muted-note">
-                    {data.total != null ? t('{n} tokens total', { n: data.total.toLocaleString() }) : t('This provider cannot count tokens before sending.')}
+                    {data.total != null ? t('{n} tokens total', { n: fmtNumber(data.total) }) : t('This provider cannot count tokens before sending.')}
                     {data.dropped > 0 && ' · ' + t('{n} message(s) not included', { n: data.dropped })}
                   </div>
                 </div>

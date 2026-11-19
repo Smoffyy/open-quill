@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { relativeParts } from './lib/relativetime.js';
+import { setErrorTranslator } from './lib/api.js';
 
 const meta = import.meta.glob('./locales/*.json', { eager: true, import: '_meta' });
 const loaders = import.meta.glob('./locales/*.json');
@@ -72,11 +73,33 @@ export function setLang(code) {
 
 export const tk = (s) => s;
 
-export function t(key, vars) {
-  const dict = byCode[lang];
-  let s = dict && typeof dict[key] === 'string' ? dict[key] : key;
+setErrorTranslator((s) => t(s));
+
+function fill(s, vars) {
   if (vars) for (const k in vars) s = s.split('{' + k + '}').join(String(vars[k]));
   return s;
+}
+
+export function t(key, vars) {
+  const dict = byCode[lang];
+  return fill(dict && typeof dict[key] === 'string' ? dict[key] : key, vars);
+}
+
+const pluralRules = new Map();
+
+export function pluralForm(n, code = lang) {
+  if (!pluralRules.has(code)) {
+    try { pluralRules.set(code, new Intl.PluralRules(code)); }
+    catch { pluralRules.set(code, new Intl.PluralRules('en')); }
+  }
+  return pluralRules.get(code).select(Number(n) || 0);
+}
+
+export function tp(n, one, other, vars) {
+  const all = { n: fmtNumber(n), ...vars };
+  const entry = byCode[lang]?.[other];
+  if (entry && typeof entry === 'object') return fill(entry[pluralForm(n)] ?? entry.other ?? other, all);
+  return t(pluralForm(n, 'en') === 'one' ? one : other, all);
 }
 
 export function fmtDate(value, opts) {
@@ -87,6 +110,25 @@ export function fmtDate(value, opts) {
 export function fmtDateTime(value, opts) {
   const d = value instanceof Date ? value : new Date(value);
   return d.toLocaleString(lang, opts);
+}
+
+export function fmtNumber(value, opts) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return '';
+  try { return n.toLocaleString(lang, opts); }
+  catch { return String(n); }
+}
+
+export function fmtCurrency(value, currency = 'USD', opts = {}) {
+  const n = Number(value) || 0;
+  const digits = n && Math.abs(n) < 0.01 ? 4 : 2;
+  try { return new Intl.NumberFormat(lang, { style: 'currency', currency, minimumFractionDigits: digits, maximumFractionDigits: digits, ...opts }).format(n); }
+  catch { return '$' + n.toFixed(digits); }
+}
+
+export function fmtUnit(value, unit, display = 'narrow') {
+  try { return new Intl.NumberFormat(lang, { style: 'unit', unit, unitDisplay: display }).format(value); }
+  catch { return value + ' ' + unit; }
 }
 
 export function fmtRelative(value, now = Date.now()) {

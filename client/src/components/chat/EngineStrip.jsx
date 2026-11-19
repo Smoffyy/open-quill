@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Gauge } from '../ui/icons.jsx';
-import { t } from '../../i18n.jsx';
+import { t, fmtNumber } from '../../i18n.jsx';
 
-const num = (n) => Number(n || 0).toLocaleString();
+const num = (n) => fmtNumber(Number(n || 0));
 const rate = (n) => {
   const v = Number(n || 0);
   if (!v) return '-';

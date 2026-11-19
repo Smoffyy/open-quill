@@ -60,7 +60,7 @@ export default function Composer({
   styles = [], styleId = 'normal', onSelectStyle, onSaveStyles,
   conversationEnded = false, endedReason = '',
   removedModel = null, skills = [], onToggleSkill = null, onManageSkills = null,
-  queueCount = 0, onQueue, onSteer, canSteer = false, onManageConnectors = null, attachCombo = '',
+  queueCount = 0, onQueue, onSteer, canSteer = false, onManageConnectors = null, connectors = [], connectorsOff = [], onToggleConnector = null, attachCombo = '',
   compareIds = [], onSetCompare, reasoningEffort, onSetEffort, kwargValues, onSetKwarg,
   contextRing = null, thread = false, footer = null, draftId, panel = null, jump = null,
   incognito = false, onToggleIncognito = null, onShowSummary = null, onPromptLedger = null
@@ -604,10 +604,36 @@ export default function Composer({
                   </button>
                 </SubItem>
                 {onManageConnectors && (
-                  <button className="pm-item" onClick={() => { closePlusMenu(); onManageConnectors(); }}>
-                    <Plug />
-                    <span className="pm-label">{t('MCP')}</span>
-                  </button>
+                  <SubItem id="connectors" sub={sub} wrapClass="pm-subwrap" flyoutClass="plus-menu pm-flyout"
+                    trigger={({ open, onClick }) => (
+                      <button className={'pm-item' + (open ? ' active' : '')} onClick={onClick}>
+                        <Plug />
+                        <span className="pm-label">{t('Connectors')}</span>
+                        <Chevron className="pm-chev" />
+                      </button>
+                    )}>
+                    <div className="pm-head">{t('Connectors')}</div>
+                    {connectors.length === 0 && <div className="pm-empty">{t('No connectors yet')}</div>}
+                    {connectors.map(c => {
+                      const on = !connectorsOff.includes(c.id);
+                      const down = c.status === 'error';
+                      return (
+                        <button key={c.id} className="pm-item pm-opt" role="menuitemcheckbox" aria-checked={on}
+                          data-tip={down ? t('Not connected') : t('{n} tools', { n: c.tools })}
+                          onClick={() => onToggleConnector && onToggleConnector(c.id)}>
+                          <span className={'pm-conn-dot' + (down ? ' down' : '')} aria-hidden="true" />
+                          <span className="pm-label">{c.name}</span>
+                          {on && <Check className="pm-check" />}
+                        </button>
+                      );
+                    })}
+                    {connectors.length > 0 && <div className="pm-foot">{t('Switched off connectors are not offered to the model in this chat.')}</div>}
+                    <div className="pm-divider" />
+                    <button className="pm-item pm-opt" onClick={() => { closePlusMenu(); onManageConnectors(); }}>
+                      <Sliders />
+                      <span className="pm-label">{t('Manage connectors')}</span>
+                    </button>
+                  </SubItem>
                 )}
                 {webSearchAvailable && <div className="pm-divider" />}
                 {webSearchAvailable && (

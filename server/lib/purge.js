@@ -3,6 +3,7 @@ import * as sandbox from '../sandbox.js';
 import { attachmentUrlsOf, purgeUnreferencedUploads } from './uploads.js';
 import { removeAll as removeProjectFiles } from './projectfiles.js';
 import { removeArtifacts } from './artifacts.js';
+import { forgetChats } from './quality.js';
 import { killSessionSockets } from './ws/broadcast.js';
 import { stopTurn } from './ws/live.js';
 
@@ -20,6 +21,7 @@ export function purgeUserChats(userId) {
     for (const id of chatIds) db.messages.removeWhere('chat_id', id);
     db.chats.removeWhere('user_id', userId);
   });
+  forgetChats(chatIds);
   purgeUnreferencedUploads(urls);
   return chatIds.size;
 }

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
 import { api, SESSION_EXPIRED, TAB_ID } from './lib/api.js';
+import { claimStorage, clearPrivateStorage } from './lib/privacy.js';
 import { newerVersion, syncDelay, draftReloads, DRAFT_SETTLE_MS } from './lib/configsync.js';
-import { setWsSender, publishPresence } from './lib/wsbus.js';
-import { t, tk, getLang } from './i18n.jsx';
+import { setWsSender, publishPresence, publishFrame, onFrame } from './lib/wsbus.js';
+import { t, tk, getLang, fmtNumber } from './i18n.jsx';
 import { withClient } from './lib/clientctx.js';
 import { applyPrefs, prefersDark, appFontId, takeSettingsToReopen } from './lib/prefs.js';
 import { layoutOf } from './lib/layout.js';
@@ -271,8 +272,14 @@ export default function App() {
     try { await api.patch('/api/skills/' + sk.id, { enabled: !sk.enabled }); loadSkills(); }
     catch { notify(t('Could not update the skill.')); }
   }, [loadSkills]);
-  const onSettingsClosed = useCallback(() => { setSettings(null); loadSkills(); }, [loadSkills]);
-  useEffect(() => { loadSkills(); }, [loadSkills]);
+  const [connectors, setConnectors] = useState([]);
+  const [chatMcpOff, setChatMcpOff] = useState([]);
+  const loadConnectors = useCallback(() => api.get('/api/mcp')
+    .then(r => setConnectors((r.servers || []).filter(s => s.enabled !== false).map(s => ({ id: s.id, name: s.name, status: s.status || 'new', tools: (s.tools || []).length, scope: s.scope }))))
+    .catch(() => {}), []);
+  const onSettingsClosed = useCallback(() => { setSettings(null); loadSkills(); loadConnectors(); }, [loadSkills, loadConnectors]);
+  useEffect(() => { loadSkills(); loadConnectors(); }, [loadSkills, loadConnectors]);
+  useEffect(() => onFrame('mcp_status', (f) => setConnectors(list => list.map(c => (c.id === f.id ? { ...c, status: f.status, tools: f.toolCount } : c)))), []);
   const [showAdmin, setShowAdmin] = useState(false);
   const [showPlayground, setShowPlayground] = useState(false);
   const [showCredits, setShowCredits] = useState(false);
@@ -582,7 +589,7 @@ export default function App() {
     return () => window.removeEventListener(SESSION_EXPIRED, expired);
   }, []);
   useEffect(() => {
-    api.get('/api/me').then(({ user }) => setUser(user)).catch(() => {
+    api.get('/api/me').then(({ user }) => { claimStorage(user.id); setUser(user); }).catch(() => {
       setUser(null);
       api.get('/api/auth/context').then(c => {
         setAuthCtx(c);
@@ -831,7 +838,7 @@ export default function App() {
     text: { modelError: t('The model returned an error.') },
     actions: {
       notifyContextTrimmed: (limit) => notify(
-        t('Context limit reached ({limit} tokens), trimming older messages so the chat can continue', { limit: limit.toLocaleString() }),
+        t('Context limit reached ({limit} tokens), trimming older messages so the chat can continue', { limit: fmtNumber(limit) }),
         { kind: 'warn', duration: 6000 }),
       finalize: () => finalize(),
       finalizeBackground: (key) => finalizeBackground(key),
@@ -842,6 +849,8 @@ export default function App() {
       syncConfig: (version, greeting) => syncConfig(version, greeting),
       adminDraft: (frame) => adminDraft(frame),
       presence: (list) => publishPresence(list),
+      mcpStatus: (frame) => publishFrame('mcp_status', frame),
+      evalJob: (job) => publishFrame('eval_job', job),
       loadBudget: () => loadBudget(),
       setAsk: (chatId, q) => setAsk(chatId, q),
       contextChanged: () => setCtxTick(n => n + 1),
@@ -1067,8 +1076,19 @@ export default function App() {
     api.post('/api/chats/' + key + '/plan/dismiss', { messageId: ref.msg, n: ref.n }).catch(() => {});
   }
 
+  function toggleConnector(id) {
+    const next = chatMcpOff.includes(id) ? chatMcpOff.filter(x => x !== id) : [...chatMcpOff, id];
+    setChatMcpOff(next);
+    const key = activeKey();
+    if (!key || key === 'incognito') return;
+    const cached = chatCache.current.get(key);
+    if (cached?.chat) cacheChat(key, { chat: { ...cached.chat, mcpOff: next } });
+    api.patch('/api/chats/' + key, { mcpOff: next }).catch(() => warn());
+  }
+
   function resetChatView() {
     setPlanDismissed(null);
+    setChatMcpOff([]);
     setFiles([]); setPendingFiles({}); setHasSummary(false);
     clearLive(); setArtifactFocus(null); setArtPanel(false);
     turnMeta.reset();
@@ -1092,6 +1112,7 @@ export default function App() {
     setChatSysOverride(chat.systemOverride || '');
     setChatPins(Array.isArray(chat.pinnedFiles) ? chat.pinnedFiles : []);
     setPlanDismissed(chat.planDismissed || null);
+    setChatMcpOff(Array.isArray(chat.mcpOff) ? chat.mcpOff : []);
   }
   function resolveLastModel(lastA) {
     if (modelsRef.current.find(mm => mm.id === lastA.model_id)) {
@@ -1359,6 +1380,9 @@ export default function App() {
       if ((chatGenParams && Object.keys(chatGenParams).length) || (chatSysOverride && chatSysOverride.trim())) {
         try { await api.patch('/api/chats/' + chatId, { genParams: chatGenParams || {}, systemOverride: chatSysOverride || '' }); } catch {}
       }
+      if (chatMcpOff.length) {
+        try { await api.patch('/api/chats/' + chatId, { mcpOff: chatMcpOff }); } catch {}
+      }
     }
     if (compareRef.current && !compareRef.current.chatId) compareRef.current.chatId = chatId;
     clearDraft(activeId);
@@ -1516,6 +1540,7 @@ export default function App() {
   async function logout() {
     try { await api.post('/api/auth/logout'); }
     catch { warn(t('Could not sign out.')); return; }
+    clearPrivateStorage();
     location.href = '/';
   }
   function updatePref(key, value) {
@@ -1557,7 +1582,7 @@ export default function App() {
     conversationEnded: chatEnded, endedReason: chatEndedReason,
     removedModel: activeId ? chatRemovedModel : null,
     skills, onToggleSkill: toggleSkill, onManageSkills: (mode) => openSettings('skills', { browse: mode === 'browse' }),
-    onManageConnectors: () => openSettings('mcp'), attachCombo: comboLabel(resolveKeybinds(user?.prefs).attachFiles),
+    onManageConnectors: () => openSettings('mcp'), connectors: incognito ? [] : connectors, connectorsOff: chatMcpOff, onToggleConnector: toggleConnector, attachCombo: comboLabel(resolveKeybinds(user?.prefs).attachFiles),
     models, modelsReady, currentId, onSelect: pickModel, extended, onToggleExtended: () => setExtended(e => !e),
     reasoningEffort, onSetEffort: setReasoningEffort, kwargValues, onSetKwarg: setKwarg,
     visionSupported: !!model?.hasVision, canUseUnavailable: !!user?.isAdmin, budget,
@@ -1946,7 +1971,7 @@ export default function App() {
       )}
 
 
-      {settings && <SettingsModal user={user} cfg={cfg} initialTab={settings.tab} browseSkills={!!settings.browse} onClose={onSettingsClosed} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile}
+      {settings && <SettingsModal user={user} cfg={cfg} initialTab={settings.tab} browseSkills={!!settings.browse} onClose={onSettingsClosed} onUpdated={setUser} onDeleted={() => { clearPrivateStorage(); location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile}
         onChangelog={() => { setSettings(null); setShowChangelog(true); }}
         onTrySkill={(sk) => { newChat(); setInput('/' + sk.name + ' '); setFocusTick(n => n + 1); }} />}
       {user?.isAdmin && cfg.setupComplete === false && !setupDone && (

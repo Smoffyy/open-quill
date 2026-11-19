@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, Fields, Field, Input, Select, Btn, Table, Empty } from '../ui.jsx';
 import { api } from '../../../lib/api.js';
 import { Download, Clock } from '../../ui/icons.jsx';
-import { t } from '../../../i18n.jsx';
+import { t, fmtDateTime } from '../../../i18n.jsx';
 import { Skel, SkelTable } from '../../ui/Skeleton.jsx';
 
 const PAGE = 60;
@@ -93,7 +93,7 @@ export default function EventsSection() {
             ]}>
               {state.entries.map(e => (
                 <tr key={e.id}>
-                  <td className="dim">{new Date(e.ts).toLocaleString()}</td>
+                  <td className="dim">{fmtDateTime(e.ts)}</td>
                   <td className="mono">{e.action}</td>
                   <td className="mono">{e.actorEmail}</td>
                   <td className="mono dim wrap">{meta(e.meta)}</td>

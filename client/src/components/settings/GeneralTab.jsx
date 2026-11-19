@@ -1,12 +1,14 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useId } from 'react';
 import { api } from '../../lib/api.js';
 import { Download, Upload } from '../ui/icons.jsx';
 import { t, useI18n } from '../../i18n.jsx';
 import { SetRow, SelectRow } from '../ui/controls.jsx';
 import { reopenSettingsAfterReload } from '../../lib/prefs.js';
 
-function Confirmable({ label, desc, action, ask, confirm, onConfirm, error }) {
+function Confirmable({ label, desc, action, ask, confirm, onConfirm, error, password = false }) {
   const [asking, setAsking] = useState(false);
+  const [secret, setSecret] = useState('');
+  const errorId = useId();
   if (!asking) {
     return (
       <SetRow label={label} desc={desc}>
@@ -18,11 +20,15 @@ function Confirmable({ label, desc, action, ask, confirm, onConfirm, error }) {
     <>
       <SetRow label={label} desc={ask}>
         <div className="set-actions">
-          <button className="btn ghost" onClick={() => setAsking(false)}>{t('Cancel')}</button>
-          <button className="btn primary" onClick={async () => { if (await onConfirm() !== false) setAsking(false); }}>{confirm}</button>
+          {password && (
+            <input type="password" className="short-input" placeholder={t('Password')} aria-label={t('Password')} autoComplete="current-password"
+              value={secret} onChange={(e) => setSecret(e.target.value)} aria-invalid={error ? 'true' : undefined} aria-describedby={errorId} />
+          )}
+          <button className="btn ghost" onClick={() => { setAsking(false); setSecret(''); }}>{t('Cancel')}</button>
+          <button className="btn primary" disabled={password && !secret} onClick={async () => { if (await onConfirm(secret) !== false) { setAsking(false); setSecret(''); } }}>{confirm}</button>
         </div>
       </SetRow>
-      {error && <div className="muted-note" role="alert">{error}</div>}
+      <div className="muted-note" id={errorId} role="alert">{error}</div>
     </>
   );
 }
@@ -44,9 +50,9 @@ export default function GeneralTab({ user, draft, onExportChats, onImportChats, 
       return false;
     }
   }
-  async function deleteAccount() {
+  async function deleteAccount(password) {
     setDelErr('');
-    try { await api.del('/api/me'); onDeleted?.(); }
+    try { await api.del('/api/me', { password }); onDeleted?.(); }
     catch (e) { setDelErr(e?.message || t('Could not delete account.')); return false; }
   }
 
@@ -92,7 +98,7 @@ export default function GeneralTab({ user, draft, onExportChats, onImportChats, 
       {!user.isOwner && (
         <Confirmable label={t("Delete account")} desc={t("Permanently removes your account, all chats, and files. This cannot be undone.")}
           action={t("Delete account")} ask={t("Delete your account and everything in it? This cannot be undone.")}
-          confirm={t("Delete")} onConfirm={deleteAccount} error={delErr} />
+          confirm={t("Delete")} onConfirm={deleteAccount} error={delErr} password />
       )}
     </>
   );

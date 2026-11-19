@@ -55,26 +55,68 @@ const TABLE_SCANS = [
   { file: 'components/chat/ToolCard.jsx', re: /\bplural\([^,]+,\s*'(?:[^'\\]|\\.)*'\s*,\s*'((?:[^'\\]|\\.)*)'/g },
 ];
 
-function walk(dir, keys) {
+const PLURAL_RE = /\btp\(\s*[^,]+,\s*'((?:[^'\\]|\\.)*)'\s*,\s*'((?:[^'\\]|\\.)*)'/g;
+
+export const SERVER = fileURLToPath(new URL('../../server', import.meta.url));
+
+const SERVER_SOURCES = [
+  'routes', 'auth.js',
+  ...['mcp', 'mcpnet', 'evals', 'quality', 'regression', 'judge', 'userskills', 'skillfile', 'workspaceskills', 'tasks',
+    'projectfiles', 'releases', 'changes', 'draft', 'providers', 'theme',
+    'playground', 'playrun', 'budget', 'roles'].map(n => `lib/${n}.js`)
+];
+
+const SERVER_RES = [
+  /\berror:\s*'([^'$\\]+)'/g,
+  /\breturn\s+'([A-Z][^'$\\]*[.?])'/g,
+  /\bconst\s+[A-Z_]+\s*=\s*'([A-Z][^'$\\]*[.?])'/g,
+  /\bnew\s+(?:Error|MemberTargetError)\('([A-Z][^'$\\]*[.?])'/g
+];
+
+function scanFile(p, keys) {
+  const src = fs.readFileSync(p, 'utf8');
+  for (const m of src.matchAll(CALL_RE)) keys.add(unescape(m[2] ?? m[3]));
+  for (const m of src.matchAll(PLURAL_RE)) { keys.add(unescape(m[1])); keys.add(unescape(m[2])); }
+}
+
+function walk(dir, keys, visit) {
   for (const f of fs.readdirSync(dir).sort()) {
     const p = path.join(dir, f);
     if (fs.statSync(p).isDirectory()) {
-      if (f !== 'locales') walk(p, keys);
-    } else if (f.endsWith('.jsx') || f.endsWith('.js')) {
-      const src = fs.readFileSync(p, 'utf8');
-      let m;
-      while ((m = CALL_RE.exec(src))) keys.add(unescape(m[2] ?? m[3]));
+      if (f !== 'locales') walk(p, keys, visit);
+    } else if (f.endsWith('.jsx') || f.endsWith('.js')) visit(p, keys);
+  }
+}
+
+function scanServer(p, keys) {
+  const src = fs.readFileSync(p, 'utf8');
+  for (const re of SERVER_RES) {
+    for (const m of src.matchAll(re)) {
+      const s = m[1].trim();
+      if (s && s.length <= 240 && /^[A-Z]/.test(s) && !/[(:]$/.test(s)) keys.add(s);
     }
   }
 }
 
+export function serverKeys() {
+  const keys = new Set();
+  for (const rel of SERVER_SOURCES) {
+    const p = path.join(SERVER, rel);
+    if (!fs.existsSync(p)) continue;
+    if (fs.statSync(p).isDirectory()) walk(p, keys, scanServer);
+    else scanServer(p, keys);
+  }
+  return keys;
+}
+
 export function collectKeys() {
   const keys = new Set();
-  walk(SRC, keys);
+  walk(SRC, keys, scanFile);
   for (const { file, re } of TABLE_SCANS) {
     const src = fs.readFileSync(path.join(SRC, file), 'utf8');
     for (const m of src.matchAll(re)) if (m[1]) keys.add(unescape(m[1]));
   }
+  for (const k of serverKeys()) keys.add(k);
   for (const k of EXTRA_KEYS) keys.add(k);
   return keys;
 }

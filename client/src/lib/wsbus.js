@@ -18,3 +18,15 @@ export function publishPresence(list) {
 export function currentPresence() {
   return presence;
 }
+
+const frameEvent = (type) => 'oq-frame-' + type;
+
+export function publishFrame(type, frame) {
+  try { window.dispatchEvent(new CustomEvent(frameEvent(type), { detail: frame })); } catch {}
+}
+
+export function onFrame(type, fn) {
+  const handler = (e) => fn(e.detail);
+  window.addEventListener(frameEvent(type), handler);
+  return () => window.removeEventListener(frameEvent(type), handler);
+}

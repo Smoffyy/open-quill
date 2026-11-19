@@ -26,6 +26,7 @@ import { runCalculator, formatCalculatorResult } from '../calculator.js';
 import { runTodo } from '../todo.js';
 import { runAskUser, formatAskUser } from '../askuser.js';
 import { waitForAnswer } from './live.js';
+import * as quality from '../quality.js';
 import { runConsult, formatConsult } from '../consult.js';
 import { recordUsage } from '../budget.js';
 import { ensureChatSidecars } from '../uploads.js';
@@ -61,7 +62,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   const history = chatHistory(chat, model, resume ? resume.id : null);
   const chatRow = db.chats.byId(chat.id) || chat;
   const {
-    membankOn, chatSearchOn, skillsOn, userSkills, mcpOn, mcpUser, endChatOn, memoryOn, calculatorOn,
+    membankOn, chatSearchOn, skillsOn, userSkills, mcpOn, mcpUser, mcpScope, mcpAsk, endChatOn, memoryOn, calculatorOn,
     todoOn, askUserOn, consultOn, consultWith, toolsOn
   } = flags;
   const membankHideTools = getSetting('membank_hide_tools', '0') === '1';
@@ -169,6 +170,31 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   };
   const hidden = (tool) => hideTools && tool !== 'ask_user';
   const oqrBlock = (call, result) => '\n\n[[OQR:' + Buffer.from(JSON.stringify(hidden(call.tool) ? { call: cleanCall(call), result, hidden: true } : { call: cleanCall(call), result }), 'utf8').toString('base64') + ']]\n';
+  const approveMcp = async (call) => {
+    const info = mcp.toolInfo(call.tool, mcpUser, mcpScope);
+    if (!info || info.mode !== 'ask') return null;
+    const granted = (db.chats.byId(chat.id) || chat).mcp_allowed_tools || [];
+    if (granted.includes(call.tool)) return null;
+    const refuse = (error) => {
+      const r = { ok: false, tool: call.tool, server: info.server.name, error };
+      return { payload: mcp.resultPayload(call, r), formatted: mcp.formatResult(call, r), hide: false };
+    };
+    if (!mcpAsk) return refuse('This tool needs the user to approve each call, and nobody is here to approve it. Do not retry it in this run.');
+    const args = JSON.stringify(mcp.callArguments(call), null, 2) || '{}';
+    const approval = { server: info.server.name, tool: info.tool.annotations?.title || info.tool.name, name: call.tool, args: args.length > 2000 ? args.slice(0, 2000) + '…' : args };
+    safeSend(JSON.stringify({ type: 'ask', chatId: chat.id, question: { approval } }));
+    const a = await waitForAnswer(chat.id, stepController ? stepController.signal : null);
+    safeSend(JSON.stringify({ type: 'asked', chatId: chat.id }));
+    if (a.answer === 'allow') return null;
+    if (a.answer === 'allow_chat') {
+      db.chats.update(chat.id, { mcp_allowed_tools: [...granted, call.tool].slice(-100) });
+      return null;
+    }
+    if (a.stopped) return refuse('The user stopped the reply instead of approving this call.');
+    if (a.timedOut) return refuse('Nobody approved this call in time, so it did not run.');
+    const said = a.answer && a.answer !== 'deny' ? ` They said: ${a.answer}` : '';
+    return refuse(`The user declined this call, so it did not run.${said}`);
+  };
   const runToolCall = async (call) => {
     if (call.tool === 'end_conversation') {
       if (!endChatOn) return null;
@@ -236,8 +262,10 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       const r = workspaceSkills.execTool(call, userSkills);
       return { payload: workspaceSkills.resultPayload(call, r), formatted: workspaceSkills.formatResult(call, r), hide: false };
     }
-    if (mcpOn && mcp.isMcpTool(call.tool, mcpUser)) {
-      const r = await mcp.execTool(call, mcpUser);
+    if (mcpOn && mcp.isMcpTool(call.tool, mcpUser, mcpScope)) {
+      const refused = await approveMcp(call);
+      if (refused) return refused;
+      const r = await mcp.execTool(call, mcpUser, mcpScope);
       return { payload: mcp.resultPayload(call, r), formatted: mcp.formatResult(call, r), hide: false, images: r.images || [] };
     }
     if (call.tool === 'web_search') {
@@ -885,6 +913,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
   }
   safeSend(JSON.stringify({ type: 'done', chatId: chat.id, messageId: (hasOutput || usageRec) ? assistantId : null, truncated, stopped: wasStopped }));
   if (hasOutput && !turnFailed) {
+    quality.afterReply(assistantId);
     const nextPrompt = () => buildMessages(model, chatHistory(chat, model), extended, systemText());
     const measure = counting ? () => countExact(model, nextPrompt(), tools) : null;
     (async () => {

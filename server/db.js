@@ -266,6 +266,44 @@ releasesCol.page = (limit, offset) => releasePageStmt.all(limit, offset).map(r =
 releasesCol.total = () => releaseCountStmt.get().n;
 releasesCol.pruneThrough = v => { try { const n = releasePruneStmt.run(v).changes; if (n) bumpTable('releases'); return n; } catch { return 0; } };
 
+const evalVersionsCol = collection('eval_versions');
+const evalVersionListStmt = sdb.prepare("SELECT json_remove(data,'$.cases') AS data FROM eval_versions WHERE collection_id=? ORDER BY version DESC");
+const evalVersionGetStmt = sdb.prepare('SELECT data FROM eval_versions WHERE collection_id=? AND version=?');
+const evalVersionPruneStmt = sdb.prepare('DELETE FROM eval_versions WHERE collection_id=? AND version<=?');
+evalVersionsCol.list = cid => evalVersionListStmt.all(cid).map(r => JSON.parse(r.data));
+evalVersionsCol.get = (cid, v) => { const r = evalVersionGetStmt.get(cid, Number(v) || 0); return r ? JSON.parse(r.data) : null; };
+evalVersionsCol.pruneThrough = (cid, v) => { evalVersionPruneStmt.run(cid, v); bumpTable('eval_versions'); };
+
+const evalRunsCol = collection('eval_runs');
+const evalRunListStmt = sdb.prepare("SELECT json_remove(data,'$.results') AS data FROM eval_runs ORDER BY created_at DESC LIMIT ?");
+const evalRunPruneStmt = sdb.prepare('DELETE FROM eval_runs WHERE collection_id=? AND id NOT IN (SELECT id FROM eval_runs WHERE collection_id=? ORDER BY created_at DESC LIMIT ?)');
+evalRunsCol.recent = limit => evalRunListStmt.all(limit).map(r => JSON.parse(r.data));
+evalRunsCol.keepLatest = (cid, n) => { evalRunPruneStmt.run(cid, cid, n); bumpTable('eval_runs'); };
+
+const qualityCol = collection('quality_checks');
+const QUALITY_WHERE = `WHERE ts >= @since AND (@criterion = '' OR criterion_id = @criterion) AND (@verdict = '' OR verdict = @verdict)`;
+const qualityPageStmt = sdb.prepare(`SELECT data FROM quality_checks ${QUALITY_WHERE} ORDER BY ts DESC LIMIT @limit OFFSET @offset`);
+const qualityCountStmt = sdb.prepare(`SELECT count(*) AS n FROM quality_checks ${QUALITY_WHERE}`);
+const qualityTallyStmt = sdb.prepare('SELECT criterion_id AS criterion, verdict, count(*) AS n FROM quality_checks WHERE ts >= ? GROUP BY criterion_id, verdict');
+const qualityDailyStmt = sdb.prepare('SELECT criterion_id AS criterion, verdict, CAST(ts / 86400000 AS INTEGER) AS day, count(*) AS n FROM quality_checks WHERE ts >= ? GROUP BY criterion_id, verdict, day ORDER BY day');
+const qualityRecurringStmt = sdb.prepare("SELECT criterion_id AS criterion, json_extract(data,'$.model_name') AS model, count(*) AS n FROM quality_checks WHERE ts >= ? AND verdict = 'fail' GROUP BY criterion_id, model ORDER BY n DESC LIMIT 20");
+qualityCol.page = f => qualityPageStmt.all(f).map(r => JSON.parse(r.data));
+qualityCol.countMatching = f => qualityCountStmt.get(f).n;
+qualityCol.tally = since => qualityTallyStmt.all(since);
+qualityCol.daily = since => qualityDailyStmt.all(since);
+qualityCol.recurring = since => qualityRecurringStmt.all(since);
+const qualityFlaggedChatStmt = sdb.prepare("SELECT 1 AS hit FROM quality_checks WHERE chat_id = ? AND verdict = 'fail' LIMIT 1");
+const qualityFlaggedMessageStmt = sdb.prepare("SELECT 1 AS hit FROM quality_checks WHERE json_extract(data,'$.message_id') = ? AND verdict = 'fail' LIMIT 1");
+const qualityByMessageStmt = sdb.prepare("SELECT data FROM quality_checks WHERE json_extract(data,'$.message_id') = ?");
+qualityCol.flaggedChat = chatId => !!qualityFlaggedChatStmt.get(chatId);
+qualityCol.flaggedMessage = mid => !!qualityFlaggedMessageStmt.get(mid);
+qualityCol.byMessage = mid => qualityByMessageStmt.all(mid).map(r => JSON.parse(r.data));
+const feedbackRatedChatStmt = sdb.prepare(`SELECT 1 AS hit FROM feedback WHERE json_extract(data,'$.chat_id') = ? AND ${IS_SAFETY} = 0 LIMIT 1`);
+feedbackCol.ratedChat = chatId => !!feedbackRatedChatStmt.get(chatId);
+
+const repliesBetweenStmt = sdb.prepare("SELECT data FROM messages WHERE created_at >= ? AND created_at <= ? AND json_extract(data,'$.role') = 'assistant' ORDER BY created_at DESC LIMIT ?");
+messagesCol.repliesBetween = (from, to, limit) => repliesBetweenStmt.all(from, to, limit).map(r => JSON.parse(r.data));
+
 export const db = {
   users: usersCol,
   chats: chatsCol,
@@ -281,7 +319,11 @@ export const db = {
   tasks: tasksCol,
   skills: skillsCol,
   releases: releasesCol,
-  draftEdits: collection('draft_edits')
+  draftEdits: collection('draft_edits'),
+  evalCollections: collection('eval_collections'),
+  evalVersions: evalVersionsCol,
+  evalRuns: evalRunsCol,
+  qualityChecks: qualityCol
 };
 
 const sGet = sdb.prepare('SELECT value FROM settings WHERE key=?');

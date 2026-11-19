@@ -27,6 +27,8 @@ import NetworkSection from './sections/NetworkSection.jsx';
 import QuotasSection from './sections/QuotasSection.jsx';
 import UsageSection from './sections/UsageSection.jsx';
 import RatingsSection from './sections/RatingsSection.jsx';
+import EvalsSection from './sections/EvalsSection.jsx';
+import QualitySection from './sections/QualitySection.jsx';
 import EventsSection from './sections/EventsSection.jsx';
 import StorageSection from './sections/StorageSection.jsx';
 import { useDismiss } from '../../lib/dismiss.js';
@@ -52,6 +54,8 @@ const VIEWS = {
   quotas: QuotasSection,
   usage: UsageSection,
   ratings: RatingsSection,
+  evaluations: EvalsSection,
+  quality: QualitySection,
   events: EventsSection,
   storage: StorageSection
 };

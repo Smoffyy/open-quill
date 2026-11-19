@@ -2,13 +2,16 @@ import { db, now } from '../db.js';
 import { authMiddleware, adminOnly } from '../auth.js';
 import * as workspaceSkills from '../lib/workspaceskills.js';
 import * as mcp from '../lib/mcp.js';
+import { memberPolicy, setMemberPolicy } from '../lib/mcpnet.js';
 import { logAudit } from '../lib/audit.js';
+import { plainSnippet } from '../lib/history.js';
 import { purgeUser } from '../lib/purge.js';
 import { monthStartMs } from '../lib/budget.js';
 import * as dataroot from '../lib/dataroot.js';
 import { toolStatsReport } from '../lib/toolstats.js';
 import { USAGE_WINDOWS } from './auth.js';
 import { roleOf, canManage, canAssign, rolePatch } from '../lib/roles.js';
+import { setSocketRole, closeUserSockets } from '../lib/ws/index.js';
 
 const OUTRANKED = 'You can only manage accounts below your own role.';
 
@@ -32,7 +35,12 @@ export default function registerAdminRoutes(app) {
     res.json({ ok: true });
   });
 
-  app.get('/api/admin/mcp', authMiddleware, adminOnly, (req, res) => res.json({ servers: mcp.list().map(mcp.publicServer) }));
+  app.get('/api/admin/mcp', authMiddleware, adminOnly, (req, res) => res.json({ servers: mcp.list().map(mcp.publicServer), policy: memberPolicy() }));
+  app.put('/api/admin/mcp/policy', authMiddleware, adminOnly, (req, res) => {
+    const policy = setMemberPolicy({ allowed: req.body?.allowed, hosts: req.body?.hosts });
+    logAudit(req, 'mcp.policy', { meta: { allowed: policy.allowed, hosts: policy.hosts.length } });
+    res.json({ policy });
+  });
   app.post('/api/admin/mcp', authMiddleware, adminOnly, async (req, res) => {
     const r = mcp.create(req.body || {});
     if (r.error) return res.status(400).json({ error: r.error });
@@ -52,6 +60,18 @@ export default function registerAdminRoutes(app) {
     mcp.remove(req.params.id);
     logAudit(req, 'mcp.delete', { meta: { id: req.params.id } });
     res.json({ ok: true });
+  });
+  app.put('/api/admin/mcp/:id/tools', authMiddleware, adminOnly, (req, res) => {
+    const r = mcp.setToolModes(req.params.id, req.body?.modes);
+    if (r.error) return res.status(404).json({ error: r.error });
+    logAudit(req, 'mcp.tools', { meta: { name: r.server.name } });
+    res.json({ server: mcp.publicServer(r.server) });
+  });
+  app.post('/api/admin/mcp/:id/try', authMiddleware, adminOnly, async (req, res) => {
+    const r = await mcp.tryTool(req.params.id, String(req.body?.tool || ''), req.body?.args);
+    if (r.error && r.ok === undefined) return res.status(404).json({ error: r.error });
+    logAudit(req, 'mcp.try', { meta: { tool: String(req.body?.tool || '').slice(0, 80) } });
+    res.json({ result: { ok: r.ok, ms: r.ms, content: r.content || '', error: r.error || '', images: (r.images || []).length } });
   });
   app.post('/api/admin/mcp/:id/refresh', authMiddleware, adminOnly, async (req, res) => {
     const r = await mcp.refreshTools(req.params.id);
@@ -90,10 +110,10 @@ export default function registerAdminRoutes(app) {
     const { users, models } = labelMaps();
     res.json({
       feedback: rows.map(f => ({
-        id: f.id, ts: f.ts, rating: f.rating, comment: f.comment || '', snippet: f.snippet || '',
+        id: f.id, ts: f.ts, rating: f.rating, comment: f.comment || '', snippet: plainSnippet(f.snippet),
         user: users.get(f.user_id) || 'deleted user',
         model: models.get(f.model_id) || f.model_id || '\u2014',
-        chatId: f.chat_id
+        chatId: f.chat_id, messageId: f.message_id || ''
       })),
       counts: db.feedback.ratingCounts()
     });
@@ -161,6 +181,7 @@ export default function registerAdminRoutes(app) {
     if (!canAssign(req.user, role)) return res.status(403).json({ error: 'You can only grant roles below your own.' });
     const from = roleOf(u);
     db.users.update(u.id, rolePatch(role));
+    setSocketRole(u.id, !!db.users.byId(u.id)?.is_admin);
     logAudit(req, 'user.role', { type: 'user', id: u.id, meta: { email: u.email, from, to: role } });
     res.json({ ok: true, role });
   });
@@ -170,6 +191,7 @@ export default function registerAdminRoutes(app) {
     if (u.is_owner) return res.status(403).json({ error: 'The top admin cannot be removed.' });
     if (u.id === req.user.id) return res.status(403).json({ error: 'You cannot remove your own account here.' });
     if (!canManage(req.user, u)) return res.status(403).json({ error: OUTRANKED });
+    closeUserSockets(u.id);
     purgeUser(u.id);
     logAudit(req, 'user.delete', { type: 'user', id: u.id, meta: { email: u.email } });
     res.json({ ok: true });

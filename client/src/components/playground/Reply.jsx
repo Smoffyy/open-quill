@@ -4,7 +4,7 @@ import ReasoningBlock from '../chat/ReasoningBlock.jsx';
 import { ModelMark } from '../ui/Weave.jsx';
 import { Btn, IconBtn, CopyBtn, Badge, Area, Dialog, KV, Tabs } from '../admin/ui.jsx';
 import { Retry, Pencil, Code, Check, Cube } from '../ui/icons.jsx';
-import { t, tk } from '../../i18n.jsx';
+import { t, tk, fmtNumber } from '../../i18n.jsx';
 import { replyStats, statTiles, fmtDuration } from '../../lib/playground.js';
 
 export const SOURCE_LABEL = { __proto__: null, draft: tk('Draft'), live: tk('Live') };
@@ -170,7 +170,7 @@ export function RequestDialog({ replies, at, onClose }) {
         <div className="pg-req-msgs">
           {(req.messages || []).map((m, i) => (
             <div key={i} className="pg-req-msg">
-              <div className="pg-req-role"><span className={'pg-role r-' + m.role}>{t(m.role)}</span><span>{t('{n} characters', { n: String(m.content || '').length.toLocaleString() })}</span></div>
+              <div className="pg-req-role"><span className={'pg-role r-' + m.role}>{t(m.role)}</span><span>{t('{n} characters', { n: fmtNumber(String(m.content || '').length) })}</span></div>
               <pre>{m.content}</pre>
             </div>
           ))}

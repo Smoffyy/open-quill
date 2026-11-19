@@ -9,7 +9,7 @@ import { copyText } from '../../lib/clipboard.js';
 import { highlight } from '../../lib/hljs.js';
 import { diffLines, stableLineDiff, collapseRuns, baseName, extOf } from '../../lib/artifacts.js';
 import { splitTurn, withLive, groupCounts, fileChanges, totals, stepTarget } from '../../lib/codeview.js';
-import { t, tk, fmtRelative } from '../../i18n.jsx';
+import { t, tk, fmtRelative, fmtDateTime } from '../../i18n.jsx';
 import { safeUrl } from '../../lib/safeurl.js';
 
 const VERBS = {
@@ -277,7 +277,7 @@ function TurnActions({ msg, onRetry, onContinue }) {
           <Retry />{t('Continue')}
         </button>
       )}
-      {msg.created_at && <span className="cx-time" data-tip={new Date(msg.created_at).toLocaleString()}>{fmtRelative(msg.created_at)}</span>}
+      {msg.created_at && <span className="cx-time" data-tip={fmtDateTime(msg.created_at)}>{fmtRelative(msg.created_at)}</span>}
     </div>
   );
 }

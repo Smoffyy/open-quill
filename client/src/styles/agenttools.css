@@ -75,6 +75,13 @@
 }
 .ap-send:disabled { opacity: .35; cursor: default; }
 .ap-hint { margin-top: 7px; font-size: 12px; color: var(--text-faint); }
+.ap-approval .ap-q { display: flex; align-items: flex-start; gap: 8px; }
+.ap-approval-ic { flex: none; width: 16px; height: 16px; margin-top: 3px; color: var(--accent); }
+.ap-args {
+  margin: 8px 0 0; padding: 8px 10px; max-height: 160px; overflow: hidden auto; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); color: var(--text-muted); font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; line-height: 1.45;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
 
 .tool-consult .tb-out-body { font-family: var(--font-sans); font-size: 13.5px; line-height: 1.55; }
 

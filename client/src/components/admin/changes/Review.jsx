@@ -39,7 +39,7 @@ export function ReviewButton() {
 }
 
 export function ReviewDialog() {
-  const { changes, user, reviewing, setReviewing } = useAdmin();
+  const { changes, user, reviewing, setReviewing, setSection } = useAdmin();
   if (!reviewing) return null;
-  return <ChangesPanel changes={changes} user={user} onClose={() => setReviewing(false)} />;
+  return <ChangesPanel changes={changes} user={user} onClose={() => setReviewing(false)} onTest={() => { setReviewing(false); setSection('evaluations'); }} />;
 }

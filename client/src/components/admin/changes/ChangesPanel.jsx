@@ -18,7 +18,7 @@ function groupTitle(g) {
   return g.label || t('Untitled');
 }
 
-export default function ChangesPanel({ changes, user, scope, layer, onPublished, onClose }) {
+export default function ChangesPanel({ changes, user, scope, layer, onPublished, onClose, onTest }) {
   const publisher = !!user?.canPublish;
   const [who, setWho] = useState(publisher ? 'all' : 'mine');
   const [skip, setSkip] = useState(() => new Set());
@@ -148,6 +148,12 @@ export default function ChangesPanel({ changes, user, scope, layer, onPublished,
               })}
             </section>
           ))}
+          {onTest && changes.changes.some(c => c.key.startsWith('model:')) && (
+            <p className="ch-quiet ch-test">
+              {t('Model changes are waiting. Run a test collection with the draft as the candidate to see what they change before members get them.')}
+              {' '}<Btn size="sm" onClick={onTest}>{t('Test these changes first')}</Btn>
+            </p>
+          )}
           {changes.version > 0 && (
             <p className="ch-quiet">
               {t('Members are on version {v}', { v: changes.version })}

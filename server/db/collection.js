@@ -13,7 +13,11 @@ export const MIRROR = {
   tasks: { user_id: o => o.user_id ?? null, next_run: o => o.next_run ?? 0, updated_at: o => o.updated_at ?? 0, created_at: o => o.created_at ?? 0 },
   skills: { user_id: o => o.user_id ?? null, name: o => o.name ?? null, updated_at: o => o.updated_at ?? 0, created_at: o => o.created_at ?? 0 },
   releases: { version: o => o.version ?? 0, created_at: o => o.created_at ?? 0 },
-  draft_edits: { updated_at: o => o.updated_at ?? 0 }
+  draft_edits: { updated_at: o => o.updated_at ?? 0 },
+  eval_collections: { updated_at: o => o.updated_at ?? 0 },
+  eval_versions: { collection_id: o => o.collection_id ?? null, version: o => o.version ?? 0, created_at: o => o.created_at ?? 0 },
+  eval_runs: { collection_id: o => o.collection_id ?? null, created_at: o => o.created_at ?? 0 },
+  quality_checks: { ts: o => o.ts ?? 0, criterion_id: o => o.criterion_id ?? null, chat_id: o => o.chat_id ?? null, verdict: o => o.verdict ?? null }
 };
 
 const bumps = new Map();

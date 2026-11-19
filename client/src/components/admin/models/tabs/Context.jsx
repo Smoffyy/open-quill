@@ -3,14 +3,14 @@ import { api } from '../../../../lib/api.js';
 import { Card, Rows, Fields, Switch, Btn } from '../../ui.jsx';
 import { useEditor, NumberField, Flag, Line } from '../bind.jsx';
 import { useAdmin } from '../../store.jsx';
-import { t } from '../../../../i18n.jsx';
+import { t, fmtNumber } from '../../../../i18n.jsx';
 
 function detectedNote(models, n, overriding) {
   if (models.length > 1) return t('Each model uses the window its backend reports.');
   if (n === undefined) return t('Not detected yet. Detect window sizes checks every model.');
   if (n > 0) {
-    if (overriding) return t('The backend reports {n} tokens.', { n: n.toLocaleString() });
-    return t('The backend reports {n} tokens. Turn this on to use a different size.', { n: n.toLocaleString() });
+    if (overriding) return t('The backend reports {n} tokens.', { n: fmtNumber(n) });
+    return t('The backend reports {n} tokens. Turn this on to use a different size.', { n: fmtNumber(n) });
   }
   if (overriding) return t('The backend did not report a window.');
   return t('The backend did not report a window, so a conservative default is used. Turn this on to set one.');

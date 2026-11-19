@@ -5,8 +5,9 @@ import McpCard from './McpCard.jsx';
 import { t } from '../../i18n.jsx';
 import { Skel, SkelRows } from '../ui/Skeleton.jsx';
 import { parseMcpConfig } from '../../lib/mcpconfig.js';
+import { onFrame } from '../../lib/wsbus.js';
 
-const blank = () => ({ name: '', url: '', headers: '', enabled: true });
+const blank = () => ({ name: '', url: '', headers: '', timeout_s: 0, enabled: true });
 
 export default function UserMcpSection() {
   const [servers, setServers] = useState([]);
@@ -15,17 +16,29 @@ export default function UserMcpSection() {
   const [edit, setEdit] = useState(null);
   const [editError, setEditError] = useState('');
   const [busy, setBusy] = useState('');
+  const [policy, setPolicy] = useState({ allowed: true, hosts: [] });
 
   useEffect(() => {
-    (async () => {
-      try { const d = await api.get('/api/mcp'); setServers(d.servers || []); setLimit(d.limit || 0); } catch {}
-      setReady(true);
-    })();
+    let alive = true;
+    const load = async () => {
+      try {
+        const d = await api.get('/api/mcp');
+        if (!alive) return;
+        setServers(d.servers || []);
+        setLimit(d.limit || 0);
+        setPolicy({ allowed: d.allowed !== false, hosts: d.hosts || [] });
+      } catch {}
+      if (alive) setReady(true);
+    };
+    load();
+    const off = onFrame('mcp_status', load);
+    return () => { alive = false; off(); };
   }, []);
 
   const workspace = servers.filter(s => s.scope === 'workspace');
   const mine = servers.filter(s => s.scope === 'user');
   const atLimit = limit > 0 && mine.length >= limit;
+  const replace = (server) => setServers(list => list.map(x => (x.id === server.id ? server : x)));
 
   function startAdd() { setEditError(''); setEdit(blank()); }
   function importConfig(text) {
@@ -34,13 +47,19 @@ export default function UserMcpSection() {
     if (http) { setEditError(''); setEdit(x => ({ ...x, name: http.name, url: http.url, headers: http.headers, clearHeaders: false })); }
     else if (text.trim()) setEditError(error === 'not-json' ? t('That is not valid JSON yet.') : t('No HTTP server found in that config. Local command servers are added by an admin.'));
   }
-  function startEdit(sv) { setEditError(''); setEdit({ id: sv.id, name: sv.name, url: sv.url, headers: '', hasHeaders: sv.hasHeaders, enabled: sv.enabled !== false }); }
+  function startEdit(sv) { setEditError(''); setEdit({ id: sv.id, name: sv.name, url: sv.url, headers: '', hasHeaders: sv.hasHeaders, timeout_s: sv.timeout_s || 0, enabled: sv.enabled !== false }); }
+  async function setMode(sv, name, mode) {
+    try { replace((await api.put('/api/mcp/' + sv.id + '/tools', { modes: { [name]: mode } })).server); } catch {}
+  }
+  async function tryTool(sv, name, args) {
+    return (await api.post('/api/mcp/' + sv.id + '/try', { tool: name, args })).result;
+  }
 
   async function save() {
     setEditError('');
     setBusy('save');
     try {
-      const body = { name: edit.name, url: edit.url, enabled: edit.enabled };
+      const body = { name: edit.name, url: edit.url, timeout_s: Number(edit.timeout_s) || 0, enabled: edit.enabled };
       // An existing header is never sent back to the browser, so an empty box means
       // "leave it alone" rather than "clear it". Clearing is its own explicit action.
       if (edit.headers.trim() || edit.clearHeaders) body.headers = edit.headers;
@@ -63,12 +82,14 @@ export default function UserMcpSection() {
       <div className="sk-head">
         <h2 className="sk-title">{t("MCP")}</h2>
         <div className="sk-head-acts">
-          <button className="sk-btn" disabled={atLimit || !!edit} onClick={startAdd}><Plus /> {t("Add server")}</button>
+          <button className="sk-btn" disabled={atLimit || !!edit || !policy.allowed} onClick={startAdd}><Plus /> {t("Add server")}</button>
         </div>
       </div>
 
       <div className="mcp-body">
         <div className="muted-note mcp-intro">{t("Add MCP servers of your own. Their tools reach every model you use that has tool calling, and nobody else on this workspace can see them. Local command servers are added by an admin.")}</div>
+        {!policy.allowed && <div className="muted-note mcp-policy-note">{t('An admin has turned off member connectors on this workspace.')}</div>}
+        {policy.allowed && policy.hosts.length > 0 && <div className="muted-note mcp-policy-note">{t('Your connectors can reach these hosts only: {hosts}', { hosts: policy.hosts.join(', ') })}</div>}
 
         {edit && (
           <div className="fn-editor mcp-editor">
@@ -84,6 +105,11 @@ export default function UserMcpSection() {
             </div>
             <div className="field"><label>{t("URL")}</label>
               <input value={edit.url} onChange={(e) => setEdit(x => ({ ...x, url: e.target.value }))} placeholder={t("http://localhost:8931/mcp")} />
+            </div>
+            <div className="field"><label htmlFor="mcp-timeout">{t("Timeout (seconds)")}</label>
+              <input id="mcp-timeout" type="number" min={0} max={300} className="short-input" value={edit.timeout_s || ''} placeholder="30"
+                onChange={(e) => setEdit(x => ({ ...x, timeout_s: e.target.value }))} />
+              <div className="muted-note mcp-headers-note"><span>{t("How long a tool call may run. Leave empty for 30 seconds.")}</span></div>
             </div>
             <div className="field"><label>{t("Headers")}</label>
               <textarea rows={2} value={edit.headers} onChange={(e) => setEdit(x => ({ ...x, headers: e.target.value, clearHeaders: false }))}
@@ -119,7 +145,9 @@ export default function UserMcpSection() {
                 onRefresh={() => refresh(sv.id)}
                 onToggle={() => toggle(sv)}
                 onEdit={() => startEdit(sv)}
-                onDelete={() => remove(sv.id)} />
+                onDelete={() => remove(sv.id)}
+                onSetMode={(name, mode) => setMode(sv, name, mode)}
+                onTry={(name, args) => tryTool(sv, name, args)} />
             ))}
           </div>
         )}
