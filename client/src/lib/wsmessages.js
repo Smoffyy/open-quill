@@ -30,6 +30,10 @@ export const handlers = {
     ctx.actions.syncConfig(m.version, false);
   },
 
+  account(_m, ctx) {
+    ctx.actions.refreshAccount();
+  },
+
   hello(m, ctx) {
     ctx.actions.syncConfig(m.configVersion, true);
   },

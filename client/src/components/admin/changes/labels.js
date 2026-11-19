@@ -45,7 +45,6 @@ export const SETTINGS = {
   safety_enabled: tk('Screen prompts'), safety_model_mode: tk('Screening model'), safety_model_id: tk('Screening model'),
   safety_prompt: tk('Screening prompt'), safety_verbose: tk('Tell members why'), safety_reason_enabled: tk('Explain refusals'),
   chat_search_enabled: tk('Chat history tools'),
-  allow_signups: tk('Accept new sign-ups'),
   local_only: tk('Local only'), egress_local_only: tk('Block public internet'), egress_allow_websearch: tk('Let web search through'),
   egress_allowlist: tk('Host allowlist'),
   greetings: tk('Greetings'), quick_prompts: tk('Starter prompts'),

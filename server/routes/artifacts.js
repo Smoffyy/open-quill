@@ -2,6 +2,7 @@ import path from 'path';
 import multer from 'multer';
 import { db, now } from '../db.js';
 import { authMiddleware } from '../auth.js';
+import { requirePermission } from '../lib/authz/middleware.js';
 import * as sandbox from '../sandbox.js';
 import { workspaceFor } from '../lib/projectfiles.js';
 import { sandboxCap, attachName, cleanPath, createEmpty, renameTo, fileInfo, sendDownload, restoreVersion, saveText, freePath } from '../lib/workspacefiles.js';
@@ -92,21 +93,21 @@ export default function registerArtifactRoutes(app) {
     res.send(sandbox.zipAll(artOf(c)));
   });
 
-  app.put('/api/chats/:id/artifacts/file', authMiddleware, (req, res) => {
+  app.put('/api/chats/:id/artifacts/file', authMiddleware, requirePermission('chats.edit'), (req, res) => {
     const c = ownChat(req, res); if (!c) return;
     if (activeTurn(c.id)) return res.status(409).json({ error: 'Wait for the reply to finish before editing artifacts.' });
     const r = saveText(artOf(c), String(req.body?.path || ''), req.body?.text, req.body?.v, sandboxCap(req.user));
     res.status(r.status).json(r.body);
   });
 
-  app.post('/api/chats/:id/artifacts/restore', authMiddleware, (req, res) => {
+  app.post('/api/chats/:id/artifacts/restore', authMiddleware, requirePermission('chats.edit'), (req, res) => {
     const c = ownChat(req, res); if (!c) return;
     if (activeTurn(c.id)) return res.status(409).json({ error: BUSY });
     const r = restoreVersion(artOf(c), String(req.body?.path || ''), parseInt(req.body?.v));
     res.status(r.status).json(r.body);
   });
 
-  app.delete('/api/chats/:id/artifacts', authMiddleware, (req, res) => {
+  app.delete('/api/chats/:id/artifacts', authMiddleware, requirePermission('chats.edit'), (req, res) => {
     const c = ownChat(req, res); if (!c) return;
     if (activeTurn(c.id)) return res.status(409).json({ error: BUSY });
     const rel = String(req.query.path || '');
@@ -128,12 +129,12 @@ export default function registerArtifactRoutes(app) {
     res.json({ ok: true, projectId: p.id, projectName: p.name, path: dest });
   }
 
-  app.post('/api/chats/:id/artifacts/save', authMiddleware, (req, res) => {
+  app.post('/api/chats/:id/artifacts/save', authMiddleware, requirePermission('chats.edit'), (req, res) => {
     const c = ownChat(req, res); if (!c) return;
     saveToProject(req, res, c, artOf(c));
   });
 
-  app.post('/api/chats/:id/files/save', authMiddleware, (req, res) => {
+  app.post('/api/chats/:id/files/save', authMiddleware, requirePermission('code.use'), (req, res) => {
     const c = ownChat(req, res); if (!c) return;
     if (c.mode !== 'code') return res.status(404).json({ error: 'not found' });
     saveToProject(req, res, c, wsOf(c));
@@ -144,7 +145,7 @@ export default function registerArtifactRoutes(app) {
     res.json({ files: sandbox.list(wsOf(c)) });
   });
 
-  app.post('/api/chats/:id/files', authMiddleware, fileUpload.single('file'), (req, res) => {
+  app.post('/api/chats/:id/files', authMiddleware, requirePermission('code.use', 'uploads.create'), fileUpload.single('file'), (req, res) => {
     const c = ownChat(req, res); if (!c) return;
     if (activeTurn(c.id)) return res.status(409).json({ error: BUSY });
     if (!req.file) return res.status(400).json({ error: 'No file received.' });
@@ -157,7 +158,7 @@ export default function registerArtifactRoutes(app) {
     res.json({ path: p.rel, files: sandbox.list(ws) });
   });
 
-  app.post('/api/chats/:id/files/new', authMiddleware, (req, res) => {
+  app.post('/api/chats/:id/files/new', authMiddleware, requirePermission('code.use'), (req, res) => {
     const c = ownChat(req, res); if (!c) return;
     if (activeTurn(c.id)) return res.status(409).json({ error: BUSY });
     const ws = wsOf(c);
@@ -165,7 +166,7 @@ export default function registerArtifactRoutes(app) {
     res.status(r.status).json(r.status === 200 ? { ...r.body, files: sandbox.list(ws) } : r.body);
   });
 
-  app.post('/api/chats/:id/files/rename', authMiddleware, (req, res) => {
+  app.post('/api/chats/:id/files/rename', authMiddleware, requirePermission('code.use'), (req, res) => {
     const c = ownChat(req, res); if (!c) return;
     if (activeTurn(c.id)) return res.status(409).json({ error: BUSY });
     const ws = wsOf(c);
@@ -173,7 +174,7 @@ export default function registerArtifactRoutes(app) {
     res.status(r.status).json(r.status === 200 ? { ...r.body, files: sandbox.list(ws) } : r.body);
   });
 
-  app.delete('/api/chats/:id/files', authMiddleware, (req, res) => {
+  app.delete('/api/chats/:id/files', authMiddleware, requirePermission('code.use'), (req, res) => {
     const c = ownChat(req, res); if (!c) return;
     if (activeTurn(c.id)) return res.status(409).json({ error: BUSY });
     const ws = wsOf(c);
@@ -193,14 +194,14 @@ export default function registerArtifactRoutes(app) {
     sendDownload(res, wsOf(c), String(req.query.path || ''), parseInt(req.query.v));
   });
 
-  app.put('/api/chats/:id/file', authMiddleware, (req, res) => {
+  app.put('/api/chats/:id/file', authMiddleware, requirePermission('code.use'), (req, res) => {
     const c = ownChat(req, res); if (!c) return;
     if (activeTurn(c.id)) return res.status(409).json({ error: 'Wait for the reply to finish before editing files.' });
     const r = saveText(wsOf(c), String(req.body?.path || ''), req.body?.text, req.body?.v, sandboxCap(req.user));
     res.status(r.status).json(r.body);
   });
 
-  app.post('/api/chats/:id/restore', authMiddleware, (req, res) => {
+  app.post('/api/chats/:id/restore', authMiddleware, requirePermission('code.use'), (req, res) => {
     const c = ownChat(req, res); if (!c) return;
     const r = restoreVersion(wsOf(c), String(req.body?.path || ''), parseInt(req.body?.v));
     res.status(r.status).json(r.body);

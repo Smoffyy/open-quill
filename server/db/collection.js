@@ -17,7 +17,8 @@ export const MIRROR = {
   eval_collections: { updated_at: o => o.updated_at ?? 0 },
   eval_versions: { collection_id: o => o.collection_id ?? null, version: o => o.version ?? 0, created_at: o => o.created_at ?? 0 },
   eval_runs: { collection_id: o => o.collection_id ?? null, created_at: o => o.created_at ?? 0 },
-  quality_checks: { ts: o => o.ts ?? 0, criterion_id: o => o.criterion_id ?? null, chat_id: o => o.chat_id ?? null, verdict: o => o.verdict ?? null }
+  quality_checks: { ts: o => o.ts ?? 0, criterion_id: o => o.criterion_id ?? null, chat_id: o => o.chat_id ?? null, verdict: o => o.verdict ?? null },
+  roles: { rank: o => o.rank ?? 0 }
 };
 
 const bumps = new Map();

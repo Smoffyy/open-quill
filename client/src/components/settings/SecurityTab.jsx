@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../../lib/api.js';
-import { t, fmtDateTime, fmtRelative } from '../../i18n.jsx';
+import { t, tp, fmtDateTime, fmtRelative } from '../../i18n.jsx';
 import { Skel, SkelRows } from '../ui/Skeleton.jsx';
 import { browserName, systemName } from '../../lib/useragent.js';
 
-const MIN_PASSWORD = 4;
+const MIN_PASSWORD = 8;
 
 function PasswordForm({ email }) {
   const [pw, setPw] = useState({ current: '', next: '', confirm: '' });
@@ -17,7 +17,7 @@ function PasswordForm({ email }) {
     e.preventDefault();
     if (busy) return;
     if (pw.next !== pw.confirm) { setErr({ text: t('New passwords do not match.'), field: 'confirm' }); return; }
-    if (pw.next.length < MIN_PASSWORD) { setErr({ text: t('New password must be at least 4 characters.'), field: 'next' }); return; }
+    if (pw.next.length < MIN_PASSWORD) { setErr({ text: t('New password must be at least 8 characters.'), field: 'next' }); return; }
     setBusy(true);
     try {
       await api.post('/api/me/password', { current: pw.current, next: pw.next });
@@ -129,10 +129,11 @@ function TwoFactor({ user, onUpdated }) {
 
 function Sessions() {
   const [sessions, setSessions] = useState(null);
+  const [idleDays, setIdleDays] = useState(0);
   const [err, setErr] = useState('');
   const load = useCallback(() => {
     setErr('');
-    api.get('/api/me/sessions').then(d => setSessions(d.sessions || [])).catch(() => setErr(t('Could not load sessions.')));
+    api.get('/api/me/sessions').then(d => { setSessions(d.sessions || []); setIdleDays(d.idleDays || 0); }).catch(() => setErr(t('Could not load sessions.')));
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -148,7 +149,7 @@ function Sessions() {
   return (
     <div className="sec-block">
       <div className="me-section-h">{t("Active sessions")}</div>
-      <div className="sec-note">{t("Devices signed in to your account. Sessions expire after 30 days idle.")}</div>
+      <div className="sec-note">{idleDays ? tp(idleDays, 'Devices signed in to your account. A session ends after {n} day without use.', 'Devices signed in to your account. A session ends after {n} days without use.') : t('Devices signed in to your account.')}</div>
       <div className="dz-err" role="alert">{err}</div>
       {sessions && sessions.some(s => !s.current) && (
         <div className="field row">

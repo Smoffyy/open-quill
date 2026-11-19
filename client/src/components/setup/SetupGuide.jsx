@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import '../../styles/setup.css';
 import { api } from '../../lib/api.js';
-import { t } from '../../i18n.jsx';
+import { t, tk } from '../../i18n.jsx';
 import { useTheme } from '../../lib/theme/store.jsx';
 import { isPreset, presetById } from '../../lib/presets.js';
 import { logoFor, useLogos } from '../../lib/logos.js';
@@ -51,7 +51,13 @@ function Welcome({ appName }) {
   );
 }
 
-function BasicsStep({ name, setName, signups, setSignups, placeholder }) {
+const SIGNUP_CHOICES = [
+  { value: 'closed', title: tk('Only me, for now'), note: tk('Nobody else can sign up. You can open sign-ups later under Users.') },
+  { value: 'approval', title: tk('Anyone, with my approval'), note: tk('People can create an account, and each one waits until you approve it.') },
+  { value: 'open', title: tk('Anyone who can reach this server'), note: tk('Good on a machine only you can reach. Risky if this address is open to a network you do not control.') }
+];
+
+function BasicsStep({ name, setName, signup, setSignup, placeholder }) {
   return (
     <>
       <p className="sg-lede">{t('Two things that are awkward to change once people have started using it.')}</p>
@@ -66,16 +72,13 @@ function BasicsStep({ name, setName, signups, setSignups, placeholder }) {
       <div className="sg-group" style={{ marginTop: 18 }}>
         <div className="sg-group-head"><span>{t('Who can create an account?')}</span></div>
         <div className="sg-choices">
-          <button type="button" className={'sg-choice' + (signups ? '' : ' on')} aria-pressed={!signups}
-            onClick={() => setSignups(false)}>
-            <strong>{t('Only me, for now')}</strong>
-            <span>{t('Nobody else can sign up. You can invite people later by turning this back on.')}</span>
-          </button>
-          <button type="button" className={'sg-choice' + (signups ? ' on' : '')} aria-pressed={signups}
-            onClick={() => setSignups(true)}>
-            <strong>{t('Anyone who can reach this server')}</strong>
-            <span>{t('Good on a machine only you can reach. Risky if this address is open to a network you do not control.')}</span>
-          </button>
+          {SIGNUP_CHOICES.map(c => (
+            <button key={c.value} type="button" className={'sg-choice' + (signup === c.value ? ' on' : '')} aria-pressed={signup === c.value}
+              onClick={() => setSignup(c.value)}>
+              <strong>{t(c.title)}</strong>
+              <span>{t(c.note)}</span>
+            </button>
+          ))}
         </div>
       </div>
     </>
@@ -280,7 +283,7 @@ export default function SetupGuide({ appName, onDone }) {
   const [failed, setFailed] = useState('');
 
   const [name, setName] = useState('');
-  const [signups, setSignups] = useState(false);
+  const [signup, setSignup] = useState('closed');
   const [theme, setTheme] = useState('');
   const [types, setTypes] = useState({});
   const [providerId, setProviderId] = useState('');
@@ -409,7 +412,8 @@ export default function SetupGuide({ appName, onDone }) {
     setBusy(true);
     try {
       if (current.id === 'basics') {
-        await api.patch('/api/admin/app-config', { appName: name.trim() || appName, allowSignups: signups });
+        await api.patch('/api/admin/app-config', { appName: name.trim() || appName });
+        await api.put('/api/admin/auth/signup', { policy: signup });
       }
       if (current.id === 'layout' && theme) {
         await api.post(`/api/admin/themes/${theme}/activate`, {});
@@ -450,7 +454,7 @@ export default function SetupGuide({ appName, onDone }) {
           <h2 className="sg-title">{current.title}</h2>
           {current.id === 'welcome' && <Welcome appName={appName} />}
           {current.id === 'basics' && (
-            <BasicsStep name={name} setName={setName} signups={signups} setSignups={setSignups} placeholder={appName} />
+            <BasicsStep name={name} setName={setName} signup={signup} setSignup={setSignup} placeholder={appName} />
           )}
           {current.id === 'layout' && <LayoutStep chosen={theme} onChoose={setTheme} />}
           {current.id === 'connection' && (

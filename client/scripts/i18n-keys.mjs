@@ -63,7 +63,8 @@ const SERVER_SOURCES = [
   'routes', 'auth.js',
   ...['mcp', 'mcpnet', 'evals', 'quality', 'regression', 'judge', 'userskills', 'skillfile', 'workspaceskills', 'tasks',
     'projectfiles', 'releases', 'changes', 'draft', 'providers', 'theme',
-    'playground', 'playrun', 'budget', 'roles'].map(n => `lib/${n}.js`)
+    'playground', 'playrun', 'budget'].map(n => `lib/${n}.js`),
+  'lib/authz', 'lib/identity'
 ];
 
 const SERVER_RES = [

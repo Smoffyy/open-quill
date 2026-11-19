@@ -91,7 +91,25 @@ CREATE INDEX IF NOT EXISTS idx_eval_runs ON eval_runs(collection_id, created_at)
 CREATE TABLE IF NOT EXISTS quality_checks (id TEXT PRIMARY KEY, ts INTEGER, criterion_id TEXT, chat_id TEXT, verdict TEXT, data TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_quality_ts ON quality_checks(ts);
 CREATE INDEX IF NOT EXISTS idx_quality_criterion ON quality_checks(criterion_id, ts);
-CREATE INDEX IF NOT EXISTS idx_quality_chat ON quality_checks(chat_id);`
+CREATE INDEX IF NOT EXISTS idx_quality_chat ON quality_checks(chat_id);`,
+
+  `CREATE TABLE IF NOT EXISTS roles (id TEXT PRIMARY KEY, rank INTEGER, data TEXT NOT NULL);
+UPDATE users SET data = json_remove(json_set(data,
+    '$.role', CASE
+      WHEN json_extract(data, '$.is_owner') THEN 'owner'
+      WHEN json_extract(data, '$.is_admin') AND json_extract(data, '$.can_publish') = 0 THEN 'editor'
+      WHEN json_extract(data, '$.is_admin') THEN 'admin'
+      ELSE 'user' END,
+    '$.status', 'active',
+    '$.source', 'local'),
+  '$.is_admin', '$.is_owner', '$.can_publish')
+WHERE json_valid(data) AND json_extract(data, '$.role') IS NULL;
+INSERT OR IGNORE INTO roles (id, rank, data)
+  SELECT 'editor', 50, json_object('id', 'editor', 'name', 'Editor', 'description', 'Uses the admin panel and stages changes, but cannot publish them.', 'rank', 50, 'permissions', json('[]'), 'preset', 'legacy-editor', 'created_at', CAST(strftime('%s', 'now') AS INTEGER) * 1000)
+  WHERE EXISTS (SELECT 1 FROM users WHERE json_extract(data, '$.role') = 'editor');
+INSERT OR IGNORE INTO settings (key, value)
+  SELECT 'auth_signup_policy', CASE WHEN value = '"0"' THEN '"closed"' ELSE '"open"' END FROM settings WHERE key = 'allow_signups';
+DELETE FROM settings WHERE key IN ('allow_signups', 'draft:allow_signups');`
 ];
 
 export const LATEST_VERSION = MIGRATIONS.length + 1;

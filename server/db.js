@@ -122,13 +122,6 @@ chatsCol.oldestByUser = userId => byUserOldestStmt.all(userId).map(r => JSON.par
 const usersCol = collection('users');
 const byEmailStmt = sdb.prepare('SELECT data FROM users WHERE email IS ?');
 usersCol.byEmail = email => { const r = byEmailStmt.get(email ?? null); return r ? JSON.parse(r.data) : undefined; };
-const userSearchStmt = sdb.prepare(`
-  SELECT data FROM users
-  WHERE id IS NOT ?
-    AND (oq_icontains(email, ?) OR oq_icontains(json_extract(data,'$.display_name'), ?))
-  ORDER BY created_at LIMIT ?`);
-usersCol.search = (needle, excludeId, limit) =>
-  userSearchStmt.all(excludeId ?? null, needle, needle, limit).map(r => JSON.parse(r.data));
 
 const usageCol = collection('usage');
 const usageByUserStmt = sdb.prepare('SELECT data FROM usage WHERE user_id=?');
@@ -183,6 +176,8 @@ const sessionsByUserStmt = sdb.prepare('SELECT data FROM sessions WHERE user_id=
 sessionsCol.byUser = userId => sessionsByUserStmt.all(userId).map(r => JSON.parse(r.data));
 const touchSessionStmt = sdb.prepare('UPDATE sessions SET last_seen=?, data=json_set(data,\'$.last_seen\',?) WHERE id=?');
 sessionsCol.touch = (id, ts) => { try { touchSessionStmt.run(ts, ts, id); } catch {} };
+const lastSeenStmt = sdb.prepare('SELECT user_id, MAX(last_seen) AS seen FROM sessions GROUP BY user_id');
+sessionsCol.lastSeenByUser = () => new Map(lastSeenStmt.all().map(r => [r.user_id, r.seen || 0]));
 const pruneSessionsStmt = sdb.prepare('DELETE FROM sessions WHERE last_seen < ?');
 sessionsCol.prune = before => { try { const n = pruneSessionsStmt.run(before).changes; if (n) bumpTable('sessions'); return n; } catch { return 0; } };
 
@@ -323,7 +318,8 @@ export const db = {
   evalCollections: collection('eval_collections'),
   evalVersions: evalVersionsCol,
   evalRuns: evalRunsCol,
-  qualityChecks: qualityCol
+  qualityChecks: qualityCol,
+  roles: collection('roles')
 };
 
 const sGet = sdb.prepare('SELECT value FROM settings WHERE key=?');
@@ -419,13 +415,6 @@ if (!getSetting('legacy_mark_v1')) {
   }
   if (LEGACY_MARK_SET.includes(getSetting('app_icon', ''))) setSetting('app_icon', '');
   setSetting('legacy_mark_v1', '1');
-}
-
-if (!getSetting('publish_role_v1')) {
-  for (const u of db.users.all()) {
-    if (u.is_admin && !u.is_owner && u.can_publish === undefined) db.users.update(u.id, { can_publish: 1 });
-  }
-  setSetting('publish_role_v1', '1');
 }
 
 export default db;

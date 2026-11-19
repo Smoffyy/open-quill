@@ -30,6 +30,7 @@ const DB_DIR = path.join(SERVER_ROOT, 'data', 'databases', DB_NAME);
 const EMAIL = 'integration@test.local';
 const PASSWORD = 'integration-password';
 const START_TIMEOUT_MS = 30000;
+const SETUP_TOKEN = 'integration-setup-token';
 
 let child = null;
 let readyMs = 0;
@@ -128,7 +129,7 @@ function startServer() {
   return new Promise((resolve, reject) => {
     const proc = spawn(process.execPath, ['index.js'], {
       cwd: SERVER_ROOT,
-      env: { ...process.env, OPEN_QUILL_DB: DB_NAME, PORT: String(PORT), HOST: '127.0.0.1' },
+      env: { ...process.env, OPEN_QUILL_DB: DB_NAME, PORT: String(PORT), HOST: '127.0.0.1', OPEN_QUILL_SETUP_TOKEN: SETUP_TOKEN },
       stdio: ['ignore', 'pipe', 'pipe']
     });
     let log = '';
@@ -175,9 +176,15 @@ before(async () => {
   child = await startServer();
   readyMs = await waitForReady();
 
-  // The first account created on a fresh database becomes owner+admin.
-  const res = await request('POST', '/api/auth/register', {
+  // The first account created on a fresh database becomes the owner, and only with the
+  // setup token the server prints while no owner exists.
+  const blind = await request('POST', '/api/auth/register', {
     origin: ORIGIN, secFetchSite: 'same-origin', body: { email: EMAIL, password: PASSWORD }
+  });
+  assert.equal(blind.status, 403, 'the first account needs the setup token');
+  assert.equal(blind.json.setup, true);
+  const res = await request('POST', '/api/auth/register', {
+    origin: ORIGIN, secFetchSite: 'same-origin', body: { email: EMAIL, password: PASSWORD, setupToken: SETUP_TOKEN }
   });
   assert.equal(res.status, 200, `registration failed: ${res.text}`);
   cookie = String(res.headers['set-cookie']?.[0] || '').split(';')[0];
@@ -216,8 +223,8 @@ test('the app answers and serves its policy header', async () => {
   assert.equal(ctx.headers['content-security-policy'], undefined, 'the policy is for documents, not the JSON API');
   assert.equal(ctx.headers['cache-control'], 'no-store', 'authenticated JSON must not be cached');
   assert.equal(ctx.json.firstRun, false);
-  // deliberately limited to branding plus the two booleans the sign-in screen needs
-  assert.deepEqual(Object.keys(ctx.json).sort(), ['allowSignups', 'appFont', 'appIcon', 'appName', 'firstRun', 'uiPreset']);
+  // deliberately limited to branding plus what the sign-in screen needs
+  assert.deepEqual(Object.keys(ctx.json).sort(), ['appFont', 'appIcon', 'appName', 'firstRun', 'signup', 'uiPreset']);
 });
 
 test('a browser on this origin can complete the whole sign-in loop', async () => {
@@ -769,42 +776,124 @@ test('a release can ship part of the draft, refuses a stale review and rolls bac
   assert.equal((await browser('POST', '/api/admin/releases/999999/restore', { body: {} })).status, 404);
 });
 
-test('editors stage, publishers ship, and only the owner makes publishers', async () => {
-  const join = async (email) => {
-    const res = await request('POST', '/api/auth/register', { origin: ORIGIN, secFetchSite: 'same-origin', body: { email, password: PASSWORD } });
-    assert.equal(res.status, 200, res.text);
-    const c = String(res.headers['set-cookie']?.[0] || '').split(';')[0];
-    return { cookie: c, id: (await browser('GET', '/api/me', { cookie: c })).json.user.id };
-  };
-  const as = (who) => (method, url, opts = {}) => browser(method, url, { ...opts, cookie: who.cookie });
-  const ed = await join('editor-role@example.com');
-  const pub = await join('publisher-role@example.com');
-  const other = await join('member-role@example.com');
+const joinAs = async (email) => {
+  const res = await request('POST', '/api/auth/register', { origin: ORIGIN, secFetchSite: 'same-origin', body: { email, password: PASSWORD } });
+  assert.equal(res.status, 200, res.text);
+  const c = String(res.headers['set-cookie']?.[0] || '').split(';')[0];
+  return { cookie: c, id: res.json.user.id, user: res.json.user };
+};
+const as = (who) => (method, url, opts = {}) => browser(method, url, { ...opts, cookie: who.cookie });
 
-  assert.equal((await browser('PATCH', `/api/admin/users/${pub.id}`, { body: { role: 'publisher' } })).status, 200);
-  assert.equal((await browser('PATCH', `/api/admin/users/${ed.id}`, { body: { role: 'editor' } })).status, 200);
-  const me = (await as(ed)('GET', '/api/me')).json.user;
-  assert.equal(me.role, 'editor');
-  assert.equal(me.canPublish, false);
-  assert.equal((await browser('PATCH', `/api/admin/users/${ed.id}`, { body: { role: 'owner' } })).status, 403, 'ownership is never granted');
+test('admins publish and manage the accounts below them, and only owners make admins', async () => {
+  const adm = await joinAs('admin-role@example.com');
+  const peer = await joinAs('admin-peer@example.com');
+  const other = await joinAs('user-role@example.com');
+  const owner = (await browser('GET', '/api/me')).json.user;
+
+  assert.equal(other.user.role, 'user', 'an open sign-up starts as a user');
+  assert.equal((await as(other)('GET', '/api/admin/users')).status, 403, 'a user cannot list accounts');
+  assert.equal((await as(other)('PATCH', '/api/admin/app-config', { body: { disclaimer: 'x' } })).status, 403, 'nor stage admin edits');
+
+  assert.equal((await browser('PATCH', `/api/admin/users/${adm.id}`, { body: { role: 'admin' } })).status, 200);
+  assert.equal((await browser('PATCH', `/api/admin/users/${peer.id}`, { body: { role: 'admin' } })).status, 200);
+  const me = (await as(adm)('GET', '/api/me')).json.user;
+  assert.equal(me.role, 'admin');
+  assert.ok(me.permissions.includes('admin.publish') && me.permissions.includes('admin.users'));
+  assert.ok(!('isAdmin' in me) && !('canPublish' in me), 'the old flags are gone');
+
+  assert.equal((await as(adm)('PATCH', `/api/admin/users/${other.id}`, { body: { role: 'admin' } })).status, 403, 'an admin cannot make admins');
+  assert.equal((await as(adm)('PATCH', `/api/admin/users/${peer.id}`, { body: { role: 'user' } })).status, 403, 'nor demote another admin');
+  assert.equal((await as(adm)('PATCH', `/api/admin/users/${adm.id}`, { body: { role: 'user' } })).status, 403, 'nor change their own role');
+  assert.equal((await as(adm)('PATCH', `/api/admin/users/${owner.id}`, { body: { status: 'disabled' } })).status, 403, 'nor touch an owner');
+  assert.equal((await as(adm)('DELETE', `/api/admin/users/${peer.id}`)).status, 403, 'nor remove a peer');
+  assert.equal((await as(adm)('PATCH', `/api/admin/users/${other.id}`, { body: { role: 'nonsense' } })).status, 403, 'an unknown role is refused');
+
+  const listed = (await as(adm)('GET', '/api/admin/users')).json.users;
+  assert.equal(listed.find(u => u.id === other.id).manage, true);
+  assert.deepEqual(listed.find(u => u.id === peer.id).assignable, [], 'a peer offers nothing to assign');
 
   await browser('POST', '/api/admin/changes/publish', { body: {} });
-  await as(ed)('PATCH', '/api/admin/app-config', { body: { disclaimer: 'Editor draft' } });
-  await as(pub)('PATCH', '/api/admin/app-config', { body: { supportContact: 'help@example.com' } });
-  assert.equal((await as(ed)('POST', '/api/admin/changes/publish', { body: {} })).status, 403, 'an editor cannot publish');
-  assert.equal((await as(ed)('POST', '/api/admin/changes/discard', { body: { keys: ['setting:support_contact'] } })).status, 403, 'nor discard someone else’s change');
-  assert.equal((await as(ed)('POST', '/api/admin/changes/discard', { body: { keys: ['setting:disclaimer'] } })).status, 200, 'but can drop their own');
-  assert.equal((await as(pub)('POST', '/api/admin/changes/publish', { body: {} })).status, 200, 'a publisher ships');
-  const head = (await browser('GET', '/api/admin/releases')).json.version;
-  assert.equal((await as(ed)('POST', `/api/admin/releases/${head - 1}/restore`, { body: {} })).status, 403, 'an editor cannot roll back');
+  await as(adm)('PATCH', '/api/admin/app-config', { body: { supportContact: 'help@example.com' } });
+  assert.equal((await as(adm)('POST', '/api/admin/changes/publish', { body: {} })).status, 200, 'an admin publishes');
 
-  assert.equal((await as(pub)('PATCH', `/api/admin/users/${other.id}`, { body: { role: 'editor' } })).status, 200, 'a publisher can make editors');
-  assert.equal((await as(pub)('PATCH', `/api/admin/users/${other.id}`, { body: { role: 'publisher' } })).status, 403, 'but not publishers');
-  assert.equal((await as(ed)('PATCH', `/api/admin/users/${other.id}`, { body: { role: 'member' } })).status, 403, 'an editor cannot touch another editor');
-  assert.equal((await as(ed)('DELETE', `/api/admin/users/${pub.id}`)).status, 403, 'nor remove a publisher');
-  assert.equal((await as(pub)('PATCH', `/api/admin/users/${pub.id}/budget`, { body: { budget: 5 } })).status, 200, 'everyone can set their own cap');
+  assert.equal((await browser('PATCH', `/api/admin/users/${owner.id}`, { body: { role: 'admin' } })).status, 403, 'nobody changes their own role');
+  assert.equal((await browser('PATCH', `/api/admin/users/${adm.id}`, { body: { role: 'owner' } })).status, 200, 'an owner can make another owner');
+  assert.equal((await as(adm)('GET', '/api/me')).json.user.owner, true);
+  assert.equal((await browser('PATCH', `/api/admin/users/${adm.id}`, { body: { role: 'admin' } })).status, 200, 'and owners can demote each other');
+  const lastOwner = await browser('DELETE', '/api/me', { body: { password: PASSWORD } });
+  assert.equal(lastOwner.status, 403, 'the last owner cannot delete their own account');
 
-  for (const u of [ed, pub, other]) assert.equal((await browser('DELETE', `/api/admin/users/${u.id}`)).status, 200, 'the owner can remove anyone');
+  assert.equal((await as(adm)('PATCH', `/api/admin/users/${other.id}/budget`, { body: { budget: 5 } })).status, 200);
+  assert.equal((await as(adm)('PATCH', `/api/admin/users/${adm.id}/budget`, { body: { budget: 5 } })).status, 200, 'everyone with user management can set their own cap');
+
+  for (const u of [adm, peer, other]) assert.equal((await browser('DELETE', `/api/admin/users/${u.id}`)).status, 200, 'the owner can remove anyone');
+});
+
+test('a pending account waits behind the gate, and a disabled one is signed out at once', async () => {
+  assert.equal((await browser('PUT', '/api/admin/auth/signup', { body: { policy: 'approval' } })).status, 200);
+  const pend = await joinAs('pending-gate@example.com');
+  assert.equal(pend.user.role, 'pending');
+  assert.equal(pend.user.gate, 'pending');
+  assert.deepEqual(pend.user.permissions, []);
+
+  const me = await as(pend)('GET', '/api/me');
+  assert.equal(me.status, 200, 'a pending account can see itself');
+  assert.equal((await as(pend)('GET', '/api/me/sessions')).status, 200, 'and its sessions');
+  for (const [method, url] of [['GET', '/api/chats'], ['POST', '/api/chats'], ['GET', '/api/models'], ['GET', '/api/app-config'], ['GET', '/api/projects'], ['POST', '/api/upload']]) {
+    const r = await as(pend)(method, url, { body: {} });
+    assert.equal(r.status, 403, `${method} ${url} is gated`);
+    assert.equal(r.json.gate, 'pending');
+  }
+  const ws = await handshake({ Origin: ORIGIN, 'Sec-Fetch-Site': 'same-origin', Cookie: pend.cookie });
+  assert.equal(ws.open, false, 'no socket while pending');
+
+  assert.equal((await browser('PATCH', `/api/admin/users/${pend.id}`, { body: { role: 'user' } })).status, 200, 'approval');
+  assert.equal((await as(pend)('GET', '/api/chats')).status, 200, 'approval takes effect on the next request');
+  assert.equal((await handshake({ Origin: ORIGIN, 'Sec-Fetch-Site': 'same-origin', Cookie: pend.cookie })).open, true);
+
+  assert.equal((await browser('PATCH', `/api/admin/users/${pend.id}`, { body: { status: 'disabled' } })).status, 200);
+  assert.equal((await as(pend)('GET', '/api/me')).status, 401, 'disabling ends every session at once');
+  const login = await request('POST', '/api/auth/login', { origin: ORIGIN, secFetchSite: 'same-origin', body: { email: 'pending-gate@example.com', password: PASSWORD } });
+  assert.equal(login.status, 403);
+  assert.match(login.json.error, /disabled/);
+  assert.equal((await browser('PATCH', `/api/admin/users/${pend.id}`, { body: { status: 'active' } })).status, 200);
+  const back = await request('POST', '/api/auth/login', { origin: ORIGIN, secFetchSite: 'same-origin', body: { email: 'pending-gate@example.com', password: PASSWORD } });
+  assert.equal(back.status, 200, 'enabling restores sign-in');
+
+  assert.equal((await browser('PUT', '/api/admin/auth/signup', { body: { policy: 'closed' } })).status, 200);
+  const closed = await request('POST', '/api/auth/register', { origin: ORIGIN, secFetchSite: 'same-origin', body: { email: 'closed@example.com', password: PASSWORD } });
+  assert.equal(closed.status, 403);
+  assert.equal((await browser('PUT', '/api/admin/auth/signup', { body: { policy: 'open', domains: ['allowed.test', 'not a domain'] } })).json.domains.length, 1);
+  const outside = await request('POST', '/api/auth/register', { origin: ORIGIN, secFetchSite: 'same-origin', body: { email: 'x@elsewhere.test', password: PASSWORD } });
+  assert.equal(outside.status, 403, 'a domain outside the list is refused');
+  const inside = await joinAs('y@allowed.test');
+  assert.equal((await as(inside)('PUT', '/api/admin/auth/signup', { body: { policy: 'open' } })).status, 403, 'only an owner sets the policy');
+  assert.equal((await browser('PUT', '/api/admin/auth/signup', { body: { policy: 'nope' } })).status, 400);
+  assert.equal((await browser('PUT', '/api/admin/auth/signup', { body: { policy: 'open', domains: [] } })).status, 200);
+
+  for (const u of [pend, inside]) assert.equal((await browser('DELETE', `/api/admin/users/${u.id}`)).status, 200);
+});
+
+test('narrowing the User role takes a feature away on the next request and gives it back', async () => {
+  const u = await joinAs('baseline@example.com');
+  assert.equal((await as(u)('POST', '/api/chats', { body: { mode: 'code' } })).status, 200);
+  const roles = (await browser('GET', '/api/admin/roles')).json.roles;
+  const base = roles.find(r => r.id === 'user').permissions;
+  assert.ok(!base.includes('chats.advanced') && !base.includes('admin.panel'), 'the default baseline is today’s member set');
+
+  const narrowed = await browser('PUT', '/api/admin/roles/user-baseline', { body: { permissions: [...base.filter(p => p !== 'code.use' && p !== 'tasks.schedule'), 'admin.users'] } });
+  assert.equal(narrowed.status, 200);
+  assert.ok(!narrowed.json.roles.find(r => r.id === 'user').permissions.includes('admin.users'), 'admin permissions never enter the User role');
+  assert.equal((await as(u)('POST', '/api/chats', { body: { mode: 'code' } })).status, 403);
+  assert.equal((await as(u)('GET', '/api/tasks')).status, 403);
+  assert.equal((await as(u)('POST', '/api/chats', { body: {} })).status, 200, 'everything else still works');
+  assert.ok(!(await as(u)('GET', '/api/me')).json.user.permissions.includes('code.use'));
+  assert.equal((await browser('POST', '/api/chats', { body: { mode: 'code' } })).status, 200, 'the owner keeps it');
+  assert.equal((await as(u)('PUT', '/api/admin/roles/user-baseline', { body: { permissions: base } })).status, 403);
+
+  assert.equal((await browser('PUT', '/api/admin/roles/user-baseline', { body: { permissions: base } })).status, 200);
+  assert.equal((await as(u)('GET', '/api/tasks')).status, 200, 'restoring gives it back');
+  assert.equal((await browser('DELETE', `/api/admin/users/${u.id}`)).status, 200);
 });
 
 test('unknown routes answer in the right language', async () => {

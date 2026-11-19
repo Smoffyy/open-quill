@@ -4,6 +4,7 @@ import { docToCss, injectCss, clearCss } from './css.js';
 import { emptyDoc, migrateDoc, fillPlaceholders, CONTENT_INDEX } from './schema.js';
 import { DEFAULT_PRESET } from '../presets.js';
 import { fmtDate, fmtDateTime } from '../../i18n.jsx';
+import { can } from '../permissions.js';
 
 const Ctx = createContext(null);
 export const useTheme = () => useContext(Ctx);
@@ -93,7 +94,7 @@ function readHistory(themeId) {
 }
 
 export function ThemeProvider({ user, cfg, children }) {
-  const isAdmin = !!user?.isAdmin;
+  const isAdmin = can(user, 'admin.panel');
   const [theme, setTheme] = useState(null);
   const [build, setBuild] = useState(() => readBuildFlag());
   const [asMember, setAsMember] = useState(false);
@@ -118,7 +119,7 @@ export function ThemeProvider({ user, cfg, children }) {
   const baseline = useRef(null);
   const [depth, setDepth] = useState({ undo: 0, redo: 0, baseline: false });
 
-  const buildOn = isAdmin && build;
+  const buildOn = can(user, 'admin.interface') && build;
 
   useEffect(() => { themeRef.current = theme; }, [theme]);
 

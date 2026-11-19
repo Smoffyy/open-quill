@@ -31,6 +31,10 @@ import registerThemeRoutes from './routes/theme.js';
 import registerChangeRoutes from './routes/changes.js';
 import registerEvalRoutes from './routes/evals.js';
 import registerQualityRoutes from './routes/quality.js';
+import registerPeopleRoutes from './routes/people.js';
+import registerIdentityRoutes from './routes/identity.js';
+import { gateOf } from './lib/authz/effective.js';
+import { announceSetup } from './lib/identity/signup.js';
 import { settleInterrupted } from './lib/regression.js';
 import { localOnlyMiddleware } from './lib/localonly.js';
 import { installEgressGuard } from './lib/egress.js';
@@ -73,7 +77,9 @@ app.use(parseCookies);
 // 404 rather than 401 for a signed-out caller: whether a given upload exists is itself
 // something only a member should learn.
 const uploadAuth = (req, res, next) => {
-  if (isPublicUpload(req.path) || sessionFromRequest(req)) return next();
+  if (isPublicUpload(req.path)) return next();
+  const r = sessionFromRequest(req);
+  if (r && !gateOf(r.user)) return next();
   res.status(404).json({ error: 'not found' });
 };
 app.use('/uploads', uploadHeaders, uploadAuth, express.static(UPLOADS, { index: false, dotfiles: 'deny' }));
@@ -94,6 +100,8 @@ registerThemeRoutes(app);
 registerChangeRoutes(app);
 registerEvalRoutes(app);
 registerQualityRoutes(app);
+registerPeopleRoutes(app);
+registerIdentityRoutes(app);
 registerMiscRoutes(app);
 
 // Unknown API routes answer in JSON. Falling through to the SPA handler below served a
@@ -137,7 +145,10 @@ function warmHostEnv() {
   worker.unref();
 }
 
-server.listen(PORT, HOST, () => console.log(`open-quill running on http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`));
+server.listen(PORT, HOST, () => {
+  console.log(`open-quill running on http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
+  announceSetup();
+});
 warmHostEnv();
 const pruneOld = () => { pruneAudit(); pruneToolStats(); pruneSessions(); };
 pruneOld();

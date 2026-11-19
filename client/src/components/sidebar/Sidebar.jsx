@@ -15,6 +15,8 @@ import { nextFitSize, FIT_PASSES } from '../../lib/fittext.js';
 import { useDismiss } from '../../lib/dismiss.js';
 import { pathForChat, pathForCode, pathForProject } from '../../lib/route.js';
 import { collectTags, hasTag } from '../../lib/chattags.js';
+import { can } from '../../lib/permissions.js';
+import { roleLabel } from '../ui/roleLabel.jsx';
 
 const SIDEBAR_CHAT_LIMIT = 40;
 const SIDEBAR_PROJECT_LIMIT = 5;
@@ -99,8 +101,8 @@ function ProfileMenu({ user, anchorRef, onSettings, onAdmin, onPlayground, onCre
     <div className="popover" ref={ref} role="menu" aria-label={t('Profile menu')}
       style={pos ? { position: 'fixed', left: pos.left, bottom: pos.bottom, width: pos.width, right: 'auto' } : { visibility: 'hidden' }}>
       <div className="pm-account">{user.email}</div>
-      {user.isAdmin && <button onClick={onAdmin}><Shield /> {t('Admin Panel')}</button>}
-      {user.isAdmin && <button onClick={onPlayground}><Flask /> {t('Playground')}</button>}
+      {can(user, 'admin.panel') && <button onClick={onAdmin}><Shield /> {t('Admin Panel')}</button>}
+      {can(user, 'admin.models') && <button onClick={onPlayground}><Flask /> {t('Playground')}</button>}
       <button onClick={onSettings}><Gear /> {t('Settings')}</button>
       <button onClick={onCredits}><Heart /> {t('Credits')}</button>
       <button onClick={onChangelog}><Sparkles /> {t('Changelog')}</button>
@@ -426,7 +428,7 @@ function Sidebar({
           <div className="avatar">{(user.displayName || user.email)[0].toUpperCase()}</div>
           <div className="profile-info">
             <div className="name">{user.displayName}</div>
-            <div className="plan">{user.isAdmin ? t('Admin') : t('Member')}</div>
+            <div className="plan">{roleLabel(user.role, user.roleName)}</div>
           </div>
           <ChevDown className="profile-caret" aria-hidden="true" />
         </button>

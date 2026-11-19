@@ -9,7 +9,6 @@ const ADMIN_ONLY = new Set(['admin', 'playground']);
 
 export function parseRoute(pathname, opts = {}) {
   const p = String(pathname || '/');
-  const isAdmin = !!opts.isAdmin;
 
   const named = (
     /^\/admin(\/|$)/.test(p) ? 'admin' :
@@ -22,7 +21,7 @@ export function parseRoute(pathname, opts = {}) {
     null
   );
   if (named) {
-    if (ADMIN_ONLY.has(named) && !isAdmin) return { view: 'home', replace: '/' };
+    if (ADMIN_ONLY.has(named) && !opts[named]) return { view: 'home', replace: '/' };
     return { view: named };
   }
 

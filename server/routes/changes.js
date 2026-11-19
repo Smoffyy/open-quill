@@ -1,5 +1,6 @@
-import { authMiddleware, adminOnly, publisherOnly } from '../auth.js';
-import { canPublish } from '../lib/roles.js';
+import { authMiddleware } from '../auth.js';
+import { requirePermission } from '../lib/authz/middleware.js';
+import { can } from '../lib/authz/effective.js';
 import { logAudit } from '../lib/audit.js';
 import { pendingChanges, publish, discard, restore, releaseList, releaseDetail } from '../lib/releases.js';
 
@@ -23,32 +24,39 @@ function answer(res, fn) {
   }
 }
 
-export default function registerChangeRoutes(app) {
-  app.get('/api/admin/changes', authMiddleware, adminOnly, (req, res) => res.json(pendingChanges()));
+function publisher(req, res, next) {
+  if (can(req.user, 'admin.publish')) return next();
+  res.status(403).json({ error: 'Publishing needs the publish permission. Ask an admin or an owner.' });
+}
 
-  app.post('/api/admin/changes/publish', authMiddleware, adminOnly, publisherOnly, (req, res) => answer(res, () => {
+export default function registerChangeRoutes(app) {
+  const panel = [authMiddleware, requirePermission('admin.panel')];
+
+  app.get('/api/admin/changes', ...panel, (req, res) => res.json(pendingChanges()));
+
+  app.post('/api/admin/changes/publish', ...panel, publisher, (req, res) => answer(res, () => {
     const b = req.body || {};
     const rel = publish(req.user, { keys: keyList(b.keys), note: b.note, base: b.base == null ? null : versionOf(b.base) });
     logAudit(req, 'config.publish', { meta: { version: rel.version, changes: rel.changes.length } });
     return { ok: true, version: rel.version, count: rel.changes.length };
   }));
 
-  app.post('/api/admin/changes/discard', authMiddleware, adminOnly, (req, res) => answer(res, () => {
-    const r = discard(req.user, { keys: keyList(req.body?.keys), onlyOwn: !canPublish(req.user) });
+  app.post('/api/admin/changes/discard', ...panel, (req, res) => answer(res, () => {
+    const r = discard(req.user, { keys: keyList(req.body?.keys), onlyOwn: !can(req.user, 'admin.publish') });
     logAudit(req, 'config.discard', { meta: { changes: r.count } });
     return { ok: true, count: r.count };
   }));
 
-  app.get('/api/admin/releases', authMiddleware, adminOnly, (req, res) => {
+  app.get('/api/admin/releases', ...panel, (req, res) => {
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
     const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
     res.json(releaseList(limit, offset));
   });
 
-  app.get('/api/admin/releases/:version', authMiddleware, adminOnly, (req, res) =>
+  app.get('/api/admin/releases/:version', ...panel, (req, res) =>
     answer(res, () => releaseDetail(versionOf(req.params.version))));
 
-  app.post('/api/admin/releases/:version/restore', authMiddleware, adminOnly, publisherOnly, (req, res) => answer(res, () => {
+  app.post('/api/admin/releases/:version/restore', ...panel, publisher, (req, res) => answer(res, () => {
     const from = versionOf(req.params.version);
     const rel = restore(req.user, from, { note: req.body?.note });
     logAudit(req, 'config.restore', { meta: { version: rel.version, from } });

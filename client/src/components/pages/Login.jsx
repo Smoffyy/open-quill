@@ -6,7 +6,8 @@ import BrandMark from '../ui/BrandMark.jsx';
 
 export default function Login({ onLogin, cfg }) {
   const firstRun = !!cfg?.firstRun;
-  const signupsAllowed = firstRun || cfg?.allowSignups !== false;
+  const signupsAllowed = firstRun || (cfg?.signup || 'open') !== 'closed';
+  const approval = !firstRun && cfg?.signup === 'approval';
   const [mode, setMode] = useState(firstRun ? 'signup' : 'signin');
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
@@ -17,9 +18,14 @@ export default function Login({ onLogin, cfg }) {
   const [twofa, setTwofa] = useState(false);
   const [code, setCode] = useState('');
   const [useRecovery, setUseRecovery] = useState(false);
+  const [setupToken, setSetupToken] = useState('');
   const appName = cfg?.appName || 'open-quill';
 
   useEffect(() => { if (firstRun) setMode('signup'); }, [firstRun]);
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get('setup');
+    if (token) setSetupToken(token);
+  }, []);
 
   function switchMode(next) {
     setMode(next);
@@ -57,9 +63,10 @@ export default function Login({ onLogin, cfg }) {
     if (pw !== confirm) { setBad('confirm'); setErr(t('Those passwords do not match.')); return; }
     setBusy(true);
     try {
-      const { user } = await api.post('/api/auth/register', { email: email.trim(), password: pw });
+      const { user } = await api.post('/api/auth/register', { email: email.trim(), password: pw, ...(firstRun ? { setupToken: setupToken.trim() } : {}) });
+      if (firstRun) history.replaceState({}, '', window.location.pathname);
       onLogin(user);
-    } catch (e) { setBad('email'); setErr(String(e?.message || '')); }
+    } catch (e) { setBad(e?.body?.setup ? 'setup' : 'email'); setErr(String(e?.message || '')); }
     setBusy(false);
   }
 
@@ -109,6 +116,11 @@ export default function Login({ onLogin, cfg }) {
                   : t('Sign in to continue.')}
               </div>
               <div className="err" id={errId} role="alert">{err}</div>
+              {firstRun && (
+                <input autoComplete="off" spellCheck={false} placeholder={t('Setup token')} value={setupToken}
+                  aria-label={t('Setup token')} {...flag('setup')}
+                  onChange={(e) => { clear(); setSetupToken(e.target.value); }} />
+              )}
               <input autoFocus={!isTouch()} type="email" autoComplete="email" placeholder={t('Email address')} value={email}
                 aria-label={t('Email address')} {...flag('email')}
                 onChange={(e) => { clear(); setEmail(e.target.value); }} />
@@ -127,6 +139,12 @@ export default function Login({ onLogin, cfg }) {
               </button>
               {!firstRun && !signupsAllowed && mode === 'signin' && (
                 <div className="login-note">{t('New accounts are turned off on this server.')}</div>
+              )}
+              {firstRun && (
+                <div className="login-note">{t('The setup token is printed in the server console while no owner account exists.')}</div>
+              )}
+              {approval && mode === 'signup' && (
+                <div className="login-note">{t('New accounts wait for an administrator to approve them.')}</div>
               )}
             </>
           )}

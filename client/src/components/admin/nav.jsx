@@ -58,11 +58,13 @@ export const NAV = [
     { id: 'launcher', label: tk('New chat screen'), Icon: Chat, title: tk('New chat screen'),
       blurb: tk('Greetings and one-tap prompts shown before the first message.'),
       find: tk('home greeting welcome quick prompts starters'),
-      index: [tk('Greetings'), tk('Starter prompts')] },
-    { id: 'members', label: tk('Members'), Icon: Users, title: tk('Members'),
-      blurb: tk('Accounts, roles, per-member spend caps, and registration.'),
-      find: tk('users people admins roles accounts signup budget'),
-      index: [tk('Accept new sign-ups'), tk('Role'), tk('Remove member')] }
+      index: [tk('Greetings'), tk('Starter prompts')] }
+  ] },
+  { group: tk('People'), items: [
+    { id: 'users', label: tk('Users'), Icon: Users, title: tk('Users'),
+      blurb: tk('Accounts, approvals, roles, per-user spend caps, and who may sign up.'),
+      find: tk('members people admins owners roles accounts signup registration approval pending disable budget'),
+      index: [tk('Registration'), tk('New accounts'), tk('Allowed email domains'), tk('Approve'), tk('Role'), tk('Disable'), tk('Sign out everywhere'), tk('Remove account')] }
   ] },
   { group: tk('Policy'), items: [
     { id: 'guardrails', label: tk('Guardrails'), Icon: Shield, title: tk('Guardrails'),
@@ -126,7 +128,8 @@ const ALIASES = {
   analytics: 'usage',
   feedback: 'ratings',
   audit: 'events',
-  databases: 'storage'
+  databases: 'storage',
+  members: 'users'
 };
 
 export function resolveSection(id) {

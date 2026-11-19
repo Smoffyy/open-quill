@@ -10,10 +10,11 @@ test('parseRoute reads each screen off the path', () => {
 });
 
 test('parseRoute sends a member away from the admin-only screens', () => {
-  assert.deepEqual(parseRoute('/admin', { isAdmin: true }), { view: 'admin' });
+  assert.deepEqual(parseRoute('/admin', { admin: true }), { view: 'admin' });
   assert.deepEqual(parseRoute('/admin'), { view: 'home', replace: '/' });
   assert.deepEqual(parseRoute('/playground'), { view: 'home', replace: '/' });
-  assert.deepEqual(parseRoute('/playground', { isAdmin: true }), { view: 'playground' });
+  assert.deepEqual(parseRoute('/playground', { admin: true }), { view: 'home', replace: '/' }, 'the panel alone does not open the playground');
+  assert.deepEqual(parseRoute('/playground', { admin: true, playground: true }), { view: 'playground' });
 });
 
 test('parseRoute decodes an id and survives a malformed one', () => {
@@ -32,7 +33,7 @@ test('parseRoute answers notfound for a path no screen claims', () => {
   assert.deepEqual(parseRoute('/nope'), { view: 'notfound' });
   assert.deepEqual(parseRoute('/chat'), { view: 'notfound' }, 'a chat needs an id');
   assert.deepEqual(parseRoute('/project'), { view: 'notfound' });
-  assert.deepEqual(parseRoute('/admin', { isAdmin: true }), { view: 'admin' }, 'a real screen still wins');
+  assert.deepEqual(parseRoute('/admin', { admin: true }), { view: 'admin' }, 'a real screen still wins');
 });
 
 test('shouldResetPath only claims the paths its own screen owns', () => {

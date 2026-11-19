@@ -2,6 +2,7 @@ import path from 'path';
 import multer from 'multer';
 import { db, uid, now } from '../db.js';
 import { authMiddleware } from '../auth.js';
+import { requirePermission } from '../lib/authz/middleware.js';
 import * as sandbox from '../sandbox.js';
 import * as projectfiles from '../lib/projectfiles.js';
 import { sandboxCap, attachName, cleanPath, createEmpty, renameTo, fileInfo, sendDownload, restoreVersion, saveText, copyFiles } from '../lib/workspacefiles.js';
@@ -31,7 +32,7 @@ export default function registerProjectRoutes(app) {
     res.json(db.projects.byUser(req.user.id).map(p => projectView(p, counts)));
   });
 
-  app.post('/api/projects', authMiddleware, (req, res) => {
+  app.post('/api/projects', authMiddleware, requirePermission('projects.create'), (req, res) => {
     if (db.projects.countWhere('user_id', req.user.id) >= PROJECT_LIMIT) return res.status(400).json({ error: 'You have reached the project limit.' });
     const t = now();
     const name = String(req.body?.name || 'New project').slice(0, 120).trim() || 'New project';
@@ -70,7 +71,7 @@ export default function registerProjectRoutes(app) {
     res.json({ files: fileView(projectfiles.workspaceOfProject(pr.id)), cap: capFor(req.user) });
   });
 
-  app.post('/api/projects/:id/files', authMiddleware, projectUpload.single('file'), (req, res) => {
+  app.post('/api/projects/:id/files', authMiddleware, requirePermission('uploads.create'), projectUpload.single('file'), (req, res) => {
     const pr = ownProject(req, res); if (!pr) return;
     if (!req.file) return res.status(400).json({ error: 'No file received.' });
     const ws = projectfiles.workspaceOfProject(pr.id);
@@ -136,7 +137,7 @@ export default function registerProjectRoutes(app) {
     res.status(r.status).json(r.status === 200 ? { ...r.body, files: fileView(ws), cap: capFor(req.user) } : r.body);
   });
 
-  app.post('/api/projects/:id/code', authMiddleware, (req, res) => {
+  app.post('/api/projects/:id/code', authMiddleware, requirePermission('code.use', 'chats.create'), (req, res) => {
     const pr = ownProject(req, res); if (!pr) return;
     const t = now();
     const chat = db.chats.insert({ id: uid(), user_id: req.user.id, project_id: null, title: String(pr.name || 'Project').slice(0, 120), starred: 0, sandbox: 0, mode: 'code', origin_project_id: pr.id, created_at: t, updated_at: t });

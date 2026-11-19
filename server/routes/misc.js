@@ -1,7 +1,9 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { authMiddleware, adminOnly } from '../auth.js';
+import { authMiddleware } from '../auth.js';
+import { requirePermission, requireAnyPermission, DENIED } from '../lib/authz/middleware.js';
+import { can } from '../lib/authz/effective.js';
 import { logAudit } from '../lib/audit.js';
 import { appConfig, configChanges } from '../lib/appconfig.js';
 import { staged, liveVersion } from '../lib/releases.js';
@@ -15,13 +17,22 @@ const APP_FONTS = new Set(['literata', 'newsreader', 'sans']);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DOCS = { __proto__: null, credits: 'CREDITS.md', changelog: 'CHANGELOG.md', license: 'LICENSE', privacy: 'docs/privacy-security.md' };
 
+const FIELD_PERMISSIONS = {
+  __proto__: null,
+  appName: 'admin.interface', disclaimer: 'admin.interface', supportContact: 'admin.interface', greetings: 'admin.interface',
+  quickPrompts: 'admin.interface', modelDocs: 'admin.interface', modelDocsConfig: 'admin.interface', appIcon: 'admin.interface',
+  appFont: 'admin.interface', localOnly: 'admin.policy', egressLocalOnly: 'admin.policy', egressAllowWebSearch: 'admin.policy',
+  egressAllowlist: 'admin.policy'
+};
+
 const text = (v, cap) => String(v ?? '').slice(0, cap);
 
 export default function registerMiscRoutes(app) {
-  app.get('/api/app-config', authMiddleware, (req, res) => res.json({ ...appConfig(!!req.user?.is_admin), configVersion: liveVersion() }));
+  app.get('/api/app-config', authMiddleware, (req, res) => res.json({ ...appConfig(can(req.user, 'admin.panel')), configVersion: liveVersion() }));
 
-  app.patch('/api/admin/app-config', authMiddleware, adminOnly, (req, res) => {
+  app.patch('/api/admin/app-config', authMiddleware, requireAnyPermission('admin.interface', 'admin.policy'), (req, res) => {
     const b = req.body && typeof req.body === 'object' ? req.body : {};
+    if (Object.keys(b).some(k => FIELD_PERMISSIONS[k] && !can(req.user, FIELD_PERMISSIONS[k]))) return res.status(403).json({ error: DENIED });
     const keys = [];
     const was = appConfig(true);
     const put = (key, value) => {
@@ -43,9 +54,6 @@ export default function registerMiscRoutes(app) {
         .map(q => ({ label: text(q?.label, 40).trim(), icon: QP_ICONS.includes(text(q?.icon, 20).trim()) ? text(q.icon, 20).trim() : 'none', prompt: text(q?.prompt, 4000).trim() }))
         .filter(q => q.label && q.prompt).slice(0, 8);
       put('quick_prompts', JSON.stringify(list));
-    }
-    if ('allowSignups' in b && put('allow_signups', b.allowSignups ? '1' : '0')) {
-      logAudit(req, 'auth.signups', { meta: { allowed: !!b.allowSignups } });
     }
     if ('localOnly' in b && put('local_only', b.localOnly ? '1' : '0')) {
       logAudit(req, 'security.localOnly', { meta: { enabled: !!b.localOnly } });
@@ -79,8 +87,8 @@ export default function registerMiscRoutes(app) {
     res.json({ ok: true });
   });
 
-  app.get('/api/admin/egress-log', authMiddleware, adminOnly, (req, res) => res.json(egressLog()));
-  app.delete('/api/admin/egress-log', authMiddleware, adminOnly, (req, res) => { clearEgressLog(); res.json({ ok: true }); });
+  app.get('/api/admin/egress-log', authMiddleware, requirePermission('admin.policy'), (req, res) => res.json(egressLog()));
+  app.delete('/api/admin/egress-log', authMiddleware, requirePermission('admin.policy'), (req, res) => { clearEgressLog(); res.json({ ok: true }); });
 
   app.get('/api/release', authMiddleware, (req, res) => res.json(releaseInfo()));
 

@@ -1,5 +1,6 @@
 import { getSetting } from '../db.js';
 import { authMiddleware } from '../auth.js';
+import { requirePermission } from '../lib/authz/middleware.js';
 import * as userskills from '../lib/userskills.js';
 import * as workspaceSkills from '../lib/workspaceskills.js';
 import { buildSkillFile, skillLines, CONTENT_MAX } from '../lib/skillfile.js';
@@ -31,7 +32,7 @@ export default function registerSkillRoutes(app) {
     res.json({ skills: [...workspaceView(), ...mine] });
   });
 
-  app.post('/api/skills', authMiddleware, (req, res) => {
+  app.post('/api/skills', authMiddleware, requirePermission('skills.create'), (req, res) => {
     const b = req.body || {};
     const input = typeof b.file === 'string'
       ? { ...userskills.fromFile(String(b.file).slice(0, CONTENT_MAX), b.name), enabled: b.enabled, source: b.source }
@@ -41,7 +42,7 @@ export default function registerSkillRoutes(app) {
     res.json(userskills.view(r.skill, req.user.display_name || req.user.email || ''));
   });
 
-  app.patch('/api/skills/:id', authMiddleware, (req, res) => {
+  app.patch('/api/skills/:id', authMiddleware, requirePermission('skills.create'), (req, res) => {
     const b = req.body || {};
     const patch = typeof b.file === 'string'
       ? userskills.fromFile(String(b.file).slice(0, CONTENT_MAX), b.name)

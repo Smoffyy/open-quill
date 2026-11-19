@@ -1,5 +1,7 @@
 import { db, uid, tx, getSetting, setSetting } from '../db.js';
-import { authMiddleware, adminOnly } from '../auth.js';
+import { authMiddleware } from '../auth.js';
+import { requirePermission } from '../lib/authz/middleware.js';
+import { can } from '../lib/authz/effective.js';
 import { getProviders, resolveProvider, providerSpec, isLocalType } from '../lib/providers.js';
 import { cloudPreset, rememberListing, listingFor } from '../lib/cloudmodels.js';
 import { matchPreset, presetList, setCustomPresets, getCustomPresets } from '../lib/pricing.js';
@@ -199,21 +201,21 @@ function applyPatch(cur, patch) {
 }
 
 export default function registerModelRoutes(app) {
-  app.get('/api/models', authMiddleware, (req, res) => res.json(req.user.is_admin ? draftModels() : publicModels()));
+  app.get('/api/models', authMiddleware, (req, res) => res.json(can(req.user, 'admin.panel') ? draftModels() : publicModels()));
 
-  app.get('/api/admin/models', authMiddleware, adminOnly, (req, res) =>
+  app.get('/api/admin/models', authMiddleware, requirePermission('admin.models'), (req, res) =>
     res.json(db.models.all().sort((a, b) => a.sort_order - b.sort_order).map(m => ({ ...m, known_ctx: knownCtx(m) }))));
 
-  app.get('/api/admin/logos', authMiddleware, adminOnly, (req, res) => res.json({ logos: listLogos() }));
+  app.get('/api/admin/logos', authMiddleware, requirePermission('admin.models'), (req, res) => res.json({ logos: listLogos() }));
 
-  app.post('/api/admin/models/prompt-values', authMiddleware, adminOnly, (req, res) => {
+  app.post('/api/admin/models/prompt-values', authMiddleware, requirePermission('admin.models'), (req, res) => {
     const model = typeof req.body?.id === 'string' ? db.models.byId(req.body.id) : null;
     if (!model) return res.status(404).json({ error: 'Model not found.' });
     const draft = req.body.model && typeof req.body.model === 'object' ? modelPatch(req.body.model, model) : {};
     res.json({ values: promptValues({ ...model, ...draft }, req.user.id) });
   });
 
-  app.get('/api/admin/discover-models', authMiddleware, adminOnly, async (req, res) => {
+  app.get('/api/admin/discover-models', authMiddleware, requirePermission('admin.models'), async (req, res) => {
     try {
       const prov = req.query.provider ? resolveProvider(req.query.provider) : getProviders()[0];
       const found = await fetchListing(prov);
@@ -231,7 +233,7 @@ export default function registerModelRoutes(app) {
     }
   });
 
-  app.get('/api/admin/models/recommended', authMiddleware, adminOnly, async (req, res) => {
+  app.get('/api/admin/models/recommended', authMiddleware, requirePermission('admin.models'), async (req, res) => {
     const prov = resolveProvider(String(req.query.provider_id || ''));
     const id = String(req.query.internal_name || '').trim();
     if (!prov || !id || isLocalType(prov.type)) return res.json({ preset: null });
@@ -240,7 +242,7 @@ export default function registerModelRoutes(app) {
     res.json({ preset: preset ? { ...preset, kwargs: sanitizeKwargs(preset.kwargs), summary: capsSummary(preset) } : null });
   });
 
-  app.post('/api/admin/models', authMiddleware, adminOnly, (req, res) => {
+  app.post('/api/admin/models', authMiddleware, requirePermission('admin.models'), (req, res) => {
     const max = db.models.all().reduce((a, m) => Math.max(a, m.sort_order || 0), 0);
     const b = req.body;
     const preset = matchPreset(b.internal_name || '');
@@ -284,7 +286,7 @@ export default function registerModelRoutes(app) {
     res.json({ id: m.id });
   });
 
-  app.patch('/api/admin/models/:id', authMiddleware, adminOnly, (req, res) => {
+  app.patch('/api/admin/models/:id', authMiddleware, requirePermission('admin.models'), (req, res) => {
     const cur = db.models.byId(req.params.id);
     if (!cur) return res.status(404).json({ error: 'not found' });
     const patch = modelPatch(req.body || {}, cur);
@@ -295,7 +297,7 @@ export default function registerModelRoutes(app) {
     res.json({ ok: true });
   });
 
-  app.patch('/api/admin/models', authMiddleware, adminOnly, (req, res) => {
+  app.patch('/api/admin/models', authMiddleware, requirePermission('admin.models'), (req, res) => {
     const rows = Array.isArray(req.body?.rows) ? req.body.rows.slice(0, MAX_BATCH) : null;
     if (!rows) return res.status(400).json({ error: 'rows must be an array' });
     const plan = [];
@@ -312,7 +314,7 @@ export default function registerModelRoutes(app) {
     res.json({ ok: true, count: plan.length });
   });
 
-  app.post('/api/admin/models/duplicate', authMiddleware, adminOnly, (req, res) => {
+  app.post('/api/admin/models/duplicate', authMiddleware, requirePermission('admin.models'), (req, res) => {
     const ids = idList(req.body?.ids);
     const all = db.models.all().sort((a, b) => a.sort_order - b.sort_order);
     const made = [];
@@ -333,7 +335,7 @@ export default function registerModelRoutes(app) {
     res.json({ ids: made.map(c => c.id) });
   });
 
-  app.post('/api/admin/models/remove', authMiddleware, adminOnly, (req, res) => {
+  app.post('/api/admin/models/remove', authMiddleware, requirePermission('admin.models'), (req, res) => {
     const gone = db.models.all().filter(m => idList(req.body?.ids).has(m.id));
     db.models.removeByIds(gone.map(m => m.id));
     for (const m of gone) logAudit(req, 'model.delete', { type: 'model', id: m.id, meta: { displayName: m.display_name } });
@@ -341,7 +343,7 @@ export default function registerModelRoutes(app) {
     res.json({ ok: true, count: gone.length });
   });
 
-  app.delete('/api/admin/models/:id', authMiddleware, adminOnly, (req, res) => {
+  app.delete('/api/admin/models/:id', authMiddleware, requirePermission('admin.models'), (req, res) => {
     const m = db.models.byId(req.params.id);
     db.models.removeById(req.params.id);
     logAudit(req, 'model.delete', { type: 'model', id: req.params.id, meta: { displayName: m?.display_name } });
@@ -349,13 +351,13 @@ export default function registerModelRoutes(app) {
     res.json({ ok: true });
   });
 
-  app.get('/api/admin/pricing/preset', authMiddleware, adminOnly, (req, res) => {
+  app.get('/api/admin/pricing/preset', authMiddleware, requirePermission('admin.models'), (req, res) => {
     res.json({ preset: matchPreset(req.query.name || '') });
   });
-  app.get('/api/admin/pricing/presets', authMiddleware, adminOnly, (req, res) => {
+  app.get('/api/admin/pricing/presets', authMiddleware, requirePermission('admin.models'), (req, res) => {
     res.json({ presets: presetList(), custom: getCustomPresets() });
   });
-  app.post('/api/admin/pricing/presets', authMiddleware, adminOnly, (req, res) => {
+  app.post('/api/admin/pricing/presets', authMiddleware, requirePermission('admin.models'), (req, res) => {
     const b = req.body || {};
     const match = String(b.match || '').trim();
     const ci = Number(b.in), co = Number(b.out);
@@ -367,7 +369,7 @@ export default function registerModelRoutes(app) {
     logAudit(req, 'pricing.preset_set', { meta: { match } });
     res.json({ custom: getCustomPresets() });
   });
-  app.delete('/api/admin/pricing/presets/:match', authMiddleware, adminOnly, (req, res) => {
+  app.delete('/api/admin/pricing/presets/:match', authMiddleware, requirePermission('admin.models'), (req, res) => {
     const target = decodeURIComponent(req.params.match).toLowerCase();
     const list = getCustomPresets().filter(p => p.match !== target);
     setSetting('custom_presets', list);
@@ -376,17 +378,17 @@ export default function registerModelRoutes(app) {
     res.json({ custom: getCustomPresets() });
   });
 
-  app.post('/api/admin/detect-ctx', authMiddleware, adminOnly, async (req, res) => {
+  app.post('/api/admin/detect-ctx', authMiddleware, requirePermission('admin.models'), async (req, res) => {
     const numCtx = {};
     for (const row of db.models.all()) numCtx[row.id] = await probeCtx({ ...row, num_ctx: 0 });
     res.json({ numCtx });
   });
 
-  app.get('/api/admin/models/folders', authMiddleware, adminOnly, (req, res) => {
+  app.get('/api/admin/models/folders', authMiddleware, requirePermission('admin.models'), (req, res) => {
     res.json({ folders: sanitizeFolders(getSetting('model_folders', [])) });
   });
 
-  app.put('/api/admin/models/folders', authMiddleware, adminOnly, (req, res) => {
+  app.put('/api/admin/models/folders', authMiddleware, requirePermission('admin.models'), (req, res) => {
     const folders = sanitizeFolders(req.body?.folders);
     setSetting('model_folders', folders);
     logAudit(req, 'model.folders', { meta: { count: folders.length } });
@@ -394,7 +396,7 @@ export default function registerModelRoutes(app) {
     res.json({ folders });
   });
 
-  app.post('/api/admin/models/folders/add', authMiddleware, adminOnly, (req, res) => {
+  app.post('/api/admin/models/folders/add', authMiddleware, requirePermission('admin.models'), (req, res) => {
     const have = sanitizeFolders(getSetting('model_folders', []));
     const folders = sanitizeFolders([...have, ...(Array.isArray(req.body?.folders) ? req.body.folders : [])]);
     if (folders.length !== have.length) {
@@ -404,7 +406,7 @@ export default function registerModelRoutes(app) {
     res.json({ folders });
   });
 
-  app.post('/api/admin/models/reorder', authMiddleware, adminOnly, (req, res) => {
+  app.post('/api/admin/models/reorder', authMiddleware, requirePermission('admin.models'), (req, res) => {
     const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
     tx(() => ids.forEach((id, i) => db.models.update(id, { sort_order: i })));
     staged(req, 'models', { keys: ['models:order'], order: ids.filter(id => typeof id === 'string') });

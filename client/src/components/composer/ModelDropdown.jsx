@@ -76,9 +76,9 @@ export function Badges({ m }) {
 
 const capLevel = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 
-export function KwargControl({ def, value, isAdmin, onSet, gated }) {
+export function KwargControl({ def, value, advanced, onSet, gated }) {
   const values = kwargValuesArr(def);
-  const locked = (!!def.adminOnly && !isAdmin) || !!def.parentId;
+  const locked = (!!def.adminOnly && !advanced) || !!def.parentId;
   const tie = gated ? ' gated' : '';
   const label = def.label || def.name || t('Option');
   const note = def.parentId
@@ -374,7 +374,7 @@ function MoreGroup({ label, items, renderOpt, openKey, setOpenKey }) {
   );
 }
 
-export default function ModelDropdown({ models, modelsReady = true, currentId, onSelect, extended, onToggleExtended, up, modelHasBg, bgInChat, onToggleBgInChat, reasoningEffort, onSetEffort, kwargValues, onSetKwarg, isAdmin = false }) {
+export default function ModelDropdown({ models, modelsReady = true, currentId, onSelect, extended, onToggleExtended, up, modelHasBg, bgInChat, onToggleBgInChat, reasoningEffort, onSetEffort, kwargValues, onSetKwarg, advanced = false }) {
   const [open, setOpen] = useState(false);
   const [openSub, setOpenSub] = useState(null);
   const [place, setPlace] = useState({ shift: 0, left: null, maxH: 0, sheet: false, ready: false });
@@ -450,7 +450,7 @@ export default function ModelDropdown({ models, modelsReady = true, currentId, o
   const current = models.find(m => m.id === currentId);
   const kwDefs = Array.isArray(current?.kwargs) ? current.kwargs : [];
   const selected = { ...(reasoningEffort ? { effort: reasoningEffort } : {}), ...(kwargValues && typeof kwargValues === 'object' ? kwargValues : {}) };
-  const kwActive = resolveKwargValues(kwDefs, selected, isAdmin);
+  const kwActive = resolveKwargValues(kwDefs, selected, advanced);
   const setKwarg = (id, value) => {
     if (onSetKwarg) onSetKwarg(id, value);
     else if (id === 'effort' && onSetEffort) onSetEffort(value);
@@ -524,7 +524,7 @@ export default function ModelDropdown({ models, modelsReady = true, currentId, o
             <>
               <hr />
               {shownKwargs.map(d => (
-                <KwargControl key={d.id} def={d} value={kwActive[d.id]} isAdmin={isAdmin} onSet={setKwarg}
+                <KwargControl key={d.id} def={d} value={kwActive[d.id]} advanced={advanced} onSet={setKwarg}
                   gated={!!(d.showIf && d.showIf.id && shownIds.has(d.showIf.id))} />
               ))}
             </>

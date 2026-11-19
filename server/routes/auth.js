@@ -1,5 +1,10 @@
 import { db, uid, now, getSetting, setSetting } from '../db.js';
-import { hash, check, sign, publicUser, authMiddleware, sessionFromRequest, createSession, revokeSession, revokeOtherSessions, sessionMaxAgeSeconds } from '../auth.js';
+import { hash, check, sign, publicUser, authMiddleware, authAccount, sessionFromRequest, createSession, revokeSession, revokeOtherSessions, sessionMaxAgeSeconds, sessionTtlDays } from '../auth.js';
+import { requirePermission } from '../lib/authz/middleware.js';
+import { can, isActive, roleOf } from '../lib/authz/effective.js';
+import { isLastOwner } from '../lib/authz/rules.js';
+import { PENDING, USER, OWNER } from '../lib/authz/roles.js';
+import { signupPolicy, domainAllowed, setupTokenMatches } from '../lib/identity/signup.js';
 import { oneShot, stripThink } from '../llm/index.js';
 import { randomSecret, verifyTotp, otpauthUri, makeRecoveryCodes, hashRecovery } from '../lib/totp.js';
 import { logAudit, clientIp } from '../lib/audit.js';
@@ -87,7 +92,7 @@ export default function registerAuthRoutes(app) {
   app.get('/api/auth/context', (req, res) => {
     res.json({
       firstRun: db.users.count() === 0,
-      allowSignups: getSetting('allow_signups', '1') === '1',
+      signup: signupPolicy(),
       appName: getSetting('app_name', 'open-quill'),
       appIcon: getSetting('app_icon', ''),
       appFont: getSetting('app_font', 'literata'),
@@ -106,6 +111,7 @@ export default function registerAuthRoutes(app) {
       keys.forEach(noteLoginFail);
       return res.status(401).json({ error: 'Incorrect email or password.' });
     }
+    if (!isActive(u)) return res.status(403).json({ error: 'This account is disabled. Contact your administrator.' });
     if (u.totp_enabled && u.totp_secret) {
       const code = String(req.body?.code || '').trim();
       const recovery = String(req.body?.recovery || '').trim();
@@ -137,7 +143,13 @@ export default function registerAuthRoutes(app) {
     if (pw.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
     if (pw.length > 1024) return res.status(400).json({ error: 'That password is too long.' });
     const refused = () => {
-      if (db.users.count() !== 0 && getSetting('allow_signups', '1') !== '1') return res.status(403).json({ error: 'New accounts are turned off on this server.' });
+      if (db.users.count() === 0) {
+        if (setupTokenMatches(req.body?.setupToken)) return null;
+        keys.forEach(noteLoginFail);
+        return res.status(403).json({ error: 'Enter the setup token shown in the server console.', setup: true });
+      }
+      if (signupPolicy() === 'closed') return res.status(403).json({ error: 'New accounts are turned off on this server.' });
+      if (!domainAllowed(email)) return res.status(403).json({ error: 'Sign-up is limited to approved email domains.' });
       if (db.users.byEmail(email)) { keys.forEach(noteLoginFail); return res.status(409).json({ error: 'An account with that email already exists.' }); }
       return null;
     };
@@ -145,9 +157,10 @@ export default function registerAuthRoutes(app) {
     const passwordHash = await hash(pw);
     if (refused()) return;
     const owner = db.users.count() === 0;
-    const u = db.users.insert({ id: uid(), email, password_hash: passwordHash, display_name: '', is_admin: owner ? 1 : 0, is_owner: owner ? 1 : 0, prefs: {}, created_at: now() });
+    const role = owner ? OWNER : signupPolicy() === 'approval' ? PENDING : USER;
+    const u = db.users.insert({ id: uid(), email, password_hash: passwordHash, display_name: '', role, status: 'active', source: 'local', prefs: {}, created_at: now() });
     if (owner) setSetting('setup_complete', '0');
-    logAudit(req, 'user.register', { type: 'user', id: u.id, meta: { email, owner } });
+    logAudit(req, 'user.register', { type: 'user', id: u.id, meta: { email, role } });
     const sid = createSession(u, req);
     setCookie(req, res, sign(u, sid));
     res.json({ user: publicUser(u) });
@@ -160,8 +173,8 @@ export default function registerAuthRoutes(app) {
     res.json({ ok: true });
   });
 
-  app.get('/api/me', authMiddleware, (req, res) => res.json({ user: publicUser(req.user) }));
-  app.patch('/api/me', authMiddleware, (req, res) => {
+  app.get('/api/me', authAccount, (req, res) => res.json({ user: publicUser(req.user) }));
+  app.patch('/api/me', authAccount, (req, res) => {
     const b = req.body || {};
     const patch = {};
     // prefs is a free-form client bag, so it is bounded rather than schema-checked: the
@@ -188,10 +201,10 @@ export default function registerAuthRoutes(app) {
     res.json({ styles: list });
   });
 
-  app.post('/api/styles/generate', authMiddleware, async (req, res) => {
+  app.post('/api/styles/generate', authMiddleware, requirePermission('chats.create'), async (req, res) => {
     const sample = String(req.body?.sample || '').slice(0, 12000);
     if (!sample.trim()) return res.status(400).json({ error: 'A writing sample is required.' });
-    const model = resolveModelOrDefault(String(req.body?.modelId || ''), !!req.user.is_admin);
+    const model = resolveModelOrDefault(String(req.body?.modelId || ''), req.user);
     if (!model) return res.status(400).json({ error: 'No model available to generate the style.' });
     try {
       const raw = await oneShot(model, [{ role: 'system', content: DEFAULT_STYLE_GEN_PROMPT }, { role: 'user', content: sample }]);
@@ -202,25 +215,25 @@ export default function registerAuthRoutes(app) {
   });
 
   const bodyText = (req) => (typeof req.body?.text === 'string' ? req.body.text : '');
-  app.get('/api/me/memories', authMiddleware, (req, res) => {
+  app.get('/api/me/memories', authMiddleware, requirePermission('tools.memory'), (req, res) => {
     res.json({ memories: memoriesOf(req.user.id) });
   });
-  app.post('/api/me/memories', authMiddleware, (req, res) => {
+  app.post('/api/me/memories', authMiddleware, requirePermission('tools.memory'), (req, res) => {
     const r = changeMemory(req.user.id, { action: 'add', text: bodyText(req), source: 'user' });
     if (!r.ok) return res.status(400).json({ error: r.error });
     res.json({ memory: r.item, memories: memoriesOf(req.user.id) });
   });
-  app.put('/api/me/memories/:id', authMiddleware, (req, res) => {
+  app.put('/api/me/memories/:id', authMiddleware, requirePermission('tools.memory'), (req, res) => {
     const r = changeMemory(req.user.id, { action: 'update', id: req.params.id, text: bodyText(req), source: 'user' });
     if (!r.ok) return res.status(/^No memory/.test(r.error) ? 404 : 400).json({ error: r.error });
     res.json({ memory: r.item, memories: memoriesOf(req.user.id) });
   });
-  app.delete('/api/me/memories/:id', authMiddleware, (req, res) => {
+  app.delete('/api/me/memories/:id', authMiddleware, requirePermission('tools.memory'), (req, res) => {
     const r = changeMemory(req.user.id, { action: 'delete', id: req.params.id });
     if (!r.ok) return res.status(404).json({ error: r.error });
     res.json({ memories: memoriesOf(req.user.id) });
   });
-  app.delete('/api/me/memories', authMiddleware, (req, res) => {
+  app.delete('/api/me/memories', authMiddleware, requirePermission('tools.memory'), (req, res) => {
     setMemories(req.user.id, []);
     res.json({ memories: [] });
   });
@@ -275,21 +288,21 @@ export default function registerAuthRoutes(app) {
     });
   });
 
-  app.get('/api/me/sessions', authMiddleware, (req, res) => {
+  app.get('/api/me/sessions', authAccount, (req, res) => {
     const list = db.sessions.byUser(req.user.id).map(s => ({
       id: s.id, current: s.id === req.sessionId, ip: s.ip || '', userAgent: s.user_agent || '',
       lastSeen: s.last_seen || 0, createdAt: s.created_at || 0
     }));
-    res.json({ sessions: list });
+    res.json({ sessions: list, idleDays: sessionTtlDays() });
   });
-  app.delete('/api/me/sessions/:id', authMiddleware, (req, res) => {
+  app.delete('/api/me/sessions/:id', authAccount, (req, res) => {
     const s = db.sessions.byId(req.params.id);
     if (!s || s.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     revokeSession(s.id);
     killSessionSockets(s.id);
     res.json({ ok: true });
   });
-  app.delete('/api/me/sessions', authMiddleware, (req, res) => {
+  app.delete('/api/me/sessions', authAccount, (req, res) => {
     const others = db.sessions.byUser(req.user.id).filter(s => s.id !== req.sessionId);
     revokeOtherSessions(req.user.id, req.sessionId);
     for (const s of others) killSessionSockets(s.id);
@@ -298,7 +311,7 @@ export default function registerAuthRoutes(app) {
 
   app.get('/api/me/budget', authMiddleware, (req, res) => res.json(budgetStatus(req.user)));
 
-  app.post('/api/me/password', authMiddleware, async (req, res) => {
+  app.post('/api/me/password', authAccount, async (req, res) => {
     const current = String(req.body?.current || '');
     const next = String(req.body?.next || '');
     if (next.length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters.' });
@@ -311,14 +324,14 @@ export default function registerAuthRoutes(app) {
     res.json({ ok: true });
   });
 
-  app.post('/api/me/2fa/setup', authMiddleware, (req, res) => {
+  app.post('/api/me/2fa/setup', authAccount, (req, res) => {
     if (req.user.totp_enabled) return res.status(400).json({ error: 'Two-factor is already enabled.' });
     const secret = randomSecret();
     db.users.update(req.user.id, { totp_pending: secret });
     const appName = getSetting('app_name', 'open-quill') || 'open-quill';
     res.json({ secret, otpauth: otpauthUri(secret, req.user.email, appName) });
   });
-  app.post('/api/me/2fa/enable', authMiddleware, (req, res) => {
+  app.post('/api/me/2fa/enable', authAccount, (req, res) => {
     const u = db.users.byId(req.user.id);
     if (u.totp_enabled) return res.status(400).json({ error: 'Two-factor is already enabled.' });
     if (!u.totp_pending) return res.status(400).json({ error: 'Start setup first.' });
@@ -332,7 +345,7 @@ export default function registerAuthRoutes(app) {
     logAudit(req, 'account.2fa_enable', { type: 'user', id: u.id });
     res.json({ ok: true, recoveryCodes: codes });
   });
-  app.post('/api/me/2fa/disable', authMiddleware, async (req, res) => {
+  app.post('/api/me/2fa/disable', authAccount, async (req, res) => {
     const u = db.users.byId(req.user.id);
     if (!u.totp_enabled) return res.json({ ok: true });
     if (!(await reauth(req, res, req.body?.password))) return;
@@ -340,7 +353,7 @@ export default function registerAuthRoutes(app) {
     logAudit(req, 'account.2fa_disable', { type: 'user', id: u.id });
     res.json({ ok: true });
   });
-  app.post('/api/me/2fa/recovery', authMiddleware, async (req, res) => {
+  app.post('/api/me/2fa/recovery', authAccount, async (req, res) => {
     const u = db.users.byId(req.user.id);
     if (!u.totp_enabled) return res.status(400).json({ error: 'Two-factor is not enabled.' });
     if (!(await reauth(req, res, req.body?.password))) return;
@@ -350,26 +363,19 @@ export default function registerAuthRoutes(app) {
     res.json({ ok: true, recoveryCodes: codes });
   });
 
-  app.delete('/api/me/chats', authMiddleware, (req, res) => {
+  app.delete('/api/me/chats', authMiddleware, requirePermission('chats.delete'), (req, res) => {
     res.json({ ok: true, deleted: purgeUserChats(req.user.id) });
   });
 
-  app.delete('/api/me', authMiddleware, async (req, res) => {
+  app.delete('/api/me', authAccount, async (req, res) => {
     const u = req.user;
-    if (u.is_owner) return res.status(403).json({ error: 'The owner account cannot be deleted.' });
+    if (roleOf(u) !== PENDING && !can(u, 'account.delete')) return res.status(403).json({ error: 'Your organization does not allow deleting your own account.' });
+    if (isLastOwner(u)) return res.status(403).json({ error: 'Make someone else an owner before deleting this account.' });
     if (!(await reauth(req, res, req.body?.password))) return;
     closeUserSockets(u.id);
     purgeUser(u.id);
     logAudit(req, 'account.delete', { type: 'user', id: u.id, meta: { email: u.email } });
     setCookie(req, res, '');
     res.json({ ok: true });
-  });
-
-  app.get('/api/users/search', authMiddleware, (req, res) => {
-    const q = String(req.query.q || '').trim().toLowerCase().slice(0, 120);
-    if (q.length < 2) return res.json([]);
-    const out = db.users.search(q, req.user.id, 10)
-      .map(u => ({ id: u.id, email: u.email, displayName: u.display_name || (u.email || '').split('@')[0] }));
-    res.json(out);
   });
 }

@@ -1,5 +1,6 @@
 import { db, uid, now, tx } from '../../db.js';
 import { authMiddleware } from '../../auth.js';
+import { requirePermission } from '../../lib/authz/middleware.js';
 import { stripToolSyntax } from '../../lib/history.js';
 import { ensureChain, childrenOf, activePath, leafUnder, sortedMsgs } from '../../lib/tree.js';
 import { copyArtifacts } from '../../lib/artifacts.js';
@@ -76,7 +77,7 @@ export default function registerMessageRoutes(app) {
     res.json({ activeLeaf: db.chats.byId(c.id)?.active_leaf || null, path: path.map(m => m.id), nodes });
   });
 
-  app.post('/api/chats/:id/branch', authMiddleware, (req, res) => {
+  app.post('/api/chats/:id/branch', authMiddleware, requirePermission('chats.edit'), (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     ensureChain(c.id);
@@ -86,7 +87,7 @@ export default function registerMessageRoutes(app) {
     res.json({ ok: true });
   });
 
-  app.post('/api/chats/:id/cherrypick', authMiddleware, (req, res) => {
+  app.post('/api/chats/:id/cherrypick', authMiddleware, requirePermission('chats.edit'), (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     if (c.ended) return res.status(403).json({ error: 'This conversation was ended by the assistant and cannot be continued.' });
@@ -106,7 +107,7 @@ export default function registerMessageRoutes(app) {
     res.json({ ok: true, id });
   });
 
-  app.post('/api/chats/:id/fork', authMiddleware, (req, res) => {
+  app.post('/api/chats/:id/fork', authMiddleware, requirePermission('chats.create', 'chats.edit'), (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     if (c.ended) return res.status(403).json({ error: 'This conversation was ended by the assistant and cannot be continued or branched.' });
@@ -138,7 +139,7 @@ export default function registerMessageRoutes(app) {
     res.json({ id: nc.id, title: nc.title, mode: nc.mode });
   });
 
-  app.patch('/api/chats/:id/messages/:mid', authMiddleware, (req, res) => {
+  app.patch('/api/chats/:id/messages/:mid', authMiddleware, requirePermission('chats.edit'), (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     const m = db.messages.byId(req.params.mid);
@@ -156,7 +157,7 @@ export default function registerMessageRoutes(app) {
     res.json({ ok: true, pinned: !!(saved || m).pinned, content: (saved || m).content });
   });
 
-  app.delete('/api/chats/:id/messages/:mid', authMiddleware, (req, res) => {
+  app.delete('/api/chats/:id/messages/:mid', authMiddleware, requirePermission('chats.edit'), (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     ensureChain(c.id);

@@ -4,7 +4,8 @@ import crypto from 'crypto';
 import * as cookie from 'cookie';
 import { db, uid, now, getSetting, setSetting } from './db.js';
 import { clientIp } from './lib/audit.js';
-import { roleOf, canPublish } from './lib/roles.js';
+import { permissionsOf, roleOf, gateOf, isActive, isOwner } from './lib/authz/effective.js';
+import { roleName } from './lib/authz/roles.js';
 
 let SECRET = getSetting('jwt_secret');
 if (!SECRET) { SECRET = crypto.randomBytes(48).toString('base64url'); setSetting('jwt_secret', SECRET); }
@@ -12,7 +13,7 @@ if (!SECRET) { SECRET = crypto.randomBytes(48).toString('base64url'); setSetting
 const ARGON_OPTS = { type: argon2.argon2id, memoryCost: 19456, timeCost: 2, parallelism: 1 };
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-function sessionTtlDays() {
+export function sessionTtlDays() {
   const d = Number(getSetting('session_ttl_days', 30));
   return Number.isFinite(d) && d > 0 ? d : 30;
 }
@@ -33,7 +34,7 @@ function maxSessions() {
 export function hash(pw) { return argon2.hash(pw, ARGON_OPTS); }
 export async function check(pw, h) { try { return await argon2.verify(h, pw); } catch { return false; } }
 
-export function createSession(user, req) {
+export function createSession(user, req, method = 'password') {
   const t = now();
   const ua = String(req?.headers?.['user-agent'] || '').slice(0, 300);
   const ip = clientIp(req);
@@ -45,7 +46,7 @@ export function createSession(user, req) {
       db.sessions.removeByIds(sorted.slice(0, existing.length - cap + 1).map(o => o.id));
     }
   }
-  const s = db.sessions.insert({ id: uid(), user_id: user.id, ip, user_agent: ua, last_seen: t, created_at: t });
+  const s = db.sessions.insert({ id: uid(), user_id: user.id, ip, user_agent: ua, method, auth_at: t, last_seen: t, created_at: t });
   return s.id;
 }
 export function sign(user, sessionId) { return jwt.sign({ id: user.id, sid: sessionId }, SECRET, { expiresIn: `${tokenLifeDays()}d` }); }
@@ -54,7 +55,12 @@ export function pruneSessions() { return db.sessions.prune(now() - sessionTtlMs(
 export function revokeOtherSessions(userId, keepId) { db.sessions.removeByIds(db.sessions.byUser(userId).filter(s => s.id !== keepId).map(s => s.id)); }
 
 export function publicUser(u) {
-  return { id: u.id, email: u.email, displayName: u.display_name || (u.email || '').split('@')[0], isAdmin: !!u.is_admin, isOwner: !!u.is_owner, role: roleOf(u), canPublish: canPublish(u), twoFactor: !!u.totp_enabled, prefs: u.prefs || {}, instructions: u.instructions || '', styles: Array.isArray(u.styles) ? u.styles : [] };
+  return {
+    id: u.id, email: u.email, displayName: u.display_name || (u.email || '').split('@')[0],
+    role: roleOf(u), roleName: roleName(roleOf(u)), owner: isOwner(u), gate: gateOf(u), source: u.source || 'local', hasPassword: !!u.password_hash,
+    permissions: [...permissionsOf(u)], twoFactor: !!u.totp_enabled,
+    prefs: u.prefs || {}, instructions: u.instructions || '', styles: Array.isArray(u.styles) ? u.styles : []
+  };
 }
 
 function resolveToken(token) {
@@ -65,12 +71,12 @@ function resolveToken(token) {
   if (!u) return null;
   const s = db.sessions.byId(payload.sid);
   if (!s || s.user_id !== u.id) return null;
-  if (now() - (s.last_seen || 0) > sessionTtlMs()) { db.sessions.removeById(s.id); return null; }
+  if (!isActive(u) || now() - (s.last_seen || 0) > sessionTtlMs()) { db.sessions.removeById(s.id); return null; }
   if (Date.now() - (s.last_seen || 0) > 60 * 1000) db.sessions.touch(s.id, now());
   return { user: u, sessionId: s.id };
 }
 
-export function authMiddleware(req, res, next) {
+export function authAccount(req, res, next) {
   const r = req.cookies?.token ? resolveToken(req.cookies.token) : null;
   if (!r) return res.status(401).json({ error: 'unauthorized' });
   req.user = r.user;
@@ -78,14 +84,12 @@ export function authMiddleware(req, res, next) {
   next();
 }
 
-export function adminOnly(req, res, next) {
-  if (!req.user?.is_admin) return res.status(403).json({ error: 'forbidden' });
-  next();
-}
-
-export function publisherOnly(req, res, next) {
-  if (!canPublish(req.user)) return res.status(403).json({ error: 'Publishing needs the publisher role. Ask a publisher or the owner.' });
-  next();
+export function authMiddleware(req, res, next) {
+  authAccount(req, res, () => {
+    const gate = gateOf(req.user);
+    if (gate) return res.status(403).json({ error: 'Your account is waiting for approval.', gate });
+    next();
+  });
 }
 
 export function sessionFromRequest(req) {

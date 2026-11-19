@@ -1,6 +1,8 @@
 import multer from 'multer';
 import { getSetting } from '../db.js';
-import { authMiddleware, adminOnly } from '../auth.js';
+import { authMiddleware } from '../auth.js';
+import { requirePermission, requireAnyPermission } from '../lib/authz/middleware.js';
+import { can } from '../lib/authz/effective.js';
 import * as referenceFiles from '../lib/referencefiles.js';
 import { diskStore, ensureSidecars, uploadPreview } from '../lib/uploads.js';
 import { roleLimit } from '../lib/models.js';
@@ -11,7 +13,7 @@ const voiceUpload = multer({ storage: multer.memoryStorage(), defParamCharset: '
 const voiceUrl = (base, p) => String(base || '').trim().replace(/\/+$/, '') + p;
 
 export default function registerMediaRoutes(app) {
-  app.post('/api/admin/upload', authMiddleware, adminOnly, (req, res) => {
+  app.post('/api/admin/upload', authMiddleware, requirePermission('admin.panel'), (req, res) => {
     upload.single('file')(req, res, (err) => {
       if (err) return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'That file is too large (max 8 MB).' : 'Upload failed.' });
       if (!req.file) return res.status(400).json({ error: 'No file received.' });
@@ -30,8 +32,8 @@ export default function registerMediaRoutes(app) {
     return mw;
   };
 
-  app.post('/api/upload', authMiddleware, (req, res) => {
-    const mb = Math.max(1, roleLimit('upload_limit_mb', !!req.user.is_admin, 8) || 8);
+  app.post('/api/upload', authMiddleware, requirePermission('uploads.create'), (req, res) => {
+    const mb = Math.max(1, roleLimit('upload_limit_mb', can(req.user, 'admin.panel'), 8) || 8);
     uploaderFor(mb)(req, res, async (err) => {
       if (err) return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? `That file is too large (max ${mb} MB).` : 'Upload failed.' });
       const files = (req.files || []).map(f => ({ url: `/uploads/${f.filename}`, name: f.originalname, type: f.mimetype, size: f.size }));
@@ -49,7 +51,7 @@ export default function registerMediaRoutes(app) {
     res.json(r);
   });
 
-  app.post('/api/voice/transcribe', authMiddleware, voiceUpload.single('audio'), async (req, res) => {
+  app.post('/api/voice/transcribe', authMiddleware, requireAnyPermission('voice.dictation', 'voice.call'), voiceUpload.single('audio'), async (req, res) => {
     if (getSetting('voice_mic_enabled', '0') !== '1' && getSetting('voice_call_enabled', '0') !== '1') return res.status(403).json({ error: 'Voice features are disabled.' });
     if (getSetting('voice_stt_engine', 'browser') !== 'server') return res.status(400).json({ error: 'Server transcription is not enabled.' });
     const base = getSetting('voice_stt_url', '');
@@ -68,7 +70,7 @@ export default function registerMediaRoutes(app) {
     } catch { res.status(502).json({ error: 'Could not reach the transcription endpoint.' }); }
   });
 
-  app.post('/api/voice/speak', authMiddleware, async (req, res) => {
+  app.post('/api/voice/speak', authMiddleware, requirePermission('voice.call'), async (req, res) => {
     if (getSetting('voice_call_enabled', '0') !== '1') return res.status(403).json({ error: 'Voice calls are disabled.' });
     if (getSetting('voice_tts_engine', 'browser') !== 'server') return res.status(400).json({ error: 'Server speech is not enabled.' });
     const base = getSetting('voice_tts_url', '');
@@ -91,20 +93,20 @@ export default function registerMediaRoutes(app) {
     } catch { res.status(502).json({ error: 'Could not reach the speech endpoint.' }); }
   });
 
-  app.get('/api/admin/membank', authMiddleware, adminOnly, async (req, res) => {
+  app.get('/api/admin/membank', authMiddleware, requirePermission('admin.tools'), async (req, res) => {
     try { await referenceFiles.ensureIndexedAll(); } catch {}
     res.json({ files: referenceFiles.list(), enabled: getSetting('membank_enabled', '0') === '1' });
   });
-  app.post('/api/admin/membank', authMiddleware, adminOnly, membankUpload.array('files', 20), async (req, res) => {
+  app.post('/api/admin/membank', authMiddleware, requirePermission('admin.tools'), membankUpload.array('files', 20), async (req, res) => {
     let saved = 0;
     for (const f of (req.files || [])) { try { await referenceFiles.saveUpload(f.originalname, f.buffer); saved++; } catch {} }
     res.json({ files: referenceFiles.list(), saved });
   });
-  app.delete('/api/admin/membank/:name', authMiddleware, adminOnly, (req, res) => {
+  app.delete('/api/admin/membank/:name', authMiddleware, requirePermission('admin.tools'), (req, res) => {
     referenceFiles.remove(req.params.name);
     res.json({ files: referenceFiles.list() });
   });
-  app.patch('/api/admin/membank/:name', authMiddleware, adminOnly, (req, res) => {
+  app.patch('/api/admin/membank/:name', authMiddleware, requirePermission('admin.tools'), (req, res) => {
     if ('folder' in req.body && !('name' in req.body)) {
       referenceFiles.setFileMeta(req.params.name, { folder: req.body.folder });
       return res.json({ files: referenceFiles.list() });
@@ -114,7 +116,7 @@ export default function registerMediaRoutes(app) {
     if ('folder' in req.body) referenceFiles.setFileMeta(req.body.name, { folder: req.body.folder });
     res.json({ files: referenceFiles.list() });
   });
-  app.put('/api/admin/membank/order', authMiddleware, adminOnly, (req, res) => {
+  app.put('/api/admin/membank/order', authMiddleware, requirePermission('admin.tools'), (req, res) => {
     const r = referenceFiles.reorder(req.body.items);
     if (!r.ok) return res.status(400).json({ error: r.error });
     res.json({ files: r.files });
