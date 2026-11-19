@@ -14,7 +14,9 @@ fs.rmSync(DB_DIR, { recursive: true, force: true, maxRetries: 20, retryDelay: 10
 const { db, uid, closeDb, setSetting, delSetting } = await import('../db.js');
 const { PERMISSIONS, PERMISSION_IDS, ADMIN_PERMISSIONS, MEMBER_PERMISSIONS, DEFAULT_USER_BASELINE, cleanPermissions } = await import('../lib/authz/permissions.js');
 const { permissionsOfRole, rankOfRole, roleExists, roleList, userBaseline } = await import('../lib/authz/roles.js');
-const { can, permissionsOf, rankOf, isOwner, gateOf } = await import('../lib/authz/effective.js');
+const { can, permissionsOf, rankOf, isOwner, gateOf, explain, groupIdsOf } = await import('../lib/authz/effective.js');
+const { createGroup, updateGroup, deleteGroup, setMembers, nestGroup, unnestGroup, closure, MAX_DEPTH } = await import('../lib/authz/groups.js');
+const { modelAllowed, defaultModelFor, allowedFor } = await import('../lib/authz/access.js');
 const { canActOn, canAssign, isLastOwner } = await import('../lib/authz/rules.js');
 
 after(() => {
@@ -25,6 +27,7 @@ after(() => {
 const person = (role, extra = {}) => db.users.insert({ id: uid(), email: `${uid()}@authz.test`, role, status: 'active', source: 'local', prefs: {}, created_at: Date.now(), ...extra });
 
 beforeEach(() => {
+  for (const g of db.groups.all()) deleteGroup(g.id);
   for (const u of db.users.all()) db.users.removeById(u.id);
   for (const r of db.roles.all()) db.roles.removeById(r.id);
   delSetting('auth_user_baseline');
@@ -172,4 +175,145 @@ test('the editor role is only created when someone was an editor', () => {
   assert.equal(sdb.prepare('SELECT count(*) AS n FROM roles').get().n, 0);
   assert.equal(sdb.prepare("SELECT 1 FROM settings WHERE key='auth_signup_policy'").get(), undefined, 'a fresh install keeps the default');
   sdb.close();
+});
+
+const group = (name, permissions = []) => {
+  const { group: g } = createGroup({ name }, null);
+  if (permissions.length) updateGroup(g.id, { permissions });
+  return g.id;
+};
+const join = (groupId, user) => assert.ok(setMembers(groupId, { add: [user.id] }, null).ok);
+
+test('a nested group passes its permissions down, and unlinking takes them back on the next check', () => {
+  setSetting('auth_user_baseline', ['chats.create']);
+  const u = person('user');
+  const team = group('Team');
+  const search = group('Search users', ['tools.web_search']);
+  join(team, u);
+  assert.equal(can(u, 'tools.web_search'), false);
+  assert.ok(nestGroup(search, team, null).ok, 'Team goes inside Search users');
+  assert.equal(can(u, 'tools.web_search'), true, 'members of the child inherit the parent');
+  assert.deepEqual(explain(u).permissions.find(p => p.id === 'tools.web_search').sources[0].path.map(x => x.name), ['Team', 'Search users']);
+  unnestGroup(search, team);
+  assert.equal(can(u, 'tools.web_search'), false);
+  nestGroup(search, team, null);
+  setMembers(team, { remove: [u.id] }, null);
+  assert.equal(can(u, 'tools.web_search'), false, 'leaving the direct group drops everything inherited through it');
+});
+
+test('overlapping grants survive the loss of one of them', () => {
+  setSetting('auth_user_baseline', []);
+  const u = person('user');
+  const a = group('A', ['code.use']);
+  const b = group('B', ['code.use', 'tools.memory']);
+  join(a, u);
+  join(b, u);
+  updateGroup(b, { permissions: ['tools.memory'] });
+  assert.ok(can(u, 'code.use'), 'still granted by A');
+  deleteGroup(a);
+  assert.equal(can(u, 'code.use'), false);
+  assert.ok(can(u, 'tools.memory'));
+});
+
+test('groups never grant admin permissions, even when the stored data claims so', () => {
+  const u = person('user');
+  const g = group('Sneaky');
+  assert.equal(updateGroup(g, { permissions: ['admin.users'] }).status, 400);
+  db.groups.update(g, { permissions: ['admin.users', 'admin.panel', 'code.use'] });
+  join(g, u);
+  assert.equal(can(u, 'admin.users'), false);
+  assert.equal(can(u, 'admin.panel'), false);
+  assert.ok(can(u, 'code.use'));
+});
+
+test('pending and disabled accounts get nothing from their groups', () => {
+  const g = group('Everyone', ['tools.web_search', 'chats.create']);
+  const pending = person('pending');
+  const off = person('user', { status: 'disabled' });
+  join(g, pending);
+  join(g, off);
+  assert.equal(permissionsOf(pending).size, 0);
+  assert.equal(permissionsOf(off).size, 0);
+  assert.equal(groupIdsOf(pending).size, 0);
+});
+
+test('cycles are refused, depth is capped, and diamonds count each group once', () => {
+  const a = group('A');
+  const b = group('B');
+  assert.ok(nestGroup(a, b, null).ok);
+  assert.equal(nestGroup(b, a, null).status, 409, 'B already sits inside A');
+  assert.equal(nestGroup(a, a, null).status, 409, 'nor inside itself');
+
+  const chain = Array.from({ length: MAX_DEPTH }, (_, i) => group('Level ' + i));
+  for (let i = 1; i < chain.length; i++) assert.ok(nestGroup(chain[i - 1], chain[i], null).ok, `level ${i}`);
+  const extra = group('Too deep');
+  assert.equal(nestGroup(chain[chain.length - 1], extra, null).status, 409, 'a ninth level is refused');
+  assert.equal(nestGroup(extra, chain[0], null).status, 409, 'from either end');
+
+  const leaf = group('Leaf');
+  const left = group('Left');
+  const right = group('Right');
+  const top = group('Top', ['tools.consult']);
+  nestGroup(left, leaf, null);
+  nestGroup(right, leaf, null);
+  nestGroup(top, left, null);
+  nestGroup(top, right, null);
+  const seen = closure([leaf]);
+  assert.deepEqual([...seen.keys()].sort(), [leaf, left, right, top].sort());
+  assert.equal(seen.get(top).depth, 2);
+  const u = person('user');
+  join(leaf, u);
+  assert.equal(explain(u).permissions.find(p => p.id === 'tools.consult').sources.filter(s => s.type === 'group').length, 1, 'one grant, not one per path');
+});
+
+test('hand-made cycles in the stored links cannot loop the closure', () => {
+  const a = group('Loop A');
+  const b = group('Loop B', ['tools.memory']);
+  db.groupMembers.insert({ id: uid(), group_id: a, member_type: 'group', member_id: b, source: 'manual' });
+  db.groupMembers.insert({ id: uid(), group_id: b, member_type: 'group', member_id: a, source: 'manual' });
+  const u = person('user');
+  join(a, u);
+  assert.ok(can(u, 'tools.memory'));
+  assert.equal(closure([a]).size, 2);
+});
+
+test('the default model follows the personal choice, then group priority and distance, then the workspace', () => {
+  const m = (id, extra = {}) => ({ id, enabled: 1, ...extra });
+  const pool = [m('ws', { is_default: 1 }), m('near'), m('far'), m('first'), m('locked', { access_groups: ['nobody'] })];
+  const u = person('user');
+  assert.equal(defaultModelFor(u, pool).id, 'ws', 'no groups: the workspace default');
+  const close = group('Close');
+  const parent = group('Parent');
+  updateGroup(parent, { defaultModelId: 'far' });
+  join(close, u);
+  nestGroup(parent, close, null);
+  assert.equal(defaultModelFor(u, pool).id, 'far');
+  updateGroup(close, { defaultModelId: 'near' });
+  db.groups.update(close, { priority: 5 });
+  db.groups.update(parent, { priority: 5 });
+  assert.equal(defaultModelFor(u, pool).id, 'near', 'at equal priority the nearer group wins');
+  db.groups.update(parent, { priority: 1 });
+  assert.equal(defaultModelFor(u, pool).id, 'far', 'priority beats distance');
+  updateGroup(parent, { defaultModelId: 'gone' });
+  assert.equal(defaultModelFor(u, pool).id, 'near', 'a default that is not usable is skipped');
+  const chooser = person('user', { prefs: { defaultModel: 'first' } });
+  join(close, chooser);
+  assert.equal(defaultModelFor(chooser, pool).id, 'first', 'a personal choice wins');
+  assert.equal(defaultModelFor(person('pending'), pool).id, 'ws');
+});
+
+test('restricted models and servers are open to their groups, nested members and the matching admins', () => {
+  const u = person('user');
+  const outsider = person('user');
+  const team = group('Model team');
+  const inner = group('Inner team');
+  nestGroup(team, inner, null);
+  join(inner, u);
+  const model = { id: 'm', enabled: 1, access_groups: [team] };
+  assert.ok(modelAllowed(u, model), 'through the nested group');
+  assert.equal(modelAllowed(outsider, model), false);
+  assert.ok(modelAllowed(outsider, { id: 'open', enabled: 1 }), 'no list means everyone');
+  assert.ok(modelAllowed(person('admin'), model), 'model admins see everything');
+  assert.equal(allowedFor(outsider, [team], 'admin.tools'), false);
+  assert.ok(allowedFor(person('admin'), [team], 'admin.tools'));
 });

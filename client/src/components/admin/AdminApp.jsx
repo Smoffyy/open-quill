@@ -22,6 +22,8 @@ import McpSection from './sections/McpSection.jsx';
 import InterfaceSection from './sections/InterfaceSection.jsx';
 import LauncherSection from './sections/LauncherSection.jsx';
 import UsersSection from './sections/UsersSection.jsx';
+import GroupsSection from './sections/GroupsSection.jsx';
+import RolesSection from './sections/RolesSection.jsx';
 import GuardrailsSection from './sections/GuardrailsSection.jsx';
 import NetworkSection from './sections/NetworkSection.jsx';
 import QuotasSection from './sections/QuotasSection.jsx';
@@ -50,6 +52,8 @@ const VIEWS = {
   interface: InterfaceSection,
   launcher: LauncherSection,
   users: UsersSection,
+  groups: GroupsSection,
+  roles: RolesSection,
   guardrails: GuardrailsSection,
   network: NetworkSection,
   quotas: QuotasSection,

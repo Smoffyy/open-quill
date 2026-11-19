@@ -11,6 +11,7 @@ export function useUsers({ confirm, enabled }) {
   const [filter, setFilterRaw] = useState({ q: '', role: '', status: '' });
   const [state, setState] = useState({ users: [], total: 0, counts: EMPTY_COUNTS, ready: false, loading: false });
   const [roles, setRoles] = useState([]);
+  const [registry, setRegistry] = useState([]);
   const [signup, setSignup] = useState(null);
   const seq = useRef(0);
 
@@ -34,7 +35,7 @@ export function useUsers({ confirm, enabled }) {
 
   useEffect(() => {
     if (!enabled) return;
-    api.get('/api/admin/roles').then(d => setRoles(d.roles || [])).catch(() => {});
+    api.get('/api/admin/roles').then(d => { setRoles(d.roles || []); setRegistry(d.permissions || []); }).catch(() => {});
     api.get('/api/admin/auth/signup').then(setSignup).catch(() => {});
   }, [enabled]);
 
@@ -86,7 +87,7 @@ export function useUsers({ confirm, enabled }) {
   }, []);
 
   return {
-    ...state, filter, setFilter, loadMore, reload, roles, signup,
+    ...state, filter, setFilter, loadMore, reload, roles, registry, signup,
     setRole, setStatus, revokeSessions, setBudget, remove, saveSignup
   };
 }

@@ -1,12 +1,12 @@
-import { db, tx, now, setSetting } from '../db.js';
+import { db, tx, uid, now, setSetting } from '../db.js';
 import { authMiddleware } from '../auth.js';
 import { logAudit } from '../lib/audit.js';
 import { purgeUser } from '../lib/purge.js';
 import { monthStartMs } from '../lib/budget.js';
-import { requirePermission, requireAnyPermission } from '../lib/authz/middleware.js';
-import { roleOf, isOwner, ACTIVE, DISABLED } from '../lib/authz/effective.js';
+import { requirePermission, requireAnyPermission, requireOwner } from '../lib/authz/middleware.js';
+import { roleOf, isOwner, explain, ACTIVE, DISABLED } from '../lib/authz/effective.js';
 import { canActOn, canAssign, isLastOwner } from '../lib/authz/rules.js';
-import { roleList, roleExists, PENDING, OWNER } from '../lib/authz/roles.js';
+import { roleList, roleExists, isBuiltinRole, CUSTOM_MIN_RANK, CUSTOM_MAX_RANK, PENDING, OWNER, USER } from '../lib/authz/roles.js';
 import { PERMISSIONS, MEMBER, cleanPermissions } from '../lib/authz/permissions.js';
 import { setStatus, endActivity, accountChanged } from '../lib/authz/accounts.js';
 import { broadcastAll } from '../lib/ws/index.js';
@@ -16,6 +16,30 @@ const LAST_OWNER = 'The organization needs at least one active owner.';
 const PAGE_MAX = 200;
 
 const lower = (v) => String(v || '').toLowerCase();
+const BUILTIN_NAMES = new Set(['owner', 'admin', 'user', 'pending']);
+
+function roleInput(b, existing) {
+  const patch = {};
+  if ('name' in b || !existing) {
+    const name = String(b.name ?? '').replace(/\s+/g, ' ').trim().slice(0, 40);
+    if (!name) return { error: 'Give the role a name.' };
+    const key = name.toLowerCase();
+    if (BUILTIN_NAMES.has(key) || db.roles.all().some(r => r.id !== existing?.id && lower(r.name) === key)) return { error: 'A role with that name already exists.' };
+    patch.name = name;
+  }
+  if ('description' in b) patch.description = String(b.description ?? '').slice(0, 300);
+  if ('rank' in b || !existing) {
+    const rank = Number(b.rank);
+    if (!Number.isInteger(rank) || rank < CUSTOM_MIN_RANK || rank > CUSTOM_MAX_RANK) return { error: 'Pick a rank between 11 and 99.' };
+    patch.rank = rank;
+  }
+  if ('permissions' in b || !existing) Object.assign(patch, { permissions: cleanPermissions(b.permissions), preset: null });
+  return { patch };
+}
+
+function refreshRole(roleId) {
+  for (const u of db.users.all()) if (roleOf(u) === roleId) accountChanged(u.id);
+}
 
 function userRow(actor, u, spend, seen, roles) {
   const manage = canActOn(actor, u);
@@ -126,8 +150,57 @@ export default function registerPeopleRoutes(app) {
     res.json({ ok: true });
   });
 
+  app.get('/api/admin/people', authMiddleware, requireAnyPermission('admin.users', 'admin.groups'), (req, res) => {
+    const q = lower(req.query.q).trim().slice(0, 120);
+    if (q.length < 1) return res.json({ people: [] });
+    const people = db.users.all()
+      .filter(u => lower(u.email).includes(q) || lower(u.display_name).includes(q))
+      .slice(0, 20)
+      .map(u => ({ id: u.id, email: u.email, displayName: u.display_name || (u.email || '').split('@')[0], role: roleOf(u) }));
+    res.json({ people });
+  });
+
   app.get('/api/admin/roles', authMiddleware, requireAnyPermission('admin.users', 'admin.groups'), (req, res) => {
     res.json({ roles: roleList(), permissions: PERMISSIONS.map(p => ({ id: p.id, tier: p.tier, category: p.category })) });
+  });
+
+  app.post('/api/admin/roles', authMiddleware, requireOwner, (req, res) => {
+    const r = roleInput(req.body || {}, null);
+    if (r.error) return res.status(400).json({ error: r.error });
+    const role = db.roles.insert({ id: uid(), ...r.patch, created_at: now() });
+    logAudit(req, 'role.create', { type: 'role', id: role.id, meta: { name: role.name, rank: role.rank } });
+    res.json({ role: roleList().find(x => x.id === role.id), roles: roleList() });
+  });
+
+  app.patch('/api/admin/roles/:id', authMiddleware, requireOwner, (req, res) => {
+    const cur = isBuiltinRole(req.params.id) ? null : db.roles.byId(req.params.id);
+    if (!cur) return res.status(404).json({ error: 'not found' });
+    const r = roleInput(req.body || {}, cur);
+    if (r.error) return res.status(400).json({ error: r.error });
+    db.roles.update(cur.id, r.patch);
+    logAudit(req, 'role.update', { type: 'role', id: cur.id, meta: { name: r.patch.name || cur.name, fields: Object.keys(r.patch) } });
+    refreshRole(cur.id);
+    res.json({ roles: roleList() });
+  });
+
+  app.delete('/api/admin/roles/:id', authMiddleware, requireOwner, (req, res) => {
+    const cur = isBuiltinRole(req.params.id) ? null : db.roles.byId(req.params.id);
+    if (!cur) return res.status(404).json({ error: 'not found' });
+    const moved = tx(() => {
+      const holders = db.users.all().filter(u => roleOf(u) === cur.id);
+      for (const u of holders) db.users.update(u.id, { role: USER });
+      db.roles.removeById(cur.id);
+      return holders;
+    });
+    for (const u of moved) accountChanged(u.id);
+    logAudit(req, 'role.delete', { type: 'role', id: cur.id, meta: { name: cur.name, moved: moved.length } });
+    res.json({ roles: roleList(), moved: moved.length });
+  });
+
+  app.get('/api/admin/users/:id/access', ...users, (req, res) => {
+    const u = db.users.byId(req.params.id);
+    if (!u) return res.status(404).json({ error: 'not found' });
+    res.json({ ...explain(u), direct: db.groupMembers.directGroups(u.id) });
   });
 
   app.put('/api/admin/roles/user-baseline', authMiddleware, requirePermission('admin.groups'), (req, res) => {

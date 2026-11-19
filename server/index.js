@@ -33,6 +33,7 @@ import registerEvalRoutes from './routes/evals.js';
 import registerQualityRoutes from './routes/quality.js';
 import registerPeopleRoutes from './routes/people.js';
 import registerIdentityRoutes from './routes/identity.js';
+import registerGroupRoutes from './routes/groups.js';
 import { gateOf } from './lib/authz/effective.js';
 import { announceSetup } from './lib/identity/signup.js';
 import { settleInterrupted } from './lib/regression.js';
@@ -102,6 +103,7 @@ registerEvalRoutes(app);
 registerQualityRoutes(app);
 registerPeopleRoutes(app);
 registerIdentityRoutes(app);
+registerGroupRoutes(app);
 registerMiscRoutes(app);
 
 // Unknown API routes answer in JSON. Falling through to the SPA handler below served a

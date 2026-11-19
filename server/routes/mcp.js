@@ -1,6 +1,7 @@
 import { authMiddleware } from '../auth.js';
 import { requirePermission } from '../lib/authz/middleware.js';
 import { can } from '../lib/authz/effective.js';
+import { allowedFor } from '../lib/authz/access.js';
 import * as mcp from '../lib/mcp.js';
 import { checkMemberUrl, memberPolicy } from '../lib/mcpnet.js';
 import { rateLimiter, throttle } from '../lib/ratelimit.js';
@@ -9,8 +10,8 @@ const outbound = throttle(rateLimiter({ windowMs: 60000, max: 30 }), 'Too many c
 
 // A user sees the workspace servers an admin configured (read-only, so they know what is
 // already available and which slugs are taken) alongside their own, which they manage.
-function workspaceView() {
-  return mcp.list().filter(s => s.enabled).map(s => ({
+function workspaceView(user) {
+  return mcp.list().filter(s => s.enabled && allowedFor(user, s.access_groups, 'admin.tools')).map(s => ({
     id: s.id, name: s.name, slug: s.slug, transport: s.transport,
     url: s.transport === 'http' ? s.url : '', command: s.command || '', args: s.args || '',
     tools: mcp.publicTools(s).filter(t => t.mode !== 'off').map(t => ({ name: t.name, description: t.description || '', annotations: t.annotations || {}, mode: t.mode })),
@@ -26,7 +27,7 @@ function mine(s) {
 export default function registerUserMcpRoutes(app) {
   app.get('/api/mcp', authMiddleware, (req, res) => {
     const policy = memberPolicy();
-    const shared = can(req.user, 'tools.mcp') ? workspaceView() : [];
+    const shared = can(req.user, 'tools.mcp') ? workspaceView(req.user) : [];
     const own = can(req.user, 'mcp.connect') ? mcp.list(req.user.id).map(mine) : [];
     res.json({ servers: [...shared, ...own], limit: mcp.USER_SERVER_LIMIT, allowed: policy.allowed && can(req.user, 'mcp.connect'), hosts: policy.hosts });
   });

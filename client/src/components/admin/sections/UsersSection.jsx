@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useAdmin } from '../store.jsx';
 import { Card, Rows, Row, Input, Area, Seg, Select, Btn, IconBtn, Acts, Table, Badge, Empty, KV, Note, fmtMoney, fmtAgo } from '../ui.jsx';
-import { Trash, Users, Logout, Alert } from '../../ui/icons.jsx';
+import { Trash, Users, Logout, Alert, Eye } from '../../ui/icons.jsx';
 import { t, tk, tp } from '../../../i18n.jsx';
 import { Skel, SkelTable } from '../../ui/Skeleton.jsx';
 import { roleLabel } from '../../ui/roleLabel.jsx';
 import { USERS_PAGE } from '../state/useUsers.js';
+import { can } from '../../../lib/permissions.js';
+import AccessDialog from '../people/AccessDialog.jsx';
 
 const SEARCH_DELAY_MS = 250;
 
@@ -45,7 +47,7 @@ function Registration({ signup, save }) {
   );
 }
 
-function UserRow({ u, me, roleName, order, M }) {
+function UserRow({ u, me, roleName, order, M, onAccess }) {
   const [cap, setCap] = useState(null);
   const pending = u.role === 'pending';
   const disabled = u.status === 'disabled';
@@ -82,6 +84,7 @@ function UserRow({ u, me, roleName, order, M }) {
       </td>
       <td className="acts">
         <Acts end>
+          <IconBtn label={t('See access')} onClick={() => onAccess(u)}><Eye /></IconBtn>
           {pending && u.assignable.includes('user') && (
             <Btn size="sm" kind="primary" onClick={() => M.setRole(u.id, 'user')}>{t('Approve')}</Btn>
           )}
@@ -99,6 +102,7 @@ function UserRow({ u, me, roleName, order, M }) {
 export default function UsersSection() {
   const { users: M, user } = useAdmin();
   const [q, setQ] = useState(M.filter.q);
+  const [viewing, setViewing] = useState(null);
   const view = VIEWS.find(v => v.filter.role === M.filter.role && v.filter.status === M.filter.status)?.value || 'all';
   const custom = M.roles.filter(r => !r.builtin);
   const roleName = (id) => roleLabel(id, custom.find(r => r.id === id)?.name);
@@ -151,10 +155,15 @@ export default function UsersSection() {
               { label: t('Role'), fit: true },
               { label: '', fit: true }
             ]}>
-              {M.users.map(u => <UserRow key={u.id} u={u} me={user} roleName={roleName} order={order} M={M} />)}
+              {M.users.map(u => <UserRow key={u.id} u={u} me={user} roleName={roleName} order={order} M={M} onAccess={setViewing} />)}
             </Table>
           )}
       </Card>
+
+      {viewing && (
+        <AccessDialog person={viewing} roles={M.roles} registry={M.registry} canEditGroups={can(user, 'admin.groups')}
+          onClose={() => setViewing(null)} />
+      )}
 
       <Card title={t('Roles')}>
         <KV items={[

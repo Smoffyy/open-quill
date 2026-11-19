@@ -32,6 +32,7 @@ export function purgeUser(userId) {
     try { removeProjectFiles(p.id); } catch {}
     try { sandbox.remove(sandbox.projectKey(p.id)); } catch {}
   }
+  db.groupMembers.dropMember('user', userId);
   const sessions = db.sessions.byUser(userId);
   db.sessions.removeWhere('user_id', userId);
   for (const s of sessions) killSessionSockets(s.id);

@@ -1,4 +1,4 @@
-import { Panel, Upload, Cube, Sliders, Users, Chat, Globe, Mic, FileText, Bulb, Plug, Shield, Eye, Wave, Star, Box, Gear, Clock, Palette, Flask, Gauge } from '../ui/icons.jsx';
+import { Panel, Upload, Cube, Sliders, Users, Chat, Globe, Mic, FileText, Bulb, Plug, Shield, Eye, Wave, Star, Box, Gear, Clock, Palette, Flask, Gauge, Briefcase, Tag } from '../ui/icons.jsx';
 import { tk } from '../../i18n.jsx';
 
 /* Each section declares everything the shell needs to render it:
@@ -64,7 +64,15 @@ export const NAV = [
     { id: 'users', label: tk('Users'), Icon: Users, title: tk('Users'),
       blurb: tk('Accounts, approvals, roles, per-user spend caps, and who may sign up.'),
       find: tk('members people admins owners roles accounts signup registration approval pending disable budget'),
-      index: [tk('Registration'), tk('New accounts'), tk('Allowed email domains'), tk('Approve'), tk('Role'), tk('Disable'), tk('Sign out everywhere'), tk('Remove account')] }
+      index: [tk('Registration'), tk('New accounts'), tk('Allowed email domains'), tk('Approve'), tk('Role'), tk('Disable'), tk('Sign out everywhere'), tk('Remove account'), tk('See access')] },
+    { id: 'groups', label: tk('Groups'), Icon: Briefcase, title: tk('Groups'),
+      blurb: tk('Teams of people, and groups inside groups, that add permissions and a default model for their members.'),
+      find: tk('teams departments nesting inherit permissions members default model'),
+      index: [tk('New group'), tk('People'), tk('Groups inside this one'), tk('Default model for new chats')] },
+    { id: 'roles', label: tk('Roles'), Icon: Tag, title: tk('Roles'),
+      blurb: tk('Baseline trust levels, what every user can do, and custom roles with admin permissions.'),
+      find: tk('rank owner admin user pending custom baseline permissions'),
+      index: [tk('New role'), tk('Rank'), tk('Admin permissions')] }
   ] },
   { group: tk('Policy'), items: [
     { id: 'guardrails', label: tk('Guardrails'), Icon: Shield, title: tk('Guardrails'),

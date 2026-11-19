@@ -280,7 +280,7 @@ export default function App() {
   const loadConnectors = useCallback(() => api.get('/api/mcp')
     .then(r => setConnectors((r.servers || []).filter(s => s.enabled !== false).map(s => ({ id: s.id, name: s.name, status: s.status || 'new', tools: (s.tools || []).length, scope: s.scope }))))
     .catch(() => {}), []);
-  const onSettingsClosed = useCallback(() => { setSettings(null); loadSkills(); loadConnectors(); }, [loadSkills, loadConnectors]);
+  const onSettingsClosed = useCallback(() => { setSettings(null); loadSkills(); loadConnectors(); loadModels(); }, [loadSkills, loadConnectors]);
   useEffect(() => { if (ready) { loadSkills(); loadConnectors(); } }, [ready, loadSkills, loadConnectors]);
   useEffect(() => onFrame('mcp_status', (f) => setConnectors(list => list.map(c => (c.id === f.id ? { ...c, status: f.status, tools: f.toolCount } : c)))), []);
   const [showAdmin, setShowAdmin] = useState(false);

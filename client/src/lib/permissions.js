@@ -29,6 +29,8 @@ export const ADMIN_SECTIONS = {
   interface: 'admin.interface',
   launcher: 'admin.interface',
   users: 'admin.users',
+  groups: 'admin.groups',
+  roles: 'admin.groups',
   guardrails: 'admin.policy',
   network: 'admin.policy',
   quotas: 'admin.policy',

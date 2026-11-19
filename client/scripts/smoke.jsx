@@ -44,6 +44,9 @@ import GuardrailsSection from '../src/components/admin/sections/GuardrailsSectio
 import LauncherSection from '../src/components/admin/sections/LauncherSection.jsx';
 import McpSection from '../src/components/admin/sections/McpSection.jsx';
 import UsersSection from '../src/components/admin/sections/UsersSection.jsx';
+import GroupsSection from '../src/components/admin/sections/GroupsSection.jsx';
+import RolesSection from '../src/components/admin/sections/RolesSection.jsx';
+import PermissionPicker from '../src/components/admin/people/PermissionPicker.jsx';
 import Pending from '../src/components/pages/Pending.jsx';
 import ChatHistorySection from '../src/components/admin/sections/ChatHistorySection.jsx';
 import ModelsSection from '../src/components/admin/sections/ModelsSection.jsx';
@@ -261,7 +264,7 @@ cases.push(['DocsNav:editing', () => React.createElement(DocsNav, {
 const ADMIN_SECTIONS = [
   ['Interface', InterfaceSection], ['Events', EventsSection], ['Files', FilesSection],
   ['Guardrails', GuardrailsSection], ['Launcher', LauncherSection], ['Mcp', McpSection],
-  ['Users', UsersSection], ['Chat history', ChatHistorySection], ['Models', ModelsSection],
+  ['Users', UsersSection], ['Groups', GroupsSection], ['Roles', RolesSection], ['Chat history', ChatHistorySection], ['Models', ModelsSection],
   ['Network', NetworkSection], ['Overview', OverviewSection], ['Providers', ProvidersSection],
   ['Quotas', QuotasSection], ['Ratings', RatingsSection], ['Search', SearchSection],
   ['Skills', SkillsSection], ['Storage', StorageSection], ['Usage', UsageSection],
@@ -287,6 +290,8 @@ const mixedModels = [
 ];
 const legacyModel = { ...plain, id: 'm4', kwargs: [], effort_enabled: 1, effort_levels: ['low', 'high'] };
 const inAdmin = (child) => React.createElement(AdminProvider, { user: adminUser, onClose: noop }, child);
+const REGISTRY = ALL_PERMISSIONS.map(id => ({ id, tier: id.startsWith('admin.') ? 'admin' : 'member', category: id.startsWith('admin.') ? 'admin' : 'chats' }));
+cases.push(['PermissionPicker', () => inAdmin(React.createElement(PermissionPicker, { registry: REGISTRY, value: ['chats.create'], locked: new Set(['chats.edit']), lockedNote: 'locked', onChange: noop }))]);
 const editing = (list, Tab) => inAdmin(React.createElement(EditorProvider, { models: list, edit: noop }, React.createElement(Tab)));
 for (const [name, Tab] of MODEL_TABS) {
   cases.push(['ModelTab:' + name + ':single', () => editing([kwargModel], Tab)]);

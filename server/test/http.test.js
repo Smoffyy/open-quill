@@ -896,6 +896,109 @@ test('narrowing the User role takes a feature away on the next request and gives
   assert.equal((await browser('DELETE', `/api/admin/users/${u.id}`)).status, 200);
 });
 
+const groupNamed = async (name, permissions) => {
+  const made = await browser('POST', '/api/admin/groups', { body: { name } });
+  assert.equal(made.status, 200, made.text);
+  if (permissions) assert.equal((await browser('PATCH', `/api/admin/groups/${made.json.group.id}`, { body: { permissions } })).status, 200);
+  return made.json.group.id;
+};
+
+test('groups grant everyday permissions to members and nested members, and nothing administrative', async () => {
+  const u = await joinAs('grouped@example.com');
+  const base = (await browser('GET', '/api/admin/roles')).json.roles.find(r => r.id === 'user').permissions;
+  await browser('PUT', '/api/admin/roles/user-baseline', { body: { permissions: base.filter(p => p !== 'code.use') } });
+  assert.equal((await as(u)('POST', '/api/chats', { body: { mode: 'code' } })).status, 403);
+
+  assert.equal((await as(u)('POST', '/api/admin/groups', { body: { name: 'Mine' } })).status, 403, 'a user cannot make groups');
+  assert.equal((await as(u)('GET', '/api/admin/groups')).status, 403, 'or list them');
+  const coders = await groupNamed('Coders', ['code.use']);
+  const team = await groupNamed('Team');
+  assert.equal((await browser('POST', '/api/admin/groups', { body: { name: 'coders' } })).status, 409, 'names are unique regardless of case');
+  assert.equal((await browser('PATCH', `/api/admin/groups/${coders}`, { body: { permissions: ['code.use', 'admin.users'] } })).status, 400, 'groups never carry admin permissions');
+  assert.equal((await browser('PUT', `/api/admin/groups/${coders}/groups/${team}`)).status, 200, 'Team goes inside Coders');
+  assert.equal((await browser('PUT', `/api/admin/groups/${team}/groups/${coders}`)).status, 409, 'and never the other way round as well');
+  assert.equal((await browser('PUT', `/api/admin/groups/${team}/members`, { body: { add: [u.id] } })).status, 200);
+
+  assert.equal((await as(u)('POST', '/api/chats', { body: { mode: 'code' } })).status, 200, 'inherited from Coders through Team');
+  const access = (await browser('GET', `/api/admin/users/${u.id}/access`)).json;
+  assert.deepEqual(access.permissions.find(p => p.id === 'code.use').sources[0].path.map(x => x.name), ['Team', 'Coders']);
+  assert.deepEqual(access.direct, [team]);
+  assert.ok(!(await as(u)('GET', '/api/me')).json.user.permissions.includes('admin.users'));
+
+  assert.equal((await browser('PUT', `/api/admin/groups/${team}/members`, { body: { remove: [u.id] } })).status, 200);
+  assert.equal((await as(u)('POST', '/api/chats', { body: { mode: 'code' } })).status, 403, 'leaving takes it away on the next request');
+
+  for (const g of [team, coders]) assert.equal((await browser('DELETE', `/api/admin/groups/${g}`)).status, 200);
+  await browser('PUT', '/api/admin/roles/user-baseline', { body: { permissions: base } });
+  assert.equal((await browser('DELETE', `/api/admin/users/${u.id}`)).status, 200);
+});
+
+test('a model limited to a group is invisible and unusable to everyone else', async () => {
+  const u = await joinAs('model-gated@example.com');
+  const team = await groupNamed('Model team');
+  const id = (await browser('POST', '/api/admin/models', { body: { display_name: 'Restricted', internal_name: 'restricted' } })).json.id;
+  assert.equal((await browser('PATCH', `/api/admin/models/${id}`, { body: { enabled: true, access_groups: [team, 7, 'x'.repeat(200)] } })).status, 200);
+  assert.deepEqual((await browser('GET', '/api/admin/models')).json.find(m => m.id === id).access_groups, [team], 'only plausible group ids are kept');
+  assert.equal((await browser('POST', '/api/admin/changes/publish', { body: {} })).status, 200);
+
+  assert.ok(!(await as(u)('GET', '/api/models')).json.some(m => m.id === id), 'hidden from the list');
+  const chat = (await as(u)('POST', '/api/chats', { body: {} })).json.id;
+  const frames = await exchange({ Origin: ORIGIN, 'Sec-Fetch-Site': 'same-origin', Cookie: u.cookie }, { type: 'chat', chatId: chat, modelId: id, content: 'hello' });
+  assert.equal(frames[0].type, 'error', 'and refused on the socket');
+
+  await browser('PUT', `/api/admin/groups/${team}/members`, { body: { add: [u.id] } });
+  await browser('PATCH', `/api/admin/groups/${team}`, { body: { defaultModelId: id } });
+  const listed = (await as(u)('GET', '/api/models')).json;
+  assert.ok(listed.some(m => m.id === id), 'joining the group opens it');
+  assert.equal(listed.find(m => m.isDefault)?.id, id, 'and the group default becomes the default for new chats');
+
+  await browser('POST', '/api/admin/models/remove', { body: { ids: [id] } });
+  await browser('POST', '/api/admin/changes/publish', { body: {} });
+  await browser('DELETE', `/api/admin/groups/${team}`);
+  await browser('DELETE', `/api/admin/users/${u.id}`);
+});
+
+test('a workspace connector limited to a group is only listed for that group', async () => {
+  const u = await joinAs('mcp-gated@example.com');
+  const team = await groupNamed('Connector team');
+  const created = await browser('POST', '/api/admin/mcp', { body: { name: 'Gated', transport: 'http', url: 'http://127.0.0.1:9/mcp', enabled: true, access_groups: [team] } });
+  const id = created.json.server.id;
+  assert.ok(!(await as(u)('GET', '/api/mcp')).json.servers.some(s => s.id === id));
+  await browser('PUT', `/api/admin/groups/${team}/members`, { body: { add: [u.id] } });
+  assert.ok((await as(u)('GET', '/api/mcp')).json.servers.some(s => s.id === id));
+  await browser('DELETE', `/api/admin/mcp/${id}`);
+  await browser('DELETE', `/api/admin/groups/${team}`);
+  await browser('DELETE', `/api/admin/users/${u.id}`);
+});
+
+test('owners define custom roles, and a custom role manages only below its rank', async () => {
+  const adm = await joinAs('role-admin@example.com');
+  const lead = await joinAs('role-lead@example.com');
+  const plain = await joinAs('role-plain@example.com');
+  await browser('PATCH', `/api/admin/users/${adm.id}`, { body: { role: 'admin' } });
+
+  assert.equal((await as(adm)('POST', '/api/admin/roles', { body: { name: 'Support', rank: 50, permissions: ['admin.panel'] } })).status, 403, 'admins do not define roles');
+  assert.equal((await browser('POST', '/api/admin/roles', { body: { name: 'Admin', rank: 50 } })).status, 400, 'built-in names are taken');
+  assert.equal((await browser('POST', '/api/admin/roles', { body: { name: 'Support', rank: 100 } })).status, 400, 'custom ranks stay below admin');
+  const made = await browser('POST', '/api/admin/roles', { body: { name: 'Support', rank: 50, permissions: ['admin.panel', 'admin.users', 'nonsense'] } });
+  assert.equal(made.status, 200, made.text);
+  const support = made.json.role.id;
+  assert.deepEqual(made.json.role.extras, ['admin.panel', 'admin.users']);
+
+  assert.equal((await browser('PATCH', `/api/admin/users/${lead.id}`, { body: { role: support } })).status, 200);
+  assert.equal((await as(lead)('GET', '/api/admin/users')).status, 200, 'the role opens user management');
+  assert.equal((await as(lead)('PATCH', `/api/admin/users/${plain.id}`, { body: { role: 'pending' } })).status, 200, 'below its rank');
+  assert.equal((await as(lead)('PATCH', `/api/admin/users/${adm.id}`, { body: { status: 'disabled' } })).status, 403, 'not above it');
+  assert.equal((await as(lead)('PATCH', `/api/admin/users/${plain.id}`, { body: { role: support } })).status, 403, 'and never its own rank');
+  assert.equal((await as(lead)('POST', '/api/admin/changes/publish', { body: {} })).status, 403, 'nothing it was not given');
+
+  const removed = await browser('DELETE', `/api/admin/roles/${support}`);
+  assert.equal(removed.json.moved, 1);
+  assert.equal((await as(lead)('GET', '/api/me')).json.user.role, 'user', 'its holders fall back to user');
+  assert.equal((await as(lead)('GET', '/api/admin/users')).status, 403);
+  for (const x of [adm, lead, plain]) await browser('DELETE', `/api/admin/users/${x.id}`);
+});
+
 test('unknown routes answer in the right language', async () => {
   const api = await request('GET', '/api/not-a-real-endpoint');
   assert.equal(api.status, 404);

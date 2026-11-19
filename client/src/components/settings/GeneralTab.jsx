@@ -1,4 +1,4 @@
-import { useState, useRef, useId } from 'react';
+import { useState, useRef, useId, useEffect } from 'react';
 import { api } from '../../lib/api.js';
 import { Download, Upload } from '../ui/icons.jsx';
 import { t, useI18n } from '../../i18n.jsx';
@@ -39,6 +39,8 @@ export default function GeneralTab({ user, draft, onExportChats, onImportChats, 
   const importRef = useRef(null);
   const [clearMsg, setClearMsg] = useState('');
   const [delErr, setDelErr] = useState('');
+  const [models, setModels] = useState([]);
+  useEffect(() => { api.get('/api/models').then(list => setModels(Array.isArray(list) ? list : [])).catch(() => {}); }, []);
 
   async function clearChats() {
     setClearMsg('');
@@ -70,6 +72,13 @@ export default function GeneralTab({ user, draft, onExportChats, onImportChats, 
         <SelectRow label={t("Language")} value={lang} options={langs.map(l => ({ v: l.code, label: l.name }))}
           onPick={(code) => { if (code !== lang) reopenSettingsAfterReload('general'); setLang(code); }} />
       </SetRow>
+      {models.length > 1 && (
+        <SetRow label={t('Default model for new chats')} desc={t('Overrides the default your organization or groups picked.')}>
+          <SelectRow label={t('Default model for new chats')} value={models.some(m => m.id === draft.prefs.defaultModel) ? draft.prefs.defaultModel : ''}
+            options={[{ v: '', label: t('Use the organization default') }, ...models.map(m => ({ v: m.id, label: m.displayName || m.id }))]}
+            onPick={(v) => draft.setPref('defaultModel', v || undefined)} />
+        </SetRow>
+      )}
       <div className="field">
         <label htmlFor="set-instructions">{t("Instructions for the Assistant")}</label>
         <div className="muted-note" id="set-instructions-note">{t("Added to the system prompt of every chat. Leave empty for none.")}</div>
