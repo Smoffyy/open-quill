@@ -48,14 +48,15 @@ Prefer not to build? Download the [latest release](https://github.com/Smoffyy/op
 
 ### Let other people on your network in
 
-Set `HOST=0.0.0.0` in `.env` and restart. Then turn on **Accept new sign-ups** under **Admin Panel → Members**.
+Set `HOST=0.0.0.0` in `.env` and restart. Then set **Registration** under **Admin Panel → Users** to open or approval.
 
 ## What it does
 
 - Works with local and cloud models, including several at once
 - Gives the assistant a workspace per chat, with files and a shell
 - Projects, memory, scheduled tasks, web search and MCP connectors
-- Team accounts with roles, and releases you can roll back
+- Team accounts with roles, groups and sharing, and releases you can roll back
+- Single sign-on, LDAP and Active Directory, SCIM provisioning and two-factor, for companies
 - Two interface styles, light and dark modes, ten languages
 
 ## Docs
@@ -65,6 +66,7 @@ Set `HOST=0.0.0.0` in `.env` and restart. Then turn on **Accept new sign-ups** u
 - [**Models & Reasoning**](docs/models.md)
 - [**Admin Guide**](docs/admin-guide.md)
 - [**Privacy & Security**](docs/privacy-security.md)
+- [**Enterprise Deployment**](docs/enterprise.md)
 - [**All documentation**](docs/README.md)
 
 ## Contributing
