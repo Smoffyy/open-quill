@@ -24,6 +24,7 @@ import ThreadSkeleton from './components/chat/ThreadSkeleton.jsx';
 import SummaryModal from './components/dialogs/SummaryModal.jsx';
 import ShareDialog from './components/dialogs/ShareDialog.jsx';
 import SharedBar from './components/chat/SharedBar.jsx';
+import { ssoMessage } from './lib/ssomessages.js';
 import CommandPalette from './components/dialogs/CommandPalette.jsx';
 import { computeActiveBg } from './lib/appbg.js';
 import { nextTheme } from './lib/palettes.js';
@@ -114,6 +115,16 @@ export default function App() {
   const ready = !!user && !user.gate;
   const userRef = useRef(undefined);
   useEffect(() => { userRef.current = user; }, [user]);
+  useEffect(() => {
+    if (!user) return;
+    const q = new URLSearchParams(location.search);
+    const linked = q.get('sso') === 'linked';
+    const code = q.get('sso_error');
+    if (!linked && !code) return;
+    history.replaceState({}, '', location.pathname);
+    if (linked) notify(t('Sign-in method linked'), { kind: 'success' });
+    else notify(ssoMessage(code), { kind: 'error' });
+  }, [user?.id]);
   const [models, setModels] = useState([]);
   const [modelsReady, setModelsReady] = useState(false);
   const [currentId, setCurrentId] = useState(null);
@@ -274,7 +285,7 @@ export default function App() {
   const [skills, setSkills] = useState([]);
   const loadSkills = useCallback(() => api.get('/api/skills').then(r => setSkills(r.skills || [])).catch(() => {}), []);
   const toggleSkill = useCallback(async (sk) => {
-    if (!sk.editable) { notify(t('Workspace skills are managed in the admin panel.')); return; }
+    if (sk.scope === 'workspace') { notify(t('Workspace skills are managed in the admin panel.')); return; }
     try { await api.patch('/api/skills/' + sk.id, { enabled: !sk.enabled }); loadSkills(); }
     catch { notify(t('Could not update the skill.')); }
   }, [loadSkills]);

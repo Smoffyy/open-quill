@@ -150,6 +150,29 @@ function unlink(groupId, type, memberId) {
   if (row) db.groupMembers.removeById(row.id);
 }
 
+export function syncExternalGroups(userId, source, names) {
+  const wanted = new Map();
+  for (const raw of Array.isArray(names) ? names.slice(0, 200) : []) {
+    const name = cleanName(raw);
+    if (name) wanted.set(nameKey(name), name);
+  }
+  tx(() => {
+    const mine = new Map(db.groups.all().filter(g => g.source === source).map(g => [g.name_key, g]));
+    for (const [key, name] of wanted) {
+      if (mine.has(key) || db.groups.count() >= MAX_GROUPS) continue;
+      const t = now();
+      mine.set(key, db.groups.insert({
+        id: uid(), name, name_key: key, description: '', source, external_id: name, permissions: [], default_model_id: null,
+        priority: db.groups.count(), created_by: null, created_at: t, updated_at: t
+      }));
+    }
+    for (const g of mine.values()) {
+      if (wanted.has(g.name_key)) link(g.id, 'user', userId, null, source);
+      else unlink(g.id, 'user', userId);
+    }
+  });
+}
+
 export function setMembers(groupId, { add: adds = [], remove = [] }, actorId) {
   const group = db.groups.byId(groupId);
   if (!group) return { status: 404, error: 'not found' };

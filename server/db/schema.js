@@ -124,7 +124,11 @@ CREATE TABLE IF NOT EXISTS uploads (id TEXT PRIMARY KEY, user_id TEXT, created_a
 CREATE INDEX IF NOT EXISTS idx_uploads_user ON uploads(user_id);`,
 
   `CREATE TABLE IF NOT EXISTS mfa_factors (id TEXT PRIMARY KEY, user_id TEXT, type TEXT, data TEXT NOT NULL);
-CREATE INDEX IF NOT EXISTS idx_mfa_factors_user ON mfa_factors(user_id, type);`
+CREATE INDEX IF NOT EXISTS idx_mfa_factors_user ON mfa_factors(user_id, type);`,
+
+  `CREATE TABLE IF NOT EXISTS identities (id TEXT PRIMARY KEY, provider_id TEXT, subject TEXT, user_id TEXT, data TEXT NOT NULL);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_identities_subject ON identities(provider_id, subject);
+CREATE INDEX IF NOT EXISTS idx_identities_user ON identities(user_id);`
 ];
 
 export const LATEST_VERSION = MIGRATIONS.length + 1;

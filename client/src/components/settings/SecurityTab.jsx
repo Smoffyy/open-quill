@@ -162,6 +162,68 @@ function Sessions() {
   );
 }
 
+function SignInMethods({ user }) {
+  const [data, setData] = useState(null);
+  const [proof, setProof] = useState('');
+  const [err, setErr] = useState('');
+  const load = useCallback(() => {
+    api.get('/api/me/identities').then(setData).catch(() => setData(null));
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  if (!data || (!data.identities.length && !data.linkable.length)) return null;
+  const needs = data.hasPassword ? 'password' : user.twoFactor ? 'code' : '';
+  const removable = data.hasPassword || data.identities.length > 1;
+
+  async function link(p) {
+    setErr('');
+    try {
+      const { url } = await api.post(`/api/auth/sso/${p.id}/start`, { intent: 'link', returnTo: '/' });
+      window.location.href = url;
+    } catch (e) {
+      setErr(e?.message || t('Could not start linking.'));
+    }
+  }
+
+  async function unlink(i) {
+    setErr('');
+    try {
+      await api.del('/api/me/identities/' + i.id, needs ? { [needs]: proof } : {});
+      setProof('');
+      load();
+    } catch (e) {
+      setErr(e?.message || t('Could not remove that sign-in method.'));
+    }
+  }
+
+  return (
+    <div className="sec-block">
+      <div className="me-section-h">{t('Sign-in methods')}</div>
+      <div className="sec-note">{t('Providers you can use instead of a password.')}</div>
+      <div className="dz-err" role="alert">{err}</div>
+      {data.identities.map(i => (
+        <div className="field row" key={i.id}>
+          <div>
+            <label>{i.label || t('Removed provider')}</label>
+            <div className="muted-note">{[i.email, i.lastUsedAt ? t('Last used {when}', { when: fmtRelative(i.lastUsedAt) }) : ''].filter(Boolean).join(' · ')}</div>
+          </div>
+          {removable && <button className="btn ghost" onClick={() => unlink(i)} disabled={!!needs && !proof}>{t('Remove')}</button>}
+        </div>
+      ))}
+      {removable && data.identities.length > 0 && needs && (
+        <input type={needs === 'password' ? 'password' : 'text'} className="short-input" value={proof} onChange={(e) => setProof(e.target.value)}
+          autoComplete={needs === 'password' ? 'current-password' : 'one-time-code'} inputMode={needs === 'code' ? 'numeric' : undefined}
+          placeholder={needs === 'password' ? t('Password') : t('Two-factor code')} aria-label={needs === 'password' ? t('Password to remove a sign-in method') : t('Two-factor code to remove a sign-in method')} />
+      )}
+      {data.linkable.length > 0 && (
+        <div className="edit-actions">
+          {data.linkable.map(p => <button key={p.id} className="btn" onClick={() => link(p)}>{t('Link {name}', { name: p.label })}</button>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SecurityTab({ user, onUpdated, reviewNotice = false }) {
   return (
     <>
@@ -171,9 +233,14 @@ export default function SecurityTab({ user, onUpdated, reviewNotice = false }) {
           {t('Replies on this workspace are reviewed automatically for quality. An admin can open one of your conversations only when a reply in it is flagged by a check, rated, or saved as a test case, and every time they do it is recorded. Incognito chats are never reviewed.')}
         </div>
       )}
-      <div className="me-section-h">{t("Password")}</div>
-      <PasswordForm email={user.email} />
+      {user.hasPassword && (
+        <>
+          <div className="me-section-h">{t("Password")}</div>
+          <PasswordForm email={user.email} />
+        </>
+      )}
       <TwoFactor user={user} onUpdated={onUpdated} />
+      <SignInMethods user={user} />
       <Sessions />
     </>
   );

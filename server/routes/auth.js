@@ -19,27 +19,12 @@ import { presetId } from '../lib/presets.js';
 import { memoriesOf, changeMemory, setMemories } from '../lib/memory.js';
 import { killSessionSockets, closeUserSockets } from '../lib/ws/index.js';
 import { cleanStyles, prefsFit } from '../lib/profile.js';
+import { sessionCookie, challengeCookie as challengeLine, MFA_COOKIE } from '../lib/identity/cookies.js';
+import { enabledProviders, publicBase, providers } from '../lib/identity/providers.js';
 
-import { isHttps } from '../lib/origin.js';
-
-// Secure is set only over TLS: forcing it on a plain-http install would make the browser
-// drop the cookie and lock everyone out of a normal localhost deployment.
-const setCookie = (req, res, token) =>
-  res.setHeader('Set-Cookie', [
-    `token=${token}`, 'HttpOnly', 'Path=/',
-    `Max-Age=${token ? sessionMaxAgeSeconds() : 0}`,
-    'SameSite=Lax',
-    ...(isHttps(req) ? ['Secure'] : [])
-  ].join('; '));
-
-const MFA_COOKIE = 'oq_mfa';
-const challengeCookie = (req, res, value) =>
-  res.append('Set-Cookie', [
-    `${MFA_COOKIE}=${value}`, 'HttpOnly', 'Path=/api/auth',
-    `Max-Age=${value ? CHALLENGE_SECONDS : 0}`,
-    'SameSite=Strict',
-    ...(isHttps(req) ? ['Secure'] : [])
-  ].join('; '));
+const REAUTH_WINDOW_MS = 10 * 60 * 1000;
+const setCookie = (req, res, token) => sessionCookie(req, res, token, sessionMaxAgeSeconds());
+const challengeCookie = (req, res, value) => challengeLine(req, res, value, CHALLENGE_SECONDS);
 
 const FAIL_WINDOW_MS = 10 * 60 * 1000;
 const FAIL_MAX = 8;
@@ -82,7 +67,15 @@ const TOO_MANY = 'Too many attempts. Try again in a few minutes.';
 async function reauth(req, res, password, wrong = 'Password is incorrect.') {
   const key = `acct:${req.user.id}`;
   if (loginLimited(key)) { res.status(429).json({ error: TOO_MANY }); return false; }
-  if (await check(String(password || ''), req.user.password_hash)) return true;
+  if (req.user.password_hash) {
+    if (await check(String(password || ''), req.user.password_hash)) return true;
+  } else if (hasTotp(req.user.id)) {
+    if (verifySecondFactor(req.user.id, { code: String(req.body?.code || '').trim() })) return true;
+    wrong = 'That code is not valid. Check your authenticator and try again.';
+  } else {
+    if (now() - (req.session?.auth_at || 0) < REAUTH_WINDOW_MS) return true;
+    wrong = 'Sign in again, then repeat this within ten minutes.';
+  }
   noteLoginFail(key);
   res.status(401).json({ error: wrong });
   return false;
@@ -109,6 +102,7 @@ export default function registerAuthRoutes(app) {
       appIcon: getSetting('app_icon', ''),
       appFont: getSetting('app_font', 'literata'),
       uiPreset: presetId(getSetting('ui_preset', '')),
+      providers: publicBase() ? enabledProviders().map(p => ({ id: p.id, type: p.type, label: p.label })) : []
     });
   });
 
@@ -204,7 +198,30 @@ export default function registerAuthRoutes(app) {
     res.json({ ok: true });
   });
 
-  app.get('/api/me', authAccount, (req, res) => res.json({ user: publicUser(req.user) }));
+  app.get('/api/me', authAccount, (req, res) => res.json({ user: publicUser(req.user, req.session) }));
+
+  app.get('/api/me/identities', authAccount, (req, res) => {
+    const known = new Map(providers().map(p => [p.id, p]));
+    const linked = db.identities.where('user_id', req.user.id).map(i => ({
+      id: i.id, providerId: i.provider_id, label: known.get(i.provider_id)?.label || '', type: known.get(i.provider_id)?.type || '',
+      email: i.email || '', linkedAt: i.linked_at || 0, lastUsedAt: i.last_login_at || 0
+    }));
+    const have = new Set(linked.map(i => i.providerId));
+    const linkable = publicBase() ? enabledProviders().filter(p => !have.has(p.id)).map(p => ({ id: p.id, type: p.type, label: p.label })) : [];
+    res.json({ identities: linked, linkable, hasPassword: !!req.user.password_hash });
+  });
+
+  app.delete('/api/me/identities/:id', authAccount, async (req, res) => {
+    const ident = db.identities.byId(req.params.id);
+    if (!ident || ident.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+    if (!req.user.password_hash && db.identities.where('user_id', req.user.id).length <= 1) {
+      return res.status(400).json({ error: 'This is the only way to sign in to this account, so it cannot be removed.' });
+    }
+    if (!(await reauth(req, res, req.body?.password))) return;
+    db.identities.removeById(ident.id);
+    logAudit(req, 'account.identity_unlink', { type: 'user', id: req.user.id, meta: { provider: ident.provider_id } });
+    res.json({ ok: true });
+  });
   app.patch('/api/me', authAccount, (req, res) => {
     const b = req.body || {};
     const patch = {};

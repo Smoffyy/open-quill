@@ -498,3 +498,50 @@ test('the two-factor policy gates admins or everyone until they enroll', async (
   assert.equal(gateOf(admin), null, 'an unknown policy falls back to optional');
   delSetting('auth_mfa_policy');
 });
+
+test('the identity provider fetch only reaches configured hosts, and only over https off loopback', async () => {
+  const { identityFetch } = await import('../lib/identity/idpfetch.js');
+  const fetchIdp = identityFetch(new Set(['login.example.com']));
+  const blocked = (e) => e.code === 'EGRESS_BLOCKED';
+  await assert.rejects(fetchIdp('https://elsewhere.example.com/token'), blocked);
+  await assert.rejects(fetchIdp('http://login.example.com/token'), blocked);
+  await assert.rejects(fetchIdp('https://login.example.com.evil.test/token'), blocked);
+});
+
+test('return paths stay on this origin and provider settings are validated', async () => {
+  const { safeReturn } = await import('../lib/identity/sso.js');
+  const { newProvider, updateProvider, cleanPublicUrl } = await import('../lib/identity/providers.js');
+  for (const bad of ['//evil.test', '/\\evil.test', 'https://evil.test', 'javascript:alert(1)', '', '/a b']) assert.equal(safeReturn(bad), '/', bad);
+  assert.equal(safeReturn('/project/abc?x=1'), '/project/abc?x=1');
+  assert.equal(cleanPublicUrl('https://chat.example.com/'), 'https://chat.example.com');
+  assert.equal(cleanPublicUrl('https://chat.example.com/sub'), '');
+  assert.equal(cleanPublicUrl('ftp://chat.example.com'), '');
+  const ms = newProvider('microsoft');
+  assert.ok(updateProvider(ms, { tenant: 'common' }).error, 'a multi-tenant alias is refused');
+  assert.equal(updateProvider(ms, { tenant: '72F988BF-86F1-41AF-91AB-2D7CD011DB47' }).provider.tenant, '72f988bf-86f1-41af-91ab-2d7cd011db47');
+  const generic = newProvider('oidc');
+  assert.ok(updateProvider(generic, { issuer: 'http://idp.example.com' }).error);
+  assert.equal(updateProvider(generic, { issuer: 'http://127.0.0.1:9000/' }).provider.issuer, 'http://127.0.0.1:9000');
+  assert.ok(updateProvider(generic, { enabled: true }).error, 'cannot turn on without a client');
+  assert.equal(updateProvider(generic, { provision: 'owner' }).provider.provision, 'off', 'unknown provisioning falls back to off');
+  assert.ok(updateProvider(newProvider('github'), { githubOrg: 'bad org!' }).error);
+});
+
+test('an email from a provider never links to an admin, a password account or an account with another sign-in', async () => {
+  const { resolveAccount } = await import('../lib/identity/sso.js');
+  const { newProvider } = await import('../lib/identity/providers.js');
+  const p = { ...newProvider('oidc'), link_by_email: true, provision: 'user' };
+  const identity = (sub, email, emailVerified = true) => ({ subject: sub, email, emailVerified, name: 'N', groups: [] });
+  const admin = person('admin', { email: 'boss@corp.test' });
+  assert.equal(resolveAccount(p, identity('s1', admin.email), 'login', null).error, 'account_exists');
+  const withPassword = person('user', { email: 'pw@corp.test', password_hash: 'x' });
+  assert.equal(resolveAccount(p, identity('s2', withPassword.email), 'login', null).error, 'account_exists');
+  const plain = person('user', { email: 'plain@corp.test' });
+  assert.equal(resolveAccount(p, identity('s3', plain.email, false), 'login', null).error, 'account_exists', 'an unverified email never links');
+  assert.equal(resolveAccount(p, identity('s3', plain.email), 'login', null).user.id, plain.id, 'a verified email links a plain account');
+  assert.equal(resolveAccount(p, identity('s4', plain.email), 'login', null).error, 'account_exists', 'but only once');
+  assert.equal(resolveAccount({ ...p, link_by_email: false }, identity('s5', 'other@corp.test'), 'login', null).created, true);
+  assert.equal(resolveAccount({ ...p, domains: ['corp.test'] }, identity('s6', 'x@elsewhere.test'), 'login', null).error, 'domain');
+  assert.equal(resolveAccount({ ...p, provision: 'off' }, identity('s7', 'new@corp.test'), 'login', null).error, 'no_account');
+  db.identities.removeWhere('provider_id', p.id);
+});

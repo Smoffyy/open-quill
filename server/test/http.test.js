@@ -224,7 +224,7 @@ test('the app answers and serves its policy header', async () => {
   assert.equal(ctx.headers['cache-control'], 'no-store', 'authenticated JSON must not be cached');
   assert.equal(ctx.json.firstRun, false);
   // deliberately limited to branding plus what the sign-in screen needs
-  assert.deepEqual(Object.keys(ctx.json).sort(), ['appFont', 'appIcon', 'appName', 'firstRun', 'signup', 'uiPreset']);
+  assert.deepEqual(Object.keys(ctx.json).sort(), ['appFont', 'appIcon', 'appName', 'firstRun', 'providers', 'signup', 'uiPreset']);
 });
 
 test('a browser on this origin can complete the whole sign-in loop', async () => {
@@ -2098,5 +2098,98 @@ test('two-factor sign-in is a sealed challenge that cannot be skipped, replayed 
     assert.equal((await browser('PUT', '/api/admin/auth/mfa', { body: { policy: 'optional' } })).status, 200);
     assert.equal((await browser('POST', '/api/me/2fa/disable', { body: { password: PASSWORD } })).status, 200);
     assert.equal((await browser('DELETE', `/api/admin/users/${sam.id}`)).status, 200);
+  }
+});
+
+test('single sign-on runs PKCE, state and nonce, provisions by policy and links only by the rules', async () => {
+  const { mockOidc } = await import('./mockapis.js');
+  const idp = await mockOidc();
+  const cookieNamed = (res, name) => (res.headers['set-cookie'] || []).map(c => c.split(';')[0]).find(c => c.startsWith(name + '='));
+  const made = [];
+  let providerId = null;
+  try {
+    providerId = (await browser('POST', '/api/admin/auth/providers', { body: { type: 'oidc' } })).json.created;
+    assert.ok(providerId);
+    const configure = await browser('PATCH', `/api/admin/auth/providers/${providerId}`, {
+      body: { label: 'Acme SSO', clientId: idp.clientId, clientSecret: idp.clientSecret, issuer: idp.url, provision: 'pending', syncGroups: true, enabled: true }
+    });
+    assert.equal(configure.status, 200, configure.text);
+    const listed = configure.json.providers.find(p => p.id === providerId);
+    assert.equal(listed.hasSecret, true);
+    assert.ok(!JSON.stringify(configure.json).includes(idp.clientSecret), 'the client secret never leaves the server');
+    assert.equal((await browser('PATCH', `/api/admin/auth/providers/${providerId}`, { body: { issuer: 'http://idp.example.com' } })).status, 400, 'a remote issuer must use https');
+
+    const start = (opts = {}) => request('POST', `/api/auth/sso/${providerId}/start`, { origin: ORIGIN, secFetchSite: 'same-origin', body: opts.body || {}, cookie: opts.cookie });
+    assert.equal((await start()).status, 503, 'no public address, no redirect URI');
+    assert.equal((await browser('PUT', '/api/admin/auth/public-url', { body: { url: 'javascript:alert(1)' } })).status, 400);
+    assert.equal((await browser('PUT', '/api/admin/auth/public-url', { body: { url: ORIGIN } })).status, 200);
+    assert.deepEqual((await request('GET', '/api/auth/context')).json.providers.map(p => p.label), ['Acme SSO']);
+
+    const signIn = async (claims, opts = {}) => {
+      const begun = await start(opts);
+      assert.equal(begun.status, 200, begun.text);
+      const flow = cookieNamed(begun, 'oq_sso');
+      const back = idp.authorize(begun.json.url, claims);
+      const cookieValue = [flow, opts.cookie].filter(Boolean).join('; ');
+      return { begun, back, done: await request('GET', back.pathname + back.search, { cookie: cookieValue }), flow };
+    };
+
+    const first = await signIn({ sub: 'acme-1', email: 'sso-user@example.com', email_verified: true, name: 'Sso User', groups: ['Engineering'] });
+    const auth = new URL(first.begun.json.url);
+    assert.equal(auth.searchParams.get('code_challenge_method'), 'S256');
+    assert.ok(auth.searchParams.get('state') && auth.searchParams.get('nonce'));
+    assert.equal(auth.searchParams.get('redirect_uri'), `${ORIGIN}/api/auth/sso/${providerId}/callback`);
+    assert.equal(first.done.status, 302);
+    assert.equal(first.done.headers.location, '/');
+    const ssoCookie = cookieNamed(first.done, 'token');
+    const me = (await request('GET', '/api/me', { cookie: ssoCookie })).json.user;
+    made.push(me.id);
+    assert.equal(me.role, 'pending', 'provisioned with the provider’s default role');
+    assert.equal(me.hasPassword, false);
+    const replay = await request('GET', first.back.pathname + first.back.search, { cookie: first.flow });
+    assert.match(replay.headers.location, /sso_error=failed/, 'an authorization code works once');
+
+    const forged = await start();
+    const tampered = idp.authorize(forged.json.url, { sub: 'acme-1', email: 'sso-user@example.com', email_verified: true });
+    tampered.searchParams.set('state', 'not-the-state');
+    assert.match((await request('GET', tampered.pathname + tampered.search, { cookie: cookieNamed(forged, 'oq_sso') })).headers.location, /sso_error=failed/, 'a state mismatch is refused');
+    const loose = idp.authorize((await start()).json.url, { sub: 'acme-1', email: 'sso-user@example.com', email_verified: true });
+    assert.match((await request('GET', loose.pathname + loose.search)).headers.location, /sso_error=expired/, 'no flow cookie, no sign-in');
+
+    assert.equal((await browser('PATCH', `/api/admin/users/${me.id}`, { body: { role: 'user' } })).status, 200);
+    const groups = (await browser('GET', '/api/admin/groups')).json.groups;
+    const synced = groups.find(g => g.source === 'sso:' + providerId && g.name === 'Engineering');
+    assert.ok(synced, 'group claims become directory groups');
+    assert.equal(synced.members, 1);
+    const again = await signIn({ sub: 'acme-1', email: 'sso-user@example.com', email_verified: true, groups: [] });
+    assert.equal(again.done.headers.location, '/', 'a linked identity signs straight in');
+    assert.equal((await browser('GET', '/api/admin/groups')).json.groups.find(g => g.id === synced.id).members, 0, 'leaving the group upstream leaves it here');
+
+    const local = await joinAs('sso-local@example.com');
+    made.push(local.id);
+    const taken = await signIn({ sub: 'acme-2', email: 'sso-local@example.com', email_verified: true });
+    assert.match(taken.done.headers.location, /sso_error=account_exists/, 'an account with a password is never linked by email');
+    const linked = await signIn({ sub: 'acme-2', email: 'anything@example.com', email_verified: true }, { body: { intent: 'link' }, cookie: local.cookie });
+    assert.equal(linked.done.headers.location, '/?sso=linked');
+    const mine = (await as(local)('GET', '/api/me/identities')).json;
+    assert.equal(mine.identities.length, 1);
+    assert.equal(mine.identities[0].label, 'Acme SSO');
+    const viaSso = await signIn({ sub: 'acme-2', email: 'anything@example.com', email_verified: true });
+    assert.equal((await request('GET', '/api/me', { cookie: cookieNamed(viaSso.done, 'token') })).json.user.id, local.id, 'the linked identity signs in to the local account');
+    const stolen = await signIn({ sub: 'acme-2', email: 'x@example.com', email_verified: true }, { body: { intent: 'link' }, cookie: ssoCookie });
+    assert.match(stolen.done.headers.location, /sso_error=linked_elsewhere/, 'an identity belongs to one account');
+    assert.equal((await as(local)('DELETE', `/api/me/identities/${mine.identities[0].id}`, { body: { password: 'wrong' } })).status, 401);
+    assert.equal((await as(local)('DELETE', `/api/me/identities/${mine.identities[0].id}`, { body: { password: PASSWORD } })).status, 200);
+
+    const unverified = await signIn({ sub: 'acme-3', email: 'fresh@example.com', email_verified: false });
+    assert.match(unverified.done.headers.location, /sso_error=unverified/, 'an unverified email never creates an account');
+    assert.equal((await request('GET', '/api/me', { cookie: ssoCookie })).status, 200);
+    assert.equal((await as({ cookie: ssoCookie })('DELETE', `/api/me/identities/${(await request('GET', '/api/me/identities', { cookie: ssoCookie })).json.identities[0].id}`, { body: {} })).status, 400, 'the only way in cannot be removed');
+  } finally {
+    for (const id of made) await browser('DELETE', `/api/admin/users/${id}`);
+    for (const g of (await browser('GET', '/api/admin/groups')).json.groups.filter(g => g.source === 'sso:' + providerId)) await browser('DELETE', `/api/admin/groups/${g.id}`);
+    if (providerId) await browser('DELETE', `/api/admin/auth/providers/${providerId}`);
+    await browser('PUT', '/api/admin/auth/public-url', { body: { url: '' } });
+    await idp.close();
   }
 });

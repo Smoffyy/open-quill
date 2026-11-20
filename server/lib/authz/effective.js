@@ -19,8 +19,9 @@ export function mfaRequired(user) {
   return policy === 'everyone' || (policy === 'admins' && [...permissionsOfRole(roleOf(user))].some(p => tierOf(p) === ADMIN_TIER));
 }
 
-export function gateOf(user) {
+export function gateOf(user, session = null) {
   if (roleOf(user) === PENDING) return 'pending';
+  if (session?.mfa === 'idp') return null;
   return mfaRequired(user) && !hasTotp(user.id) ? 'mfa' : null;
 }
 

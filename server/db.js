@@ -333,6 +333,10 @@ const aclPruneStmts = [
   "DELETE FROM acl WHERE principal_type='group' AND principal_id NOT IN (SELECT id FROM user_groups)"
 ].map(s => sdb.prepare(s));
 aclCol.prune = () => { if (aclPruneStmts.reduce((n, s) => n + s.run().changes, 0)) bumpTable('acl'); };
+const identitiesCol = collection('identities');
+const identityStmt = sdb.prepare('SELECT data FROM identities WHERE provider_id=? AND subject=?');
+identitiesCol.find = (providerId, subject) => { const r = identityStmt.get(String(providerId), String(subject)); return r ? JSON.parse(r.data) : null; };
+
 const chatsByProjectStmt = sdb.prepare("SELECT data FROM chats WHERE json_extract(data,'$.project_id') = ? OR json_extract(data,'$.origin_project_id') = ?");
 chatsCol.byProject = projectId => chatsByProjectStmt.all(projectId, projectId).map(r => JSON.parse(r.data));
 chatsCol.withPins = () => sdb.prepare("SELECT data FROM chats WHERE json_array_length(json_extract(data,'$.pinned_files')) > 0").all().map(r => JSON.parse(r.data));
@@ -365,7 +369,8 @@ export const db = {
   groupMembers: groupMembersCol,
   acl: aclCol,
   uploads: collection('uploads'),
-  mfaFactors: collection('mfa_factors')
+  mfaFactors: collection('mfa_factors'),
+  identities: identitiesCol
 };
 
 const sGet = sdb.prepare('SELECT value FROM settings WHERE key=?');

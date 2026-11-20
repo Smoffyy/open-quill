@@ -67,7 +67,7 @@ export function initWs(server) {
       if (!sameOrigin(req)) return done(false, 403, 'Forbidden');
       const r = sessionFromRequest(req);
       if (!r) return done(false, 401, 'Unauthorized');
-      if (gateOf(r.user)) return done(false, 403, 'Forbidden');
+      if (gateOf(r.user, r.session)) return done(false, 403, 'Forbidden');
       done(true);
     }
   });
@@ -75,7 +75,7 @@ export function initWs(server) {
   wss.on('connection', (ws, req) => {
     const r = sessionFromRequest(req);
     let u = r?.user;
-    if (!u || gateOf(u)) { ws.close(); return; }
+    if (!u || gateOf(u, r.session)) { ws.close(); return; }
     ws.isAlive = true;
     ws.on('pong', () => { ws.isAlive = true; });
     clients.set(ws, { userId: u.id, sessionId: r.sessionId || null, isAdmin: can(u, 'admin.panel'), aborts: new Map(), steers: new Map(), stops: new Set() });
@@ -97,7 +97,7 @@ export function initWs(server) {
       const state = clients.get(ws);
       if (!state) return;
       const fresh = db.users.byId(userId);
-      if (!fresh || !isActive(fresh) || gateOf(fresh)) { ws.close(); return; }
+      if (!fresh || !isActive(fresh) || gateOf(fresh, r.session)) { ws.close(); return; }
       u = fresh;
       state.isAdmin = can(u, 'admin.panel');
       const allowed = (...perms) => perms.every(p => can(u, p));

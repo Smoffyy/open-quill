@@ -31,6 +31,7 @@ export const ADMIN_SECTIONS = {
   users: 'admin.users',
   groups: 'admin.groups',
   roles: 'admin.groups',
+  signin: 'admin.users',
   guardrails: 'admin.policy',
   network: 'admin.policy',
   quotas: 'admin.policy',

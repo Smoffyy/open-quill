@@ -1,4 +1,4 @@
-import { Panel, Upload, Cube, Sliders, Users, Chat, Globe, Mic, FileText, Bulb, Plug, Shield, Eye, Wave, Star, Box, Gear, Clock, Palette, Flask, Gauge, Briefcase, Tag } from '../ui/icons.jsx';
+import { Panel, Upload, Cube, Sliders, Users, Chat, Globe, Mic, FileText, Bulb, Plug, Shield, Eye, Wave, Star, Box, Gear, Clock, Palette, Flask, Gauge, Briefcase, Tag, Link } from '../ui/icons.jsx';
 import { tk } from '../../i18n.jsx';
 
 /* Each section declares everything the shell needs to render it:
@@ -72,7 +72,11 @@ export const NAV = [
     { id: 'roles', label: tk('Roles'), Icon: Tag, title: tk('Roles'),
       blurb: tk('Baseline trust levels, what every user can do, and custom roles with admin permissions.'),
       find: tk('rank owner admin user pending custom baseline permissions'),
-      index: [tk('New role'), tk('Rank'), tk('Admin permissions')] }
+      index: [tk('New role'), tk('Rank'), tk('Admin permissions')] },
+    { id: 'signin', label: tk('Sign-in'), Icon: Link, title: tk('Sign-in'),
+      blurb: tk('Single sign-on with Google, Microsoft, GitHub or any OpenID Connect provider, and the server’s public address.'),
+      find: tk('sso oidc oauth google microsoft entra github okta keycloak login provider redirect callback public address'),
+      index: [tk('Public address'), tk('Sign-in providers')] }
   ] },
   { group: tk('Policy'), items: [
     { id: 'guardrails', label: tk('Guardrails'), Icon: Shield, title: tk('Guardrails'),

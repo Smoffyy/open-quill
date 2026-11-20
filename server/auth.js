@@ -55,10 +55,10 @@ export function revokeSession(id) { db.sessions.removeById(id); }
 export function pruneSessions() { return db.sessions.prune(now() - sessionTtlMs()); }
 export function revokeOtherSessions(userId, keepId) { db.sessions.removeByIds(db.sessions.byUser(userId).filter(s => s.id !== keepId).map(s => s.id)); }
 
-export function publicUser(u) {
+export function publicUser(u, session = null) {
   return {
     id: u.id, email: u.email, displayName: u.display_name || (u.email || '').split('@')[0],
-    role: roleOf(u), roleName: roleName(roleOf(u)), owner: isOwner(u), gate: gateOf(u), source: u.source || 'local', hasPassword: !!u.password_hash,
+    role: roleOf(u), roleName: roleName(roleOf(u)), owner: isOwner(u), gate: gateOf(u, session), source: u.source || 'local', hasPassword: !!u.password_hash,
     permissions: [...permissionsOf(u)], twoFactor: hasTotp(u.id), twoFactorRequired: mfaRequired(u), recoveryLeft: recoveryLeft(u.id),
     prefs: u.prefs || {}, instructions: u.instructions || '', styles: Array.isArray(u.styles) ? u.styles : []
   };
@@ -74,7 +74,7 @@ function resolveToken(token) {
   if (!s || s.user_id !== u.id) return null;
   if (!isActive(u) || now() - (s.last_seen || 0) > sessionTtlMs()) { db.sessions.removeById(s.id); return null; }
   if (Date.now() - (s.last_seen || 0) > 60 * 1000) db.sessions.touch(s.id, now());
-  return { user: u, sessionId: s.id };
+  return { user: u, sessionId: s.id, session: s };
 }
 
 export function authAccount(req, res, next) {
@@ -82,12 +82,13 @@ export function authAccount(req, res, next) {
   if (!r) return res.status(401).json({ error: 'unauthorized' });
   req.user = r.user;
   req.sessionId = r.sessionId;
+  req.session = r.session;
   next();
 }
 
 export function authMiddleware(req, res, next) {
   authAccount(req, res, () => {
-    const gate = gateOf(req.user);
+    const gate = gateOf(req.user, req.session);
     if (gate === 'pending') return res.status(403).json({ error: 'Your account is waiting for approval.', gate });
     if (gate) return res.status(403).json({ error: 'Set up two-factor authentication to continue.', gate });
     next();
