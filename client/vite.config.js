@@ -40,6 +40,7 @@ export default defineConfig({
     proxy: {
       '/api': 'http://localhost:3001',
       '/uploads': 'http://localhost:3001',
+      '/scim': 'http://localhost:3001',
       '/ws': { target: 'ws://localhost:3001', ws: true }
     }
   }

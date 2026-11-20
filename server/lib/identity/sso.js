@@ -91,7 +91,7 @@ export async function finishFlow(p, flow, currentUrl) {
   return p.type === 'github' ? githubIdentity(p, config, tokens) : oidcIdentity(p, config, tokens);
 }
 
-const holdsAdmin = (user) => [...permissionsOfRole(roleOf(user))].some(id => tierOf(id) === ADMIN);
+export const holdsAdmin = (user) => [...permissionsOfRole(roleOf(user))].some(id => tierOf(id) === ADMIN);
 const domainOf = (email) => email.slice(email.lastIndexOf('@') + 1);
 
 function domainOk(p, email) {

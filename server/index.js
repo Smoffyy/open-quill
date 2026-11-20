@@ -35,6 +35,7 @@ import registerQualityRoutes from './routes/quality.js';
 import registerPeopleRoutes from './routes/people.js';
 import registerIdentityRoutes from './routes/identity.js';
 import registerSsoRoutes from './routes/sso.js';
+import registerScimRoutes from './routes/scim.js';
 import registerGroupRoutes from './routes/groups.js';
 import registerSharingRoutes from './routes/sharing.js';
 import { gateOf } from './lib/authz/effective.js';
@@ -76,6 +77,7 @@ app.use((req, res, next) => {
 // Auth is a cookie, so every state-changing endpoint is forgeable from another origin
 // unless we check. SameSite=Lax already blocks the common case; this closes the rest.
 app.use(sameOriginGuard);
+registerScimRoutes(app);
 app.use(express.json({ limit: '2mb' }));
 app.use((req, _res, next) => { if (req.body === undefined) req.body = {}; next(); });
 app.use(parseCookies);

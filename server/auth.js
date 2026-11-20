@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import * as cookie from 'cookie';
 import { db, uid, now, getSetting, setSetting } from './db.js';
 import { clientIp, logAudit } from './lib/audit.js';
-import { permissionsOf, roleOf, gateOf, isActive, isOwner, mfaRequired } from './lib/authz/effective.js';
+import { permissionsOf, roleOf, gateOf, isActive, isOwner, isManaged, mfaRequired } from './lib/authz/effective.js';
 import { roleName } from './lib/authz/roles.js';
 import { hasTotp, recoveryLeft } from './lib/identity/mfa.js';
 import { headerIdentity, headerAccount } from './lib/identity/header.js';
@@ -61,7 +61,7 @@ export function revokeOtherSessions(userId, keepId) { db.sessions.removeByIds(db
 export function publicUser(u, session = null) {
   return {
     id: u.id, email: u.email, displayName: u.display_name || (u.email || '').split('@')[0],
-    role: roleOf(u), roleName: roleName(roleOf(u)), owner: isOwner(u), gate: gateOf(u, session), source: u.source || 'local', hasPassword: !!u.password_hash,
+    role: roleOf(u), roleName: roleName(roleOf(u)), owner: isOwner(u), gate: gateOf(u, session), source: u.source || 'local', managed: isManaged(u), hasPassword: !!u.password_hash,
     permissions: [...permissionsOf(u)], twoFactor: hasTotp(u.id), twoFactorRequired: mfaRequired(u), recoveryLeft: recoveryLeft(u.id),
     prefs: u.prefs || {}, instructions: u.instructions || '', styles: Array.isArray(u.styles) ? u.styles : []
   };

@@ -173,6 +173,36 @@ export function syncExternalGroups(userId, source, names) {
   });
 }
 
+export function createSourceGroup({ name: raw, source, externalId = null }) {
+  const name = cleanName(raw);
+  if (!name) return { status: 400, error: 'Give the group a name.' };
+  if (db.groups.count() >= MAX_GROUPS) return { status: 400, error: 'This workspace has reached the group limit.' };
+  const key = nameKey(name);
+  if (db.groups.all().some(g => g.source === source && g.name_key === key)) return { status: 409, error: 'A group with that name already exists.' };
+  const t = now();
+  const group = db.groups.insert({
+    id: uid(), name, name_key: key, description: '', source, external_id: externalId, permissions: [], default_model_id: null,
+    priority: db.groups.count(), created_by: null, created_at: t, updated_at: t
+  });
+  return { group };
+}
+
+export function renameSourceGroup(group, raw, externalId) {
+  const name = cleanName(raw);
+  if (!name) return { status: 400, error: 'Give the group a name.' };
+  const key = nameKey(name);
+  if (db.groups.all().some(g => g.id !== group.id && g.source === group.source && g.name_key === key)) return { status: 409, error: 'A group with that name already exists.' };
+  return { group: db.groups.update(group.id, { name, name_key: key, external_id: externalId ?? group.external_id ?? null, updated_at: now() }) };
+}
+
+export function setSourceMembers(groupId, userIds, source) {
+  const keep = new Set(userIds);
+  tx(() => {
+    for (const userId of db.groupMembers.usersOf(groupId)) if (!keep.has(userId)) unlink(groupId, 'user', userId);
+    for (const userId of keep) link(groupId, 'user', userId, null, source);
+  });
+}
+
 export function setMembers(groupId, { add: adds = [], remove = [] }, actorId) {
   const group = db.groups.byId(groupId);
   if (!group) return { status: 404, error: 'not found' };

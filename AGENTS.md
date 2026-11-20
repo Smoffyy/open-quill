@@ -49,7 +49,7 @@ Nothing may reach the network that the user did not configure. Fonts, KaTeX and 
 
 ## Server
 
-Entry `server/index.js` owns middleware order: security headers, `sameOriginGuard`, JSON body, cookies, authenticated `/uploads` static, `register*Routes(app)`, JSON 404 for `/api` and `/uploads`, SPA static, error handler, then `initWs(server)`.
+Entry `server/index.js` owns middleware order: security headers, `sameOriginGuard`, the SCIM router (`routes/scim.js` at `/scim/v2`, with its own `application/scim+json` parser, bearer-token auth, 404 and SCIM-format errors, so it never sees cookies or the JSON error handler), JSON body, cookies, authenticated `/uploads` static, `register*Routes(app)`, JSON 404 for `/api` and `/uploads`, SPA static, error handler, then `initWs(server)`.
 
 **Database** (`db.js`, `db/schema.js`, `db/collection.js`): one SQLCipher-encrypted file per database, key from `DB_ENCRYPTION_KEY` or a generated `.dbkey`. Every table is `id` plus a few mirrored index columns plus one JSON blob (`data`); `MIRROR` in `db/collection.js` declares which fields get mirrored, so a new indexed column means an entry there and in the migration. Schema changes are appended to `MIGRATIONS` in `db/schema.js` (each entry brings the DB to version `index + 2`) and run unconditionally at startup: **append, never edit a shipped entry**. Query in SQL, not JS: `db.<table>.all()` parses every row, so hot paths get a prepared statement (see `messages.byChat` and the search statements). `getSetting` returns the cached object itself, so never mutate in place; build a new value and `setSetting`.
 

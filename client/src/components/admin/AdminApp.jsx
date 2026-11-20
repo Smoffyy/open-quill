@@ -24,6 +24,7 @@ import LauncherSection from './sections/LauncherSection.jsx';
 import UsersSection from './sections/UsersSection.jsx';
 import GroupsSection from './sections/GroupsSection.jsx';
 import SignInSection from './sections/SignInSection.jsx';
+import ProvisioningSection from './sections/ProvisioningSection.jsx';
 import RolesSection from './sections/RolesSection.jsx';
 import GuardrailsSection from './sections/GuardrailsSection.jsx';
 import NetworkSection from './sections/NetworkSection.jsx';
@@ -55,6 +56,7 @@ const VIEWS = {
   users: UsersSection,
   groups: GroupsSection,
   signin: SignInSection,
+  provisioning: ProvisioningSection,
   roles: RolesSection,
   guardrails: GuardrailsSection,
   network: NetworkSection,

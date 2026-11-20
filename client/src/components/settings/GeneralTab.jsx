@@ -105,7 +105,8 @@ export default function GeneralTab({ user, draft, onExportChats, onImportChats, 
       <Confirmable label={t("Reset all settings")} desc={t("Back to defaults for this theme. Chats and account are untouched.")}
         action={t("Reset")} ask={t("Reset every setting to this theme's defaults?")}
         confirm={t("Reset")} onConfirm={() => draft.resetPrefs()} />
-      {(user.role === 'pending' || can(user, 'account.delete')) && (
+      {user.managed && <div className="muted-note">{t('Your organization manages this account, so it can’t be deleted here.')}</div>}
+      {!user.managed && (user.role === 'pending' || can(user, 'account.delete')) && (
         <Confirmable label={t("Delete account")} desc={t("Permanently removes your account, all chats, and files. This cannot be undone.")}
           action={t("Delete account")} ask={t("Delete your account and everything in it? This cannot be undone.")}
           confirm={t("Delete")} onConfirm={deleteAccount} error={delErr} password />

@@ -336,6 +336,15 @@ aclCol.prune = () => { if (aclPruneStmts.reduce((n, s) => n + s.run().changes, 0
 const identitiesCol = collection('identities');
 const identityStmt = sdb.prepare('SELECT data FROM identities WHERE provider_id=? AND subject=?');
 identitiesCol.find = (providerId, subject) => { const r = identityStmt.get(String(providerId), String(subject)); return r ? JSON.parse(r.data) : null; };
+const scimTokensCol = collection('scim_tokens');
+const scimTokenStmt = sdb.prepare('SELECT data FROM scim_tokens WHERE hash = ?');
+scimTokensCol.byHash = hash => { const r = scimTokenStmt.get(String(hash)); return r ? JSON.parse(r.data) : null; };
+const scimNameStmt = sdb.prepare("SELECT data FROM users WHERE lower(json_extract(data,'$.scim.user_name')) = lower(?)");
+usersCol.byScimName = name => scimNameStmt.all(String(name)).map(r => JSON.parse(r.data));
+const externalIdStmt = sdb.prepare("SELECT data FROM users WHERE json_extract(data,'$.external_id') = ?");
+usersCol.byExternalId = id => externalIdStmt.all(String(id)).map(r => JSON.parse(r.data));
+const bySourceStmt = sdb.prepare("SELECT data FROM users WHERE json_extract(data,'$.source') = ? ORDER BY created_at, id");
+usersCol.bySource = source => bySourceStmt.all(String(source)).map(r => JSON.parse(r.data));
 
 const chatsByProjectStmt = sdb.prepare("SELECT data FROM chats WHERE json_extract(data,'$.project_id') = ? OR json_extract(data,'$.origin_project_id') = ?");
 chatsCol.byProject = projectId => chatsByProjectStmt.all(projectId, projectId).map(r => JSON.parse(r.data));
@@ -370,7 +379,8 @@ export const db = {
   acl: aclCol,
   uploads: collection('uploads'),
   mfaFactors: collection('mfa_factors'),
-  identities: identitiesCol
+  identities: identitiesCol,
+  scimTokens: scimTokensCol
 };
 
 const sGet = sdb.prepare('SELECT value FROM settings WHERE key=?');

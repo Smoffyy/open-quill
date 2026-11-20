@@ -2261,3 +2261,156 @@ test('directory sign-in binds as exactly one entry, provisions, syncs groups and
     await dir.close();
   }
 });
+
+test('SCIM provisions users and groups the way Okta and Entra ID drive it, and never takes over an account by surprise', async () => {
+  const PATCH_OP = 'urn:ietf:params:scim:api:messages:2.0:PatchOp';
+  const call = (method, path, token, body, type = 'application/scim+json') => {
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    if (body === undefined) return request(method, '/scim/v2' + path, { headers });
+    headers['Content-Type'] = type;
+    return request(method, '/scim/v2' + path, { headers, raw: Buffer.from(typeof body === 'string' ? body : JSON.stringify(body)) });
+  };
+  const made = [];
+  try {
+    assert.equal((await call('GET', '/Users', 'oqscim_x')).status, 403, 'provisioning is off until an owner turns it on');
+    const on = await browser('PUT', '/api/admin/auth/scim', { body: { enabled: true, provision: 'user', deprovision: 'disable', adopt: 'off' } });
+    assert.equal(on.status, 200, on.text);
+    assert.ok(on.json.baseUrl.endsWith('/scim/v2'));
+    assert.equal((await browser('POST', '/api/admin/auth/scim/tokens', { body: { name: '' } })).status, 400);
+    const minted = await browser('POST', '/api/admin/auth/scim/tokens', { body: { name: 'Okta', days: 90 } });
+    const token = minted.json.token;
+    assert.match(token, /^oqscim_[\w-]{43}$/);
+    assert.ok(!JSON.stringify(minted.json.tokens).includes(token), 'the token is shown once and never listed');
+    const member = await joinAs('scim-member@example.com');
+    made.push(member.id);
+    assert.equal((await as(member)('GET', '/api/admin/auth/scim')).status, 403);
+
+    const anon = await call('GET', '/Users');
+    assert.equal(anon.status, 401);
+    assert.match(anon.headers['www-authenticate'], /Bearer/);
+    assert.deepEqual(anon.json.schemas, ['urn:ietf:params:scim:api:messages:2.0:Error']);
+    assert.equal((await call('GET', '/Users', 'oqscim_' + 'A'.repeat(43))).status, 401);
+    const config = await call('GET', '/ServiceProviderConfig', token);
+    assert.equal(config.status, 200);
+    assert.match(config.headers['content-type'], /application\/scim\+json/);
+    assert.equal(config.json.patch.supported, true);
+    assert.equal((await call('GET', '/Schemas', token)).json.totalResults, 3);
+    assert.equal((await call('GET', '/ResourceTypes/User', token)).json.endpoint, '/Users');
+    assert.equal((await call('GET', '/Nope', token)).status, 404);
+    assert.equal((await call('GET', '/Users?filter=userName%20eq%20%229c7f4b0e%22', token)).json.totalResults, 0, 'the Entra connection test finds nobody');
+
+    const entraUser = {
+      schemas: ['urn:ietf:params:scim:schemas:core:2.0:User', 'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User'],
+      externalId: '0a21f0f2-8d2a-4f8e-bf98-7363c4aed4ef', userName: 'Lena.Ortiz@scim.test', active: true,
+      emails: [{ primary: true, type: 'work', value: 'Lena.Ortiz@scim.test' }], meta: { resourceType: 'User' },
+      name: { formatted: 'Lena Ortiz', familyName: 'Ortiz', givenName: 'Lena' }, roles: [],
+      'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User': { department: 'Research', manager: { value: 'boss' } }
+    };
+    const created = await call('POST', '/Users', token, entraUser);
+    assert.equal(created.status, 201, created.text);
+    assert.equal(created.headers.location, created.json.meta.location);
+    const lena = created.json;
+    made.push(lena.id);
+    assert.equal(lena.userName, 'Lena.Ortiz@scim.test');
+    assert.equal(lena.active, true);
+    assert.equal(lena['urn:ietf:params:scim:schemas:extension:enterprise:2.0:User'].department, 'Research');
+    const account = (await browser('GET', '/api/admin/users?q=lena.ortiz%40scim.test')).json.users[0];
+    assert.equal(account.role, 'user');
+    assert.equal(account.source, 'scim');
+    assert.equal((await request('POST', '/api/auth/login', { origin: ORIGIN, secFetchSite: 'same-origin', body: { email: 'lena.ortiz@scim.test', password: 'anything-at-all' } })).status, 401, 'a provisioned account has no password');
+
+    const dup = await call('POST', '/Users', token, entraUser);
+    assert.equal(dup.status, 409);
+    assert.equal(dup.json.scimType, 'uniqueness');
+    assert.equal((await call('GET', '/Users?filter=userName%20eq%20%22lena.ortiz%40scim.test%22', token)).json.Resources[0].id, lena.id, 'userName matches without case');
+    assert.equal((await call('GET', `/Users?filter=externalId%20eq%20%22${entraUser.externalId}%22`, token)).json.totalResults, 1);
+    assert.equal((await call('GET', '/Users?filter=emails%5Btype%20eq%20%22work%22%5D.value%20co%20%22scim.test%22', token)).json.totalResults, 1);
+    assert.equal((await call('GET', '/Users?filter=userName%20zz%20%22x%22', token)).json.scimType, 'invalidFilter');
+    const slim = (await call('GET', `/Users/${lena.id}?attributes=userName`, token)).json;
+    assert.deepEqual(Object.keys(slim).sort(), ['id', 'schemas', 'userName']);
+
+    const entraPatch = await call('PATCH', `/Users/${lena.id}`, token, { schemas: [PATCH_OP], Operations: [
+      { op: 'Replace', path: 'emails[type eq "work"].value', value: 'lena.souza@scim.test' },
+      { op: 'Replace', path: 'name.familyName', value: 'Souza' },
+      { op: 'Replace', path: 'displayName', value: 'Lena Souza' }
+    ] });
+    assert.equal(entraPatch.status, 200, entraPatch.text);
+    assert.equal(entraPatch.json.emails[0].value, 'lena.souza@scim.test');
+    assert.equal((await browser('GET', '/api/admin/users?q=lena.souza%40scim.test')).json.users[0].displayName, 'Lena Souza', 'the sign-in email follows the work email');
+    const off = await call('PATCH', `/Users/${lena.id}`, token, { schemas: [PATCH_OP], Operations: [{ op: 'Replace', path: 'active', value: 'False' }] });
+    assert.equal(off.json.active, false);
+    assert.equal((await browser('GET', '/api/admin/users?q=lena.souza%40scim.test')).json.users[0].status, 'disabled');
+    const back = await call('PATCH', `/Users/${lena.id}`, token, { schemas: [PATCH_OP], Operations: [{ op: 'replace', value: { active: true } }] });
+    assert.equal(back.json.active, true, 'Okta reactivates with a value object');
+    assert.equal((await call('PATCH', `/Users/${lena.id}`, token, { Operations: [{ op: 'replace', path: 'active', value: false }] })).json.scimType, 'invalidSyntax');
+    assert.equal((await call('PATCH', `/Users/${lena.id}`, token, '{"schemas": [')).json.scimType, 'invalidSyntax');
+
+    const oktaUser = {
+      schemas: ['urn:ietf:params:scim:schemas:core:2.0:User'], userName: 'kai.tanaka@scim.test', name: { givenName: 'Kai', familyName: 'Tanaka' },
+      emails: [{ primary: true, value: 'kai.tanaka@scim.test', type: 'work' }], displayName: 'Kai Tanaka', locale: 'en-US', externalId: '00ujl29u0le5T6Aj10h7',
+      groups: [], password: 'never-stored-1', active: true
+    };
+    const kai = (await call('POST', '/Users', token, oktaUser, 'application/json')).json;
+    made.push(kai.id);
+    const put = await call('PUT', `/Users/${kai.id}`, token, { ...oktaUser, displayName: 'Kai T.', title: 'Engineer' });
+    assert.equal(put.json.displayName, 'Kai T.');
+    assert.equal(put.json.title, 'Engineer');
+    assert.ok(!put.text.includes('never-stored-1'), 'a pushed password is ignored');
+
+    const group = await call('POST', '/Groups', token, { schemas: ['urn:ietf:params:scim:schemas:core:2.0:Group'], externalId: 'grp-1', displayName: 'Data Science', members: [{ value: lena.id }] });
+    assert.equal(group.status, 201, group.text);
+    const gid = group.json.id;
+    assert.equal((await call('POST', '/Groups', token, { schemas: ['urn:ietf:params:scim:schemas:core:2.0:Group'], displayName: 'data science' })).json.scimType, 'uniqueness');
+    assert.equal((await call('PATCH', `/Groups/${gid}`, token, { schemas: [PATCH_OP], Operations: [{ op: 'Add', path: 'members', value: [{ value: kai.id }] }] })).status, 204);
+    assert.deepEqual((await call('GET', `/Groups/${gid}`, token)).json.members.map(m => m.value).sort(), [lena.id, kai.id].sort());
+    assert.equal((await call('PATCH', `/Groups/${gid}`, token, { schemas: [PATCH_OP], Operations: [{ op: 'Add', path: 'members', value: [{ value: member.id }] }] })).json.scimType, 'invalidValue', 'only provisioned people can join a provisioned group');
+    await call('PATCH', `/Groups/${gid}`, token, { schemas: [PATCH_OP], Operations: [{ op: 'remove', path: `members[value eq "${lena.id}"]` }] });
+    await call('PATCH', `/Groups/${gid}`, token, { schemas: [PATCH_OP], Operations: [{ op: 'replace', value: { id: gid, displayName: 'Data Platform' } }] });
+    const listed = (await call('GET', '/Groups?excludedAttributes=members&filter=displayName%20eq%20%22Data%20Platform%22', token)).json;
+    assert.equal(listed.totalResults, 1);
+    assert.equal(listed.Resources[0].members, undefined, 'members can be left out');
+    assert.deepEqual((await call('GET', `/Groups/${gid}`, token)).json.members.map(m => m.value), [kai.id]);
+    const local = (await browser('GET', '/api/admin/groups')).json.groups.find(g => g.id === gid);
+    assert.equal(local.source, 'scim');
+    assert.equal(local.name, 'Data Platform');
+    assert.equal((await call('GET', `/Users/${kai.id}`, token)).json.groups[0].display, 'Data Platform');
+
+    const taken = await call('POST', '/Users', token, { userName: 'scim-member@example.com' });
+    assert.equal(taken.status, 409, 'an existing account is not adopted while adoption is off');
+    await browser('PUT', '/api/admin/auth/scim', { body: { adopt: 'members' } });
+    const admin = await joinAs('scim-admin@example.com');
+    made.push(admin.id);
+    await browser('PATCH', `/api/admin/users/${admin.id}`, { body: { role: 'admin' } });
+    assert.equal((await call('POST', '/Users', token, { userName: 'scim-admin@example.com' })).status, 409, 'an admin is never adopted');
+    const adopted = await call('POST', '/Users', token, { userName: 'scim-member@example.com', displayName: 'Adopted' });
+    assert.equal(adopted.status, 201, adopted.text);
+    assert.equal(adopted.json.id, member.id, 'adoption keeps the account and its data');
+    assert.equal((await as(member)('GET', '/api/me')).status, 401, 'adoption ends the account’s sessions');
+    assert.equal((await request('POST', '/api/auth/login', { origin: ORIGIN, secFetchSite: 'same-origin', body: { email: 'scim-member@example.com', password: PASSWORD } })).status, 401, 'and removes its password');
+
+    assert.equal((await call('DELETE', `/Users/${kai.id}`, token)).status, 204);
+    assert.equal((await call('GET', `/Users/${kai.id}`, token)).status, 404, 'a removed user is gone from provisioning');
+    assert.equal((await browser('GET', '/api/admin/users?q=kai.tanaka%40scim.test')).json.users[0].status, 'disabled', 'but kept here, disabled');
+    const restored = await call('POST', '/Users', token, oktaUser);
+    assert.equal(restored.json.id, kai.id, 'provisioning the same person again restores the account');
+    assert.equal(restored.json.active, true);
+    await browser('PUT', '/api/admin/auth/scim', { body: { deprovision: 'delete' } });
+    assert.equal((await call('DELETE', `/Users/${kai.id}`, token)).status, 204);
+    assert.equal((await browser('GET', '/api/admin/users?q=kai.tanaka%40scim.test')).json.users.length, 0, 'delete mode removes the account and its data');
+    assert.equal((await call('DELETE', `/Groups/${gid}`, token)).status, 204);
+
+    const events = (await browser('GET', '/api/admin/audit?action=scim.')).json.entries;
+    assert.ok(events.some(e => e.action === 'scim.user_create' && e.actorEmail === 'SCIM: Okta'));
+    assert.ok(events.some(e => e.action === 'scim.user_adopt'));
+    const view = (await browser('GET', '/api/admin/auth/scim')).json;
+    assert.ok(view.tokens[0].lastUsedAt > 0);
+    assert.ok(view.recent.length > 0);
+    await browser('DELETE', `/api/admin/auth/scim/tokens/${view.tokens[0].id}`);
+    assert.equal((await call('GET', '/Users', token)).status, 401, 'a revoked token stops working at once');
+  } finally {
+    await browser('PUT', '/api/admin/auth/scim', { body: { enabled: false, adopt: 'off', deprovision: 'disable' } });
+    for (const t of (await browser('GET', '/api/admin/auth/scim')).json.tokens) await browser('DELETE', `/api/admin/auth/scim/tokens/${t.id}`);
+    for (const id of made) await browser('DELETE', `/api/admin/users/${id}`);
+    for (const g of (await browser('GET', '/api/admin/groups')).json.groups.filter(g => g.source === 'scim')) await browser('DELETE', `/api/admin/groups/${g.id}`);
+  }
+});

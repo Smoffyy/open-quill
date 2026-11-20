@@ -8,6 +8,8 @@ import { MFA_POLICIES, mfaPolicy, hasTotp } from '../lib/identity/mfa.js';
 import { broadcastAll } from '../lib/ws/index.js';
 import { headerStatus } from '../lib/identity/header.js';
 import { publicLdap, updateLdap, testLdap, lookupLdap, syncLdap } from '../lib/identity/ldap.js';
+import { scimConfig, updateScim, tokenList, createToken, revokeToken } from '../lib/scim/config.js';
+import { isHttps } from '../lib/origin.js';
 import { PROVIDER_TYPES, MAX_PROVIDERS, providers, providerById, newProvider, publicProvider, updateProvider, publicBase, cleanPublicUrl, clientConfig, forgetConfig } from '../lib/identity/providers.js';
 
 function providersView(user) {
@@ -143,6 +145,41 @@ export default function registerIdentityRoutes(app) {
     logAudit(req, 'auth.ldap_sync', { meta: { ok: report.ok, checked: report.checked, updated: report.updated, disabled: report.disabled, missing: report.missing } });
     if (report.updated || report.disabled) broadcastAll({ type: 'account' });
     res.json(report);
+  });
+
+  function scimView(req) {
+    const base = publicBase() || `${isHttps(req) ? 'https' : 'http'}://${req.get('host')}`;
+    const recent = db.audit.query({ action: 'scim.', actor: '', since: 0, limit: 20, offset: 0 })
+      .map(r => ({ id: r.id, ts: r.ts, action: r.action, actor: r.actor_email || '', meta: r.meta || null }));
+    return {
+      ...scimConfig(), baseUrl: `${base}/scim/v2`, baseFromRequest: !publicBase(), tokens: tokenList(), recent,
+      managed: db.users.bySource('scim').length, editable: isOwner(req.user)
+    };
+  }
+
+  app.get('/api/admin/auth/scim', authMiddleware, requirePermission('admin.users'), (req, res) => {
+    res.json(scimView(req));
+  });
+
+  app.put('/api/admin/auth/scim', authMiddleware, requireOwner, (req, res) => {
+    const next = updateScim(req.body || {});
+    setSetting('auth_scim', next);
+    logAudit(req, 'auth.scim_update', { meta: next });
+    res.json(scimView(req));
+  });
+
+  app.post('/api/admin/auth/scim/tokens', authMiddleware, requireOwner, (req, res) => {
+    const r = createToken(req.body || {}, req.user);
+    if (r.error) return res.status(400).json({ error: r.error });
+    logAudit(req, 'auth.scim_token_create', { meta: { name: String(req.body?.name || '').slice(0, 80) } });
+    res.json({ ...scimView(req), token: r.token });
+  });
+
+  app.delete('/api/admin/auth/scim/tokens/:id', authMiddleware, requireOwner, (req, res) => {
+    const row = revokeToken(req.params.id);
+    if (!row) return res.status(404).json({ error: 'not found' });
+    logAudit(req, 'auth.scim_token_revoke', { meta: { name: row.name } });
+    res.json(scimView(req));
   });
 
   app.get('/api/admin/auth/mfa', authMiddleware, requirePermission('admin.users'), (req, res) => {

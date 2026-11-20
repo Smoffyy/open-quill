@@ -10,6 +10,7 @@ import { can } from '../../../lib/permissions.js';
 import AccessDialog from '../people/AccessDialog.jsx';
 
 const SEARCH_DELAY_MS = 250;
+const SOURCE_BADGE = { __proto__: null, scim: tk('provisioned'), ldap: tk('directory'), header: tk('proxy') };
 
 const POLICIES = [
   { value: 'open', label: tk('Open'), note: tk('Anyone who can reach this server can create an account and start right away.') },
@@ -88,6 +89,7 @@ function UserRow({ u, me, roleName, order, M, onAccess }) {
             {pending && <Badge tone="warn">{t('pending')}</Badge>}
             {disabled && <Badge tone="bad">{t('disabled')}</Badge>}
             {u.twoFactor && <Badge>{t('2fa')}</Badge>}
+            {SOURCE_BADGE[u.source] && <Badge>{t(SOURCE_BADGE[u.source])}</Badge>}
             {u.id === me?.id && <Badge>{t('you')}</Badge>}
           </span>
         </span>

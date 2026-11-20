@@ -1,7 +1,7 @@
 import { db, uid, now, getSetting, setSetting } from '../db.js';
 import { hash, check, sign, publicUser, authMiddleware, authAccount, sessionFromRequest, createSession, revokeSession, revokeOtherSessions, sessionMaxAgeSeconds, sessionTtlDays } from '../auth.js';
 import { requirePermission } from '../lib/authz/middleware.js';
-import { can, isActive, roleOf } from '../lib/authz/effective.js';
+import { can, isActive, isManaged, roleOf } from '../lib/authz/effective.js';
 import { isLastOwner } from '../lib/authz/rules.js';
 import { PENDING, USER, OWNER } from '../lib/authz/roles.js';
 import { signupPolicy, domainAllowed, setupTokenMatches } from '../lib/identity/signup.js';
@@ -431,6 +431,7 @@ export default function registerAuthRoutes(app) {
   app.delete('/api/me', authAccount, async (req, res) => {
     const u = req.user;
     if (roleOf(u) !== PENDING && !can(u, 'account.delete')) return res.status(403).json({ error: 'Your organization does not allow deleting your own account.' });
+    if (isManaged(u)) return res.status(403).json({ error: 'Your organization manages this account, so it can’t be deleted here.' });
     if (isLastOwner(u)) return res.status(403).json({ error: 'Make someone else an owner before deleting this account.' });
     if (!(await reauth(req, res, req.body?.password))) return;
     closeUserSockets(u.id);

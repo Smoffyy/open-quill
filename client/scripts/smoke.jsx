@@ -81,6 +81,7 @@ import SecurityTab from '../src/components/settings/SecurityTab.jsx';
 import SearchSection from '../src/components/admin/sections/SearchSection.jsx';
 import SkillsSection from '../src/components/admin/sections/SkillsSection.jsx';
 import SignInSection from '../src/components/admin/sections/SignInSection.jsx';
+import ProvisioningSection from '../src/components/admin/sections/ProvisioningSection.jsx';
 import StorageSection from '../src/components/admin/sections/StorageSection.jsx';
 import UsageSection from '../src/components/admin/sections/UsageSection.jsx';
 import VoiceSection from '../src/components/admin/sections/VoiceSection.jsx';
@@ -275,7 +276,7 @@ cases.push(['DocsNav:editing', () => React.createElement(DocsNav, {
 const ADMIN_SECTIONS = [
   ['Interface', InterfaceSection], ['Events', EventsSection], ['Files', FilesSection],
   ['Guardrails', GuardrailsSection], ['Launcher', LauncherSection], ['Mcp', McpSection],
-  ['Users', UsersSection], ['Groups', GroupsSection], ['Roles', RolesSection], ['Sign-in', SignInSection], ['Chat history', ChatHistorySection], ['Models', ModelsSection],
+  ['Users', UsersSection], ['Groups', GroupsSection], ['Roles', RolesSection], ['Sign-in', SignInSection], ['Provisioning', ProvisioningSection], ['Chat history', ChatHistorySection], ['Models', ModelsSection],
   ['Network', NetworkSection], ['Overview', OverviewSection], ['Providers', ProvidersSection],
   ['Quotas', QuotasSection], ['Ratings', RatingsSection], ['Search', SearchSection],
   ['Skills', SkillsSection], ['Storage', StorageSection], ['Usage', UsageSection],

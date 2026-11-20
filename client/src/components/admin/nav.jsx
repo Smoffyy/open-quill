@@ -1,4 +1,4 @@
-import { Panel, Upload, Cube, Sliders, Users, Chat, Globe, Mic, FileText, Bulb, Plug, Shield, Eye, Wave, Star, Box, Gear, Clock, Palette, Flask, Gauge, Briefcase, Tag, Link } from '../ui/icons.jsx';
+import { Panel, Upload, Cube, Sliders, Users, Chat, Globe, Mic, FileText, Bulb, Plug, Shield, Eye, Wave, Star, Box, Gear, Clock, Palette, Flask, Gauge, Briefcase, Tag, Link, Refresh } from '../ui/icons.jsx';
 import { tk } from '../../i18n.jsx';
 
 /* Each section declares everything the shell needs to render it:
@@ -76,7 +76,11 @@ export const NAV = [
     { id: 'signin', label: tk('Sign-in'), Icon: Link, title: tk('Sign-in'),
       blurb: tk('Single sign-on with Google, Microsoft, GitHub or any OpenID Connect provider, directory sign-in over LDAP, and the server’s public address.'),
       find: tk('sso oidc oauth google microsoft entra github okta keycloak login provider redirect callback public address ldap active directory openldap sync'),
-      index: [tk('Public address'), tk('Sign-in providers'), tk('Directory (LDAP)')] }
+      index: [tk('Public address'), tk('Sign-in providers'), tk('Directory (LDAP)')] },
+    { id: 'provisioning', label: tk('Provisioning'), Icon: Refresh, title: tk('Provisioning'),
+      blurb: tk('SCIM 2.0 provisioning, so your identity provider creates, updates and removes accounts and groups.'),
+      find: tk('scim provisioning okta entra azure onelogin jumpcloud token deprovision lifecycle sync'),
+      index: [tk('SCIM provisioning'), tk('Tokens'), tk('Recent activity')] }
   ] },
   { group: tk('Policy'), items: [
     { id: 'guardrails', label: tk('Guardrails'), Icon: Shield, title: tk('Guardrails'),

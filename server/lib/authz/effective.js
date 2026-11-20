@@ -12,6 +12,7 @@ const memo = new Map();
 
 export const roleOf = (user) => (user && typeof user.role === 'string' && user.role ? user.role : PENDING);
 export const isActive = (user) => !!user && user.status !== DISABLED;
+export const isManaged = (user) => ['scim', 'ldap', 'header'].includes(user?.source);
 export const isOwner = (user) => isActive(user) && roleOf(user) === OWNER;
 export const rankOf = (user) => rankOfRole(roleOf(user));
 export function mfaRequired(user) {

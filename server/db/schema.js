@@ -128,7 +128,12 @@ CREATE INDEX IF NOT EXISTS idx_mfa_factors_user ON mfa_factors(user_id, type);`,
 
   `CREATE TABLE IF NOT EXISTS identities (id TEXT PRIMARY KEY, provider_id TEXT, subject TEXT, user_id TEXT, data TEXT NOT NULL);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_identities_subject ON identities(provider_id, subject);
-CREATE INDEX IF NOT EXISTS idx_identities_user ON identities(user_id);`
+CREATE INDEX IF NOT EXISTS idx_identities_user ON identities(user_id);`,
+
+  `CREATE TABLE IF NOT EXISTS scim_tokens (id TEXT PRIMARY KEY, hash TEXT, data TEXT NOT NULL);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_scim_tokens_hash ON scim_tokens(hash);
+CREATE INDEX IF NOT EXISTS idx_users_scim_name ON users(lower(json_extract(data,'$.scim.user_name')));
+CREATE INDEX IF NOT EXISTS idx_users_external_id ON users(json_extract(data,'$.external_id'));`
 ];
 
 export const LATEST_VERSION = MIGRATIONS.length + 1;
