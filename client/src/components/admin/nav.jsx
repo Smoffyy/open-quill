@@ -74,9 +74,9 @@ export const NAV = [
       find: tk('rank owner admin user pending custom baseline permissions'),
       index: [tk('New role'), tk('Rank'), tk('Admin permissions')] },
     { id: 'signin', label: tk('Sign-in'), Icon: Link, title: tk('Sign-in'),
-      blurb: tk('Single sign-on with Google, Microsoft, GitHub or any OpenID Connect provider, and the server’s public address.'),
-      find: tk('sso oidc oauth google microsoft entra github okta keycloak login provider redirect callback public address'),
-      index: [tk('Public address'), tk('Sign-in providers')] }
+      blurb: tk('Single sign-on with Google, Microsoft, GitHub or any OpenID Connect provider, directory sign-in over LDAP, and the server’s public address.'),
+      find: tk('sso oidc oauth google microsoft entra github okta keycloak login provider redirect callback public address ldap active directory openldap sync'),
+      index: [tk('Public address'), tk('Sign-in providers'), tk('Directory (LDAP)')] }
   ] },
   { group: tk('Policy'), items: [
     { id: 'guardrails', label: tk('Guardrails'), Icon: Shield, title: tk('Guardrails'),

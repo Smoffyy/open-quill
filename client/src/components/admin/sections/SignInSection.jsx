@@ -5,6 +5,7 @@ import { askConfirm } from '../../../lib/confirm.js';
 import { Card, Rows, Row, Input, Area, Seg, Select, Btn, IconBtn, Acts, Table, Badge, Dialog, Field, Fields, ToggleRow, Note, CopyBtn, Empty, SectionSkeleton } from '../ui.jsx';
 import { Trash, Pencil, Link } from '../../ui/icons.jsx';
 import { t, tk } from '../../../i18n.jsx';
+import DirectoryCard from './DirectoryCard.jsx';
 
 const TYPES = [
   { value: 'google', label: 'Google' },
@@ -248,6 +249,7 @@ export default function SignInSection() {
           </Table>
         )}
       </Card>
+      <DirectoryCard editable={data.editable} provision={PROVISION} />
       {editing && <ProviderDialog provider={editing} editable={data.editable} onSaved={setData} onClose={() => setEditing(null)} />}
     </>
   );

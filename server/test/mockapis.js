@@ -619,3 +619,44 @@ export async function mockOidc({ clientId = 'oq-client', clientSecret = 'oq-secr
     close: () => new Promise(r => { server.closeAllConnections?.(); server.close(r); })
   };
 }
+
+export async function mockLdap({ base = 'dc=example,dc=com', serviceDn = 'cn=svc,dc=example,dc=com', servicePassword = 'svc-pass' } = {}) {
+  const ldap = (await import('ldapjs')).default;
+  const people = new Map();
+  const server = ldap.createServer();
+  const norm = (dn) => String(dn).toLowerCase().replace(/\s+/g, '');
+  server.bind(base, (req, res, next) => {
+    const dn = norm(req.dn.toString());
+    const password = String(req.credentials || '');
+    const person = [...people.values()].find(p => norm(p.dn) === dn);
+    const ok = (dn === norm(serviceDn) && password === servicePassword) || (person && password && password === person.password);
+    if (!ok) return next(new ldap.InvalidCredentialsError());
+    res.end();
+    return next();
+  });
+  server.search(base, (req, res, next) => {
+    for (const p of people.values()) {
+      if (!norm(p.dn).endsWith(norm(req.dn.toString()))) continue;
+      if (!req.filter.matches(p.attributes)) continue;
+      const wanted = req.attributes.length ? req.attributes : Object.keys(p.attributes);
+      const picked = {};
+      for (const name of wanted) {
+        const key = Object.keys(p.attributes).find(k => k.toLowerCase() === name.toLowerCase());
+        if (key) picked[name] = p.attributes[key];
+      }
+      res.send(new ldap.SearchEntry({ messageId: res.messageId, objectName: p.dn, attributes: ldap.Attribute.fromObject(picked) }));
+    }
+    res.end();
+    return next();
+  });
+  const port = await new Promise((resolve) => { server.listen(0, '127.0.0.1', () => resolve(server.address().port)); });
+  return {
+    url: `ldap://127.0.0.1:${port}`, base, serviceDn, servicePassword,
+    add(uid, { password, mail, cn, uuid, memberOf = [] }) {
+      const dn = `uid=${uid},ou=people,${base}`;
+      people.set(uid, { dn, password, attributes: { objectclass: ['inetOrgPerson'], uid, mail, cn, entryuuid: uuid, memberof: memberOf } });
+    },
+    remove(uid) { people.delete(uid); },
+    close: () => new Promise(r => { server.close(r); })
+  };
+}

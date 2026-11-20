@@ -224,7 +224,7 @@ test('the app answers and serves its policy header', async () => {
   assert.equal(ctx.headers['cache-control'], 'no-store', 'authenticated JSON must not be cached');
   assert.equal(ctx.json.firstRun, false);
   // deliberately limited to branding plus what the sign-in screen needs
-  assert.deepEqual(Object.keys(ctx.json).sort(), ['appFont', 'appIcon', 'appName', 'firstRun', 'providers', 'signup', 'uiPreset']);
+  assert.deepEqual(Object.keys(ctx.json).sort(), ['appFont', 'appIcon', 'appName', 'firstRun', 'ldap', 'providers', 'signup', 'uiPreset']);
 });
 
 test('a browser on this origin can complete the whole sign-in loop', async () => {
@@ -2191,5 +2191,73 @@ test('single sign-on runs PKCE, state and nonce, provisions by policy and links 
     if (providerId) await browser('DELETE', `/api/admin/auth/providers/${providerId}`);
     await browser('PUT', '/api/admin/auth/public-url', { body: { url: '' } });
     await idp.close();
+  }
+});
+
+test('directory sign-in binds as exactly one entry, provisions, syncs groups and fails closed', async () => {
+  const { mockLdap } = await import('./mockapis.js');
+  const dir = await mockLdap();
+  const made = [];
+  dir.add('ana', { password: 'ana-directory-pass', mail: 'Ana@Corp.test', cn: 'Ana Lima', uuid: '0f8fad5b-d9cb-469f-a165-70867728950e', memberOf: ['cn=Engineering,ou=groups,dc=example,dc=com', 'cn=R\\2cD,ou=groups,dc=example,dc=com'] });
+  dir.add('bo', { password: 'bo-directory-pass', mail: 'bo@corp.test', cn: 'Bo', uuid: '7c9e6679-7425-40de-944b-e07fc1f90ae7' });
+  const signIn = (email, password) => request('POST', '/api/auth/login', { origin: ORIGIN, secFetchSite: 'same-origin', body: { email, password } });
+  const settings = {
+    url: dir.url, security: 'none', bindDn: dir.serviceDn, bindPassword: dir.servicePassword,
+    userBase: 'ou=people,' + dir.base, userFilter: '(&(objectClass=inetOrgPerson)(uid={{username}}))',
+    groupMode: 'memberOf', provision: 'user', enabled: true
+  };
+  try {
+    assert.equal((await browser('PUT', '/api/admin/auth/ldap', { body: { ...settings, url: 'ldap://ldap.example.com' } })).status, 400, 'no plain text to a remote directory');
+    assert.equal((await browser('PUT', '/api/admin/auth/ldap', { body: { ...settings, userFilter: '(uid=*)' } })).status, 400, 'the filter must take the username');
+    const saved = await browser('PUT', '/api/admin/auth/ldap', { body: settings });
+    assert.equal(saved.status, 200, saved.text);
+    assert.equal(saved.json.hasPassword, true);
+    assert.ok(!JSON.stringify(saved.json).includes(dir.servicePassword), 'the service password never comes back');
+    assert.equal((await browser('POST', '/api/admin/auth/ldap/test', { body: {} })).json.ok, true);
+    const lookup = (await browser('POST', '/api/admin/auth/ldap/lookup', { body: { username: 'ana' } })).json;
+    assert.equal(lookup.email, 'ana@corp.test');
+    assert.deepEqual(lookup.groups, ['Engineering', 'R,D']);
+    assert.equal((await request('GET', '/api/auth/context')).json.ldap, true);
+
+    assert.equal((await signIn('ana', 'wrong')).status, 401);
+    assert.equal((await signIn('*', 'ana-directory-pass')).status, 401, 'a wildcard username matches nobody');
+    assert.equal((await signIn('ana)(uid=*', 'ana-directory-pass')).status, 401, 'filter syntax in a username is escaped');
+    const ok = await signIn('ana', 'ana-directory-pass');
+    assert.equal(ok.status, 200, ok.text);
+    assert.equal(ok.json.user.email, 'ana@corp.test');
+    assert.equal(ok.json.user.source, 'ldap');
+    assert.equal(ok.json.user.hasPassword, false, 'the directory password is never stored');
+    made.push(ok.json.user.id);
+    const groups = (await browser('GET', '/api/admin/groups')).json.groups.filter(g => g.source === 'ldap').map(g => g.name).sort();
+    assert.deepEqual(groups, ['Engineering', 'R,D']);
+    assert.equal((await signIn('ana', 'ana-directory-pass')).json.user.id, ok.json.user.id, 'the same entry signs in to the same account');
+
+    const local = await joinAs('ldap-local@example.com');
+    made.push(local.id);
+    dir.add('dup', { password: 'dup-pass', mail: 'ldap-local@example.com', cn: 'Dup', uuid: '16fd2706-8baf-433b-82eb-8c7fada847da' });
+    assert.equal((await signIn('dup', 'dup-pass')).status, 403, 'a directory entry never takes over a password account');
+    assert.equal((await signIn('ldap-local@example.com', PASSWORD)).status, 200, 'local accounts keep signing in with their password');
+
+    const bo = await signIn('bo', 'bo-directory-pass');
+    made.push(bo.json.user.id);
+    dir.remove('bo');
+    await browser('PUT', '/api/admin/auth/ldap', { body: { syncDisable: true, syncMaxDisablePct: 10 } });
+    const guarded = (await browser('POST', '/api/admin/auth/ldap/sync', { body: {} })).json;
+    assert.equal(guarded.ok, false, 'a sync that would disable too many accounts changes nothing');
+    assert.equal((await browser('GET', '/api/admin/users?q=bo%40corp.test')).json.users[0].status, 'active');
+    await browser('PUT', '/api/admin/auth/ldap', { body: { syncMaxDisablePct: 50 } });
+    const report = (await browser('POST', '/api/admin/auth/ldap/sync', { body: {} })).json;
+    assert.equal(report.ok, true);
+    assert.equal(report.disabled, 1);
+    assert.equal((await browser('GET', '/api/admin/users?q=bo%40corp.test')).json.users[0].status, 'disabled', 'gone from the directory, disabled here');
+
+    await browser('PUT', '/api/admin/auth/ldap', { body: { url: 'ldap://127.0.0.1:1' } });
+    assert.equal((await signIn('ana', 'ana-directory-pass')).status, 503, 'an unreachable directory fails closed');
+    assert.equal((await signIn(EMAIL, PASSWORD)).status, 200, 'and the owner can still sign in');
+  } finally {
+    await browser('PUT', '/api/admin/auth/ldap', { body: { enabled: false } });
+    for (const id of made) await browser('DELETE', `/api/admin/users/${id}`);
+    for (const g of (await browser('GET', '/api/admin/groups')).json.groups.filter(g => g.source === 'ldap')) await browser('DELETE', `/api/admin/groups/${g.id}`);
+    await dir.close();
   }
 });

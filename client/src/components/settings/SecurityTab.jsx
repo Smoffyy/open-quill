@@ -204,7 +204,7 @@ function SignInMethods({ user }) {
       {data.identities.map(i => (
         <div className="field row" key={i.id}>
           <div>
-            <label>{i.label || t('Removed provider')}</label>
+            <label>{i.type === 'ldap' ? t('Directory (LDAP)') : i.label || t('Removed provider')}</label>
             <div className="muted-note">{[i.email, i.lastUsedAt ? t('Last used {when}', { when: fmtRelative(i.lastUsedAt) }) : ''].filter(Boolean).join(' · ')}</div>
           </div>
           {removable && <button className="btn ghost" onClick={() => unlink(i)} disabled={!!needs && !proof}>{t('Remove')}</button>}

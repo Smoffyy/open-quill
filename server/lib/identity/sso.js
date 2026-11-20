@@ -131,7 +131,7 @@ export function resolveAccount(p, identity, intent, linkUser) {
   if (!identity.emailVerified && p.type !== 'microsoft') return { error: 'unverified' };
   const user = db.users.insert({
     id: uid(), email: identity.email, display_name: identity.name.slice(0, 80), role: p.provision === 'user' ? USER : PENDING,
-    status: 'active', source: 'sso:' + p.id, prefs: {}, created_at: now()
+    status: 'active', source: p.source || 'sso:' + p.id, prefs: {}, created_at: now()
   });
   link(p, identity, user.id);
   return { user, created: true };

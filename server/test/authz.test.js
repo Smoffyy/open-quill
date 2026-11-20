@@ -575,3 +575,34 @@ test('trusted header settings fail closed and only trust the listed proxies', as
   assert.equal(readHeaderIdentity(cfg, req({ 'x-forwarded-email': 'A@B.test', 'x-openquill-proxy-secret': secret })).email, 'a@b.test');
   assert.equal(readHeaderIdentity(cfg, req({ 'x-forwarded-email': 'not an email', 'x-openquill-proxy-secret': secret })), null);
 });
+
+test('directory filters escape user input and settings refuse unsafe connections', async () => {
+  const { escapeFilter, firstRdnValue, updateLdap, PRESETS } = await import('../lib/identity/ldap.js');
+  assert.equal(escapeFilter('a*b'), 'a\\2ab');
+  assert.equal(escapeFilter('x)(uid=*'), 'x\\29\\28uid=\\2a');
+  assert.equal(escapeFilter('back\\slash\0'), 'back\\5cslash\\00');
+  assert.equal(firstRdnValue('cn=Engineering,ou=groups,dc=x'), 'Engineering');
+  assert.equal(firstRdnValue('CN=R\\2cD,OU=Groups,DC=x'), 'R,D');
+  assert.equal(firstRdnValue('cn=Smith\\, Ann,ou=x'), 'Smith, Ann');
+  assert.equal(firstRdnValue(''), '');
+
+  const base = { url: 'ldaps://ldap.corp.test', security: 'ldaps', userBase: 'ou=people,dc=corp', enabled: true };
+  assert.ok(updateLdap(base).config);
+  assert.ok(updateLdap({ ...base, url: 'ldap://ldap.corp.test', security: 'none' }).error, 'no plain text to another machine');
+  assert.ok(updateLdap({ ...base, url: 'ldap://127.0.0.1:389', security: 'none' }).config, 'plain text only on loopback');
+  assert.ok(updateLdap({ ...base, url: 'ldap://ldap.corp.test', security: 'starttls' }).config);
+  assert.ok(updateLdap({ ...base, url: 'ldap://ldap.corp.test' }).error, 'LDAPS needs an ldaps address');
+  assert.ok(updateLdap({ ...base, url: 'https://ldap.corp.test' }).error);
+  assert.ok(updateLdap({ ...base, userFilter: '(uid=*)' }).error, 'the filter must take the username');
+  assert.ok(updateLdap({ ...base, groupMode: 'search', groupFilter: '(member=x)' }).error, 'a group search must take the dn');
+  assert.ok(updateLdap({ ...base, attrs: { email: 'mail)(x' } }).error);
+  assert.ok(updateLdap({ ...base, userBase: '' }).error, 'cannot turn on without a base');
+  assert.equal(updateLdap({ ...base, security: 'bogus' }).config.security, 'ldaps', 'unknown security falls back to LDAPS');
+  assert.equal(PRESETS.openldap.attrs.email, 'mail', 'editing settings never changes the presets');
+  const ad = updateLdap({ ...base, preset: 'activedirectory' }).config;
+  assert.equal(ad.attrs.id, PRESETS.activedirectory.attrs.id);
+  assert.equal(ad.group_mode, 'memberOf');
+  const sealed = updateLdap({ ...base, bindPassword: 'svc-secret' }).config;
+  assert.ok(sealed.bind_password && !sealed.bind_password.includes('svc-secret'), 'the bind password is sealed');
+  assert.equal(updateLdap({ ...base, timeoutMs: 999999, syncMaxDisablePct: -5, syncHours: 1000 }).config.timeout_ms, 30000);
+});

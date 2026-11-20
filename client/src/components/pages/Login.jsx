@@ -22,6 +22,8 @@ export default function Login({ onLogin, cfg }) {
   const [setupToken, setSetupToken] = useState('');
   const appName = cfg?.appName || 'open-quill';
   const providers = cfg?.providers || [];
+  const directory = !!cfg?.ldap && !firstRun && mode === 'signin';
+  const loginLabel = directory ? t('Email or username') : t('Email address');
 
   useEffect(() => { if (firstRun) setMode('signup'); }, [firstRun]);
   useEffect(() => {
@@ -152,8 +154,8 @@ export default function Login({ onLogin, cfg }) {
                   aria-label={t('Setup token')} {...flag('setup')}
                   onChange={(e) => { clear(); setSetupToken(e.target.value); }} />
               )}
-              <input autoFocus={!isTouch()} type="email" autoComplete="email" placeholder={t('Email address')} value={email}
-                aria-label={t('Email address')} {...flag('email')}
+              <input autoFocus={!isTouch()} type={directory ? 'text' : 'email'} autoComplete={directory ? 'username' : 'email'} spellCheck={false}
+                autoCapitalize="none" placeholder={loginLabel} value={email} aria-label={loginLabel} {...flag('email')}
                 onChange={(e) => { clear(); setEmail(e.target.value); }} />
               <input type="password" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
                 placeholder={t('Password')} value={pw} aria-label={t('Password')} {...flag('pw')}

@@ -21,6 +21,7 @@ import { killSessionSockets, closeUserSockets } from '../lib/ws/index.js';
 import { cleanStyles, prefsFit } from '../lib/profile.js';
 import { sessionCookie, challengeCookie as challengeLine, MFA_COOKIE } from '../lib/identity/cookies.js';
 import { enabledProviders, publicBase, providers } from '../lib/identity/providers.js';
+import { ldapEnabled, ldapSignIn } from '../lib/identity/ldap.js';
 
 const REAUTH_WINDOW_MS = 10 * 60 * 1000;
 const setCookie = (req, res, token) => sessionCookie(req, res, token, sessionMaxAgeSeconds());
@@ -102,7 +103,8 @@ export default function registerAuthRoutes(app) {
       appIcon: getSetting('app_icon', ''),
       appFont: getSetting('app_font', 'literata'),
       uiPreset: presetId(getSetting('ui_preset', '')),
-      providers: publicBase() ? enabledProviders().map(p => ({ id: p.id, type: p.type, label: p.label })) : []
+      providers: publicBase() ? enabledProviders().map(p => ({ id: p.id, type: p.type, label: p.label })) : [],
+      ldap: ldapEnabled()
     });
   });
 
@@ -112,8 +114,24 @@ export default function registerAuthRoutes(app) {
     const keys = limitKeys(req, email);
     if (anyLimited(keys)) return res.status(429).json({ error: TOO_MANY });
     if (!email || !pw) return res.status(400).json({ error: 'Enter your email and password.' });
-    const u = db.users.byEmail(email);
-    if (!(await passwordMatches(pw, u?.password_hash))) {
+    let u = db.users.byEmail(email);
+    let method = 'password';
+    if (ldapEnabled() && !u?.password_hash) {
+      await passwordMatches(pw, null);
+      const r = await ldapSignIn(email, pw);
+      if (r.error === 'unavailable') return res.status(503).json({ error: 'Sign-in is temporarily unavailable. Try again later.' });
+      if (r.error === 'credentials') {
+        keys.forEach(noteLoginFail);
+        return res.status(401).json({ error: 'Incorrect email or password.' });
+      }
+      if (r.error) {
+        logAudit(req, 'auth.ldap_refused', { meta: { reason: r.error } });
+        return res.status(403).json({ error: 'This directory account cannot sign in here. Ask an administrator for access.' });
+      }
+      u = r.user;
+      method = 'ldap';
+      if (r.created) logAudit({ user: u, headers: req.headers, socket: req.socket }, 'user.provision', { type: 'user', id: u.id, meta: { email: u.email, provider: 'ldap', role: u.role } });
+    } else if (!(await passwordMatches(pw, u?.password_hash))) {
       keys.forEach(noteLoginFail);
       return res.status(401).json({ error: 'Incorrect email or password.' });
     }
@@ -121,13 +139,13 @@ export default function registerAuthRoutes(app) {
     // The counter is cleared only once the whole login succeeds, so a stolen password
     // still cannot be used to grind second-factor codes without limit.
     if (hasTotp(u.id)) {
-      challengeCookie(req, res, issueChallenge(u, 'password'));
+      challengeCookie(req, res, issueChallenge(u, method));
       return res.json({ mfa: { methods: ['totp', 'recovery'] } });
     }
     keys.forEach(k => loginFails.delete(k));
-    const sid = createSession(u, req);
+    const sid = createSession(u, req, method);
     setCookie(req, res, sign(u, sid));
-    logAudit(req, 'auth.login', { type: 'user', id: u.id });
+    logAudit(req, 'auth.login', { type: 'user', id: u.id, meta: { method } });
     res.json({ user: publicUser(u) });
   });
 
@@ -203,7 +221,7 @@ export default function registerAuthRoutes(app) {
   app.get('/api/me/identities', authAccount, (req, res) => {
     const known = new Map(providers().map(p => [p.id, p]));
     const linked = db.identities.where('user_id', req.user.id).map(i => ({
-      id: i.id, providerId: i.provider_id, label: known.get(i.provider_id)?.label || '', type: known.get(i.provider_id)?.type || '',
+      id: i.id, providerId: i.provider_id, label: known.get(i.provider_id)?.label || '', type: i.provider_id === 'ldap' ? 'ldap' : known.get(i.provider_id)?.type || '',
       email: i.email || '', linkedAt: i.linked_at || 0, lastUsedAt: i.last_login_at || 0
     }));
     const have = new Set(linked.map(i => i.providerId));

@@ -7,6 +7,7 @@ import { PENDING } from '../lib/authz/roles.js';
 import { MFA_POLICIES, mfaPolicy, hasTotp } from '../lib/identity/mfa.js';
 import { broadcastAll } from '../lib/ws/index.js';
 import { headerStatus } from '../lib/identity/header.js';
+import { publicLdap, updateLdap, testLdap, lookupLdap, syncLdap } from '../lib/identity/ldap.js';
 import { PROVIDER_TYPES, MAX_PROVIDERS, providers, providerById, newProvider, publicProvider, updateProvider, publicBase, cleanPublicUrl, clientConfig, forgetConfig } from '../lib/identity/providers.js';
 
 function providersView(user) {
@@ -105,6 +106,43 @@ export default function registerIdentityRoutes(app) {
     else delSetting('auth_public_url');
     logAudit(req, 'auth.public_url', { meta: { url } });
     res.json(providersView(req.user));
+  });
+
+  app.get('/api/admin/auth/ldap', authMiddleware, requirePermission('admin.users'), (req, res) => {
+    res.json({ ...publicLdap(), editable: isOwner(req.user) });
+  });
+
+  app.put('/api/admin/auth/ldap', authMiddleware, requireOwner, (req, res) => {
+    const r = updateLdap(req.body || {});
+    if (r.error) return res.status(400).json({ error: r.error });
+    setSetting('auth_ldap', r.config);
+    logAudit(req, 'auth.ldap_update', { meta: { enabled: r.config.enabled, url: r.config.url, provision: r.config.provision } });
+    res.json({ ...publicLdap(), editable: true });
+  });
+
+  app.post('/api/admin/auth/ldap/test', authMiddleware, requireOwner, async (req, res) => {
+    try {
+      res.json(await testLdap());
+    } catch {
+      res.status(502).json({ error: 'The directory could not be reached, or it refused the service account.' });
+    }
+  });
+
+  app.post('/api/admin/auth/ldap/lookup', authMiddleware, requireOwner, async (req, res) => {
+    const username = String(req.body?.username || '').trim().slice(0, 256);
+    if (!username) return res.status(400).json({ error: 'Enter a username to look up.' });
+    try {
+      res.json(await lookupLdap(username));
+    } catch {
+      res.status(502).json({ error: 'The directory could not be reached, or it refused the service account.' });
+    }
+  });
+
+  app.post('/api/admin/auth/ldap/sync', authMiddleware, requireOwner, async (req, res) => {
+    const report = await syncLdap();
+    logAudit(req, 'auth.ldap_sync', { meta: { ok: report.ok, checked: report.checked, updated: report.updated, disabled: report.disabled, missing: report.missing } });
+    if (report.updated || report.disabled) broadcastAll({ type: 'account' });
+    res.json(report);
   });
 
   app.get('/api/admin/auth/mfa', authMiddleware, requirePermission('admin.users'), (req, res) => {

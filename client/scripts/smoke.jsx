@@ -104,6 +104,7 @@ cases.push(['ShareDialog', () => React.createElement(ShareDialog, { type: 'proje
 cases.push(['SharedBar', () => React.createElement(SharedBar, { owner: 'Ana', onCopy: noop })]);
 cases.push(['MfaRequired', () => React.createElement(MfaRequired, { user: { email: 'p@b.c', gate: 'mfa' }, cfg: { appName: 'Quill' }, onUser: noop })]);
 cases.push(['TotpEnroll', () => React.createElement(TotpEnroll, { onEnabled: noop, onCancel: noop })]);
+cases.push(['Login:directory', () => React.createElement(Login, { onLogin: noop, cfg: { signup: 'closed', ldap: true, providers: [{ id: 'g', label: 'Google' }] } })]);
 cases.push(['RecoveryCodes', () => React.createElement(RecoveryCodes, { codes: ['abcde-fghij', 'klmno-pqrst'] })]);
 cases.push(['SharedBar:busy', () => React.createElement(SharedBar, { owner: 'Ana', busy: true, onCopy: noop })]);
 const chatArts = [{ path: 'trip-plan.md', ext: 'md', size: 1200, v: 2 }, { path: 'flow.mmd', ext: 'mmd', size: 80, v: 1 }];
