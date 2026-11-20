@@ -3809,5 +3809,10 @@
   "Enter the directory (tenant) ID, a GUID from the app registration.": "앱 등록에 있는 디렉터리(테넌트) ID GUID를 입력하세요.",
   "The issuer must be an https address.": "발급자는 https 주소여야 합니다.",
   "Enter the organization’s login, for example acme.": "조직의 로그인 이름을 입력하세요. 예: acme",
-  "Fill in the client ID, the secret and the issuer before turning this on.": "켜기 전에 클라이언트 ID, 시크릿, 발급자를 입력하세요."
+  "Fill in the client ID, the secret and the issuer before turning this on.": "켜기 전에 클라이언트 ID, 시크릿, 발급자를 입력하세요.",
+  "Trusted proxy": "신뢰할 수 있는 프록시",
+  "Set with the TRUSTED_HEADER variables in the server’s environment, so it cannot be changed here.": "서버 환경의 TRUSTED_HEADER 변수로 설정되므로 여기서는 바꿀 수 없습니다.",
+  "Turned off because the settings are not valid: {error}": "설정이 올바르지 않아 꺼져 있습니다: {error}",
+  "Proxies": "프록시",
+  "Email header": "이메일 헤더"
 }

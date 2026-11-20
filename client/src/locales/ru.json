@@ -3842,5 +3842,10 @@
   "Enter the directory (tenant) ID, a GUID from the app registration.": "Введите ID каталога (клиента), это GUID из регистрации приложения.",
   "The issuer must be an https address.": "Издатель должен быть адресом https.",
   "Enter the organization’s login, for example acme.": "Введите логин организации, например acme.",
-  "Fill in the client ID, the secret and the issuer before turning this on.": "Перед включением укажите ID клиента, секрет и издателя."
+  "Fill in the client ID, the secret and the issuer before turning this on.": "Перед включением укажите ID клиента, секрет и издателя.",
+  "Trusted proxy": "Доверенный прокси",
+  "Set with the TRUSTED_HEADER variables in the server’s environment, so it cannot be changed here.": "Задаётся переменными TRUSTED_HEADER в окружении сервера, поэтому здесь его не изменить.",
+  "Turned off because the settings are not valid: {error}": "Выключено, потому что настройки неверны: {error}",
+  "Proxies": "Прокси",
+  "Email header": "Заголовок с почтой"
 }

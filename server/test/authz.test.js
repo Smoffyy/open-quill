@@ -545,3 +545,33 @@ test('an email from a provider never links to an admin, a password account or an
   assert.equal(resolveAccount({ ...p, provision: 'off' }, identity('s7', 'new@corp.test'), 'login', null).error, 'no_account');
   db.identities.removeWhere('provider_id', p.id);
 });
+
+test('trusted header settings fail closed and only trust the listed proxies', async () => {
+  const { parseHeaderConfig, trustedPeer, readHeaderIdentity } = await import('../lib/identity/header.js');
+  const secret = 's'.repeat(40);
+  const base = { TRUSTED_HEADER_AUTH: 'on', TRUSTED_HEADER_PROXIES: '10.0.0.5, 10.1.0.0/16, fd00::/8', TRUSTED_HEADER_SECRET: secret, TRUSTED_HEADER_EMAIL: 'X-Forwarded-Email' };
+  assert.deepEqual(parseHeaderConfig({}), { enabled: false, error: '' }, 'off unless switched on');
+  const cfg = parseHeaderConfig(base);
+  assert.equal(cfg.enabled, true);
+  assert.equal(cfg.provision, 'pending', 'new people wait for approval by default');
+  for (const [key, value] of [
+    ['TRUSTED_HEADER_PROXIES', ''], ['TRUSTED_HEADER_PROXIES', '0.0.0.0/0'], ['TRUSTED_HEADER_PROXIES', '::/0'], ['TRUSTED_HEADER_PROXIES', 'proxy.local'],
+    ['TRUSTED_HEADER_PROXIES', '10.0.0.0/33'], ['TRUSTED_HEADER_SECRET', 'short'], ['TRUSTED_HEADER_EMAIL', ''], ['TRUSTED_HEADER_EMAIL', 'X Email'],
+    ['TRUSTED_HEADER_PROVISION', 'owner']
+  ]) {
+    const broken = parseHeaderConfig({ ...base, [key]: value });
+    assert.equal(broken.enabled, false, `${key}=${value} turns the feature off`);
+    assert.ok(broken.error);
+  }
+  assert.ok(trustedPeer(cfg, '10.0.0.5'));
+  assert.ok(trustedPeer(cfg, '::ffff:10.1.2.3'), 'an IPv4-mapped address is matched as IPv4');
+  assert.ok(trustedPeer(cfg, 'fd12::1'));
+  assert.equal(trustedPeer(cfg, '10.0.0.6'), false);
+  assert.equal(trustedPeer(cfg, ''), false);
+  const req = (headers, remoteAddress = '10.0.0.5') => ({ headers, socket: { remoteAddress } });
+  assert.equal(readHeaderIdentity(cfg, req({})), null, 'no header, no identity');
+  assert.deepEqual(readHeaderIdentity(cfg, req({ 'x-forwarded-email': 'a@b.test' })), { refused: true }, 'no secret is refused');
+  assert.deepEqual(readHeaderIdentity(cfg, req({ 'x-forwarded-email': 'a@b.test', 'x-openquill-proxy-secret': secret }, '10.9.9.9')), { refused: true });
+  assert.equal(readHeaderIdentity(cfg, req({ 'x-forwarded-email': 'A@B.test', 'x-openquill-proxy-secret': secret })).email, 'a@b.test');
+  assert.equal(readHeaderIdentity(cfg, req({ 'x-forwarded-email': 'not an email', 'x-openquill-proxy-secret': secret })), null);
+});

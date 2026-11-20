@@ -3809,5 +3809,10 @@
   "Enter the directory (tenant) ID, a GUID from the app registration.": "请输入目录（租户）ID，即应用注册中的 GUID。",
   "The issuer must be an https address.": "签发方必须是 https 地址。",
   "Enter the organization’s login, for example acme.": "请输入组织的登录名，例如 acme。",
-  "Fill in the client ID, the secret and the issuer before turning this on.": "开启前请填写客户端 ID、密钥和签发方。"
+  "Fill in the client ID, the secret and the issuer before turning this on.": "开启前请填写客户端 ID、密钥和签发方。",
+  "Trusted proxy": "受信任的代理",
+  "Set with the TRUSTED_HEADER variables in the server’s environment, so it cannot be changed here.": "由服务器环境中的 TRUSTED_HEADER 变量设置，因此无法在此更改。",
+  "Turned off because the settings are not valid: {error}": "因设置无效而关闭：{error}",
+  "Proxies": "代理",
+  "Email header": "邮箱标头"
 }

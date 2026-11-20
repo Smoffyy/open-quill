@@ -206,6 +206,20 @@ export default function SignInSection() {
             </div>
           )}
       </Card>
+      {(data.header?.enabled || data.header?.error) && (
+        <Card title={t('Trusted proxy')} sub={t('Set with the TRUSTED_HEADER variables in the server’s environment, so it cannot be changed here.')}>
+          {data.header.error
+            ? <Note tone="warn">{t('Turned off because the settings are not valid: {error}', { error: data.header.error })}</Note>
+            : (
+              <Rows>
+                <Row label={t('Proxies')}><span className="dim mono">{data.header.proxies.join(', ')}</span></Row>
+                <Row label={t('Email header')}><span className="dim mono">{data.header.emailHeader}</span></Row>
+                <Row label={t('New accounts')}><span className="dim">{t((PROVISION.find(p => p.value === data.header.provision) || PROVISION[0]).label)}</span></Row>
+                <Row label={t('Link existing accounts by email')}><span className="dim">{data.header.link ? t('On') : t('Off')}</span></Row>
+              </Rows>
+            )}
+        </Card>
+      )}
       <Card title={t('Sign-in providers')} flush
         sub={data.editable ? t('People can sign in with these as well as with a password.') : t('Only an owner can change how people sign in.')}
         actions={data.editable && (

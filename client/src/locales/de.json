@@ -3810,5 +3810,10 @@
   "Enter the directory (tenant) ID, a GUID from the app registration.": "Gib die Verzeichnis-ID (Mandant) ein, eine GUID aus der App-Registrierung.",
   "The issuer must be an https address.": "Der Aussteller muss eine https-Adresse sein.",
   "Enter the organization’s login, for example acme.": "Gib den Login-Namen der Organisation ein, zum Beispiel acme.",
-  "Fill in the client ID, the secret and the issuer before turning this on.": "Trage Client-ID, Geheimnis und Aussteller ein, bevor du das einschaltest."
+  "Fill in the client ID, the secret and the issuer before turning this on.": "Trage Client-ID, Geheimnis und Aussteller ein, bevor du das einschaltest.",
+  "Trusted proxy": "Vertrauenswürdiger Proxy",
+  "Set with the TRUSTED_HEADER variables in the server’s environment, so it cannot be changed here.": "Wird über die TRUSTED_HEADER-Variablen in der Serverumgebung festgelegt und kann hier nicht geändert werden.",
+  "Turned off because the settings are not valid: {error}": "Ausgeschaltet, weil die Einstellungen ungültig sind: {error}",
+  "Proxies": "Proxys",
+  "Email header": "E-Mail-Header"
 }

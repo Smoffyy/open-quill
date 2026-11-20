@@ -3809,5 +3809,10 @@
   "Enter the directory (tenant) ID, a GUID from the app registration.": "アプリ登録にあるディレクトリ (テナント) ID の GUID を入力してください。",
   "The issuer must be an https address.": "発行者は https アドレスである必要があります。",
   "Enter the organization’s login, for example acme.": "組織のログイン名を入力してください (例: acme)。",
-  "Fill in the client ID, the secret and the issuer before turning this on.": "オンにする前に、クライアント ID、シークレット、発行者を入力してください。"
+  "Fill in the client ID, the secret and the issuer before turning this on.": "オンにする前に、クライアント ID、シークレット、発行者を入力してください。",
+  "Trusted proxy": "信頼済みプロキシ",
+  "Set with the TRUSTED_HEADER variables in the server’s environment, so it cannot be changed here.": "サーバー環境の TRUSTED_HEADER 変数で設定されるため、ここでは変更できません。",
+  "Turned off because the settings are not valid: {error}": "設定が正しくないためオフになっています: {error}",
+  "Proxies": "プロキシ",
+  "Email header": "メールヘッダー"
 }

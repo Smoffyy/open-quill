@@ -3810,5 +3810,10 @@
   "Enter the directory (tenant) ID, a GUID from the app registration.": "Saisissez l’ID de l’annuaire (locataire), un GUID de l’inscription d’application.",
   "The issuer must be an https address.": "L’émetteur doit être une adresse https.",
   "Enter the organization’s login, for example acme.": "Saisissez l’identifiant de l’organisation, par exemple acme.",
-  "Fill in the client ID, the secret and the issuer before turning this on.": "Renseignez l’ID client, le secret et l’émetteur avant d’activer ceci."
+  "Fill in the client ID, the secret and the issuer before turning this on.": "Renseignez l’ID client, le secret et l’émetteur avant d’activer ceci.",
+  "Trusted proxy": "Proxy de confiance",
+  "Set with the TRUSTED_HEADER variables in the server’s environment, so it cannot be changed here.": "Défini par les variables TRUSTED_HEADER de l’environnement du serveur, il ne peut donc pas être modifié ici.",
+  "Turned off because the settings are not valid: {error}": "Désactivé car les réglages ne sont pas valides : {error}",
+  "Proxies": "Proxys",
+  "Email header": "En-tête d’e-mail"
 }

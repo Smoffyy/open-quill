@@ -6,6 +6,7 @@ import { isOwner, isActive, roleOf, gateOf } from '../lib/authz/effective.js';
 import { PENDING } from '../lib/authz/roles.js';
 import { MFA_POLICIES, mfaPolicy, hasTotp } from '../lib/identity/mfa.js';
 import { broadcastAll } from '../lib/ws/index.js';
+import { headerStatus } from '../lib/identity/header.js';
 import { PROVIDER_TYPES, MAX_PROVIDERS, providers, providerById, newProvider, publicProvider, updateProvider, publicBase, cleanPublicUrl, clientConfig, forgetConfig } from '../lib/identity/providers.js';
 
 function providersView(user) {
@@ -50,7 +51,7 @@ export default function registerIdentityRoutes(app) {
   });
 
   app.get('/api/admin/auth/providers', authMiddleware, requirePermission('admin.users'), (req, res) => {
-    res.json(providersView(req.user));
+    res.json({ ...providersView(req.user), header: headerStatus() });
   });
 
   app.post('/api/admin/auth/providers', authMiddleware, requireOwner, (req, res) => {

@@ -3,10 +3,13 @@ import argon2 from 'argon2';
 import crypto from 'crypto';
 import * as cookie from 'cookie';
 import { db, uid, now, getSetting, setSetting } from './db.js';
-import { clientIp } from './lib/audit.js';
+import { clientIp, logAudit } from './lib/audit.js';
 import { permissionsOf, roleOf, gateOf, isActive, isOwner, mfaRequired } from './lib/authz/effective.js';
 import { roleName } from './lib/authz/roles.js';
 import { hasTotp, recoveryLeft } from './lib/identity/mfa.js';
+import { headerIdentity, headerAccount } from './lib/identity/header.js';
+import { sessionCookie } from './lib/identity/cookies.js';
+import { syncExternalGroups } from './lib/authz/groups.js';
 
 let SECRET = getSetting('jwt_secret');
 if (!SECRET) { SECRET = crypto.randomBytes(48).toString('base64url'); setSetting('jwt_secret', SECRET); }
@@ -64,7 +67,7 @@ export function publicUser(u, session = null) {
   };
 }
 
-function resolveToken(token) {
+function resolveToken(token, req) {
   let payload;
   try { payload = jwt.verify(token, SECRET); } catch { return null; }
   if (!payload?.sid) return null;
@@ -73,12 +76,53 @@ function resolveToken(token) {
   const s = db.sessions.byId(payload.sid);
   if (!s || s.user_id !== u.id) return null;
   if (!isActive(u) || now() - (s.last_seen || 0) > sessionTtlMs()) { db.sessions.removeById(s.id); return null; }
+  if (s.method === 'header' && headerIdentity(req)?.email !== s.header_email) return null;
   if (Date.now() - (s.last_seen || 0) > 60 * 1000) db.sessions.touch(s.id, now());
   return { user: u, sessionId: s.id, session: s };
 }
 
+const refusals = new Map();
+
+function noteRefusal(req) {
+  const ip = clientIp(req);
+  if (Date.now() - (refusals.get(ip) || 0) < 60 * 1000) return;
+  if (refusals.size > 1000) refusals.clear();
+  refusals.set(ip, Date.now());
+  logAudit(req, 'auth.header_refused', { meta: { peer: String(req.socket?.remoteAddress || '') } });
+}
+
+function syncHeaderGroups(session, userId, groups) {
+  if (!groups) return;
+  const key = groups.join(',');
+  if (session.header_groups === key) return;
+  syncExternalGroups(userId, 'header', groups);
+  db.sessions.update(session.id, { header_groups: key });
+}
+
+function headerSession(req, res, token) {
+  const ident = headerIdentity(req);
+  if (!ident) return null;
+  if (ident.refused) { noteRefusal(req); return null; }
+  const current = token ? resolveToken(token, req) : null;
+  if (current?.session.method === 'header') {
+    syncHeaderGroups(current.session, current.user.id, ident.groups);
+    return current;
+  }
+  const found = headerAccount(ident);
+  if (!found.user || !isActive(found.user)) return null;
+  const sid = createSession(found.user, req, 'header', 'idp');
+  const session = db.sessions.update(sid, { header_email: ident.email });
+  syncHeaderGroups(session, found.user.id, ident.groups);
+  if (res) sessionCookie(req, res, sign(found.user, sid), sessionMaxAgeSeconds());
+  const actor = { user: found.user, socket: req.socket, headers: req.headers };
+  if (found.created) logAudit(actor, 'user.provision', { type: 'user', id: found.user.id, meta: { email: found.user.email, provider: 'header' } });
+  logAudit(actor, 'auth.login', { type: 'user', id: found.user.id, meta: { method: 'header' } });
+  return { user: found.user, sessionId: sid, session };
+}
+
 export function authAccount(req, res, next) {
-  const r = req.cookies?.token ? resolveToken(req.cookies.token) : null;
+  const token = req.cookies?.token;
+  const r = headerSession(req, res, token) || (token ? resolveToken(token, req) : null);
   if (!r) return res.status(401).json({ error: 'unauthorized' });
   req.user = r.user;
   req.sessionId = r.sessionId;
@@ -97,8 +141,7 @@ export function authMiddleware(req, res, next) {
 
 export function sessionFromRequest(req) {
   const raw = req.headers.cookie ? cookie.parseCookie(req.headers.cookie) : {};
-  if (!raw.token) return null;
-  return resolveToken(raw.token);
+  return headerSession(req, null, raw.token) || (raw.token ? resolveToken(raw.token, req) : null);
 }
 
 export function parseCookies(req, _res, next) {
