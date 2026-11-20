@@ -2,8 +2,37 @@ import { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
 import { t } from '../../i18n.jsx';
 import BrandMark from '../ui/BrandMark.jsx';
+import TotpEnroll, { RecoveryCodes } from '../settings/TotpEnroll.jsx';
 
 const POLL_MS = 30000;
+
+async function signOut() {
+  try { await api.post('/api/auth/logout', {}); } catch {}
+  window.location.href = '/';
+}
+
+export function MfaRequired({ user, cfg, onUser }) {
+  const [done, setDone] = useState(null);
+  const appName = cfg?.appName || 'open-quill';
+  return (
+    <div className="login">
+      <div className="login-card">
+        <div className="login-logo"><BrandMark src={cfg?.appIcon} /> {appName}</div>
+        <h1>{t('Set up two-factor')}</h1>
+        <div className="login-box mfa-box">
+          <div className="lbl">{t('Your organization requires two-factor authentication for {email}.', { email: user.email })}</div>
+          {done ? (
+            <>
+              <RecoveryCodes codes={done.recoveryCodes} />
+              <button type="button" className="primary" onClick={() => onUser(done.user)}>{t('Continue')}</button>
+            </>
+          ) : <TotpEnroll onEnabled={setDone} />}
+          <button type="button" className="back" onClick={signOut}>{t('Sign out')}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Pending({ user, cfg, onUser }) {
   const [busy, setBusy] = useState(false);
@@ -28,11 +57,6 @@ export default function Pending({ user, cfg, onUser }) {
       setNote(t('Could not reach the server. Try again in a moment.'));
     }
     setBusy(false);
-  }
-
-  async function signOut() {
-    try { await api.post('/api/auth/logout', {}); } catch {}
-    window.location.href = '/';
   }
 
   return (

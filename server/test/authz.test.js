@@ -428,3 +428,73 @@ test('an upload is read by its owner, by readers of a shared chat that shows it,
   assert.ok(revoke(owner, 'chat', chat, 'user', reader.id).ok);
   assert.equal(canReadUpload(reader, url), false, 'revoking the chat revokes what it showed');
 });
+
+test('sealed values round-trip, and a tampered or foreign value opens to nothing', async () => {
+  const { seal, unseal } = await import('../lib/identity/seal.js');
+  const sealed = seal('JBSWY3DPEHPK3PXP');
+  assert.notEqual(sealed, seal('JBSWY3DPEHPK3PXP'), 'every seal uses a fresh nonce');
+  assert.equal(unseal(sealed), 'JBSWY3DPEHPK3PXP');
+  const flipped = sealed.slice(0, -2) + (sealed.at(-2) === 'A' ? 'B' : 'A') + sealed.at(-1);
+  assert.equal(unseal(flipped), null);
+  assert.equal(unseal('JBSWY3DPEHPK3PXP'), null);
+  assert.equal(unseal(null), null);
+});
+
+test('a TOTP code works once, a later code works, and recovery codes are single use', async () => {
+  const { startEnrollment, confirmEnrollment, verifySecondFactor, hasTotp, recoveryLeft, removeFactors } = await import('../lib/identity/mfa.js');
+  const { totpCode } = await import('../lib/totp.js');
+  const u = person('user');
+  const { secret, qr } = await startEnrollment(u);
+  assert.match(qr, /^<svg/, 'the QR code is rendered on the server');
+  assert.ok(!JSON.stringify(db.users.byId(u.id)).includes(secret), 'the pending key is stored sealed');
+  assert.equal(confirmEnrollment(u.id, '000000').status, 401);
+  const enrolled = confirmEnrollment(u.id, totpCode(secret));
+  assert.equal(enrolled.recoveryCodes.length, 10);
+  assert.ok(hasTotp(u.id));
+  assert.ok(!JSON.stringify(db.mfaFactors.where('user_id', u.id)).includes(secret), 'the key is stored sealed');
+  assert.equal(verifySecondFactor(u.id, { code: totpCode(secret) }), null, 'the code used to enroll cannot be replayed');
+  assert.equal(verifySecondFactor(u.id, { code: totpCode(secret, Date.now() + 30000) }), 'totp');
+  assert.equal(verifySecondFactor(u.id, { code: totpCode(secret, Date.now() + 30000) }), null, 'nor can any code twice');
+  const [first] = enrolled.recoveryCodes;
+  assert.equal(verifySecondFactor(u.id, { recovery: first.toUpperCase().replace('-', ' ') }), 'recovery', 'spacing and case do not matter');
+  assert.equal(verifySecondFactor(u.id, { recovery: first }), null, 'a recovery code works once');
+  assert.equal(recoveryLeft(u.id), 9);
+  assert.equal(verifySecondFactor(u.id, {}), null);
+  removeFactors(u.id);
+  assert.equal(hasTotp(u.id), false);
+});
+
+test('a sign-in challenge opens once, expires, and cannot be forged', async () => {
+  const { issueChallenge, readChallenge, spendChallenge } = await import('../lib/identity/mfa.js');
+  const { seal } = await import('../lib/identity/seal.js');
+  const u = person('user');
+  const value = issueChallenge(u, 'password');
+  const found = readChallenge(value);
+  assert.equal(found.user.id, u.id);
+  spendChallenge(found.challenge);
+  assert.equal(readChallenge(value), null, 'a spent challenge is refused');
+  assert.equal(readChallenge(seal(JSON.stringify({ uid: u.id, nonce: 'x', exp: Date.now() - 1 }))), null, 'an expired one too');
+  assert.equal(readChallenge(Buffer.from(JSON.stringify({ uid: u.id, nonce: 'y', exp: Date.now() + 60000 })).toString('base64url')), null, 'and an unsealed one');
+  assert.equal(readChallenge(undefined), null);
+});
+
+test('the two-factor policy gates admins or everyone until they enroll', async () => {
+  const { startEnrollment, confirmEnrollment } = await import('../lib/identity/mfa.js');
+  const { totpCode } = await import('../lib/totp.js');
+  const admin = person('admin');
+  const u = person('user');
+  const waiting = person('pending');
+  assert.equal(gateOf(admin), null, 'optional by default');
+  setSetting('auth_mfa_policy', 'admins');
+  assert.equal(gateOf(admin), 'mfa');
+  assert.equal(gateOf(u), null);
+  assert.equal(gateOf(waiting), 'pending', 'pending stays pending');
+  setSetting('auth_mfa_policy', 'everyone');
+  assert.equal(gateOf(u), 'mfa');
+  const { secret } = await startEnrollment(u);
+  confirmEnrollment(u.id, totpCode(secret));
+  assert.equal(gateOf(u), null, 'enrolling lifts the gate');
+  setSetting('auth_mfa_policy', 'nonsense');
+  assert.equal(gateOf(admin), null, 'an unknown policy falls back to optional');
+  delSetting('auth_mfa_policy');
+});

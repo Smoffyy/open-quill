@@ -2033,3 +2033,70 @@ test('sharing hands out exactly the granted level, and nobody reaches what was n
     await mock.close();
   }
 });
+
+test('two-factor sign-in is a sealed challenge that cannot be skipped, replayed or reused', async () => {
+  const { totpCode } = await import('../lib/totp.js');
+  const cookieNamed = (res, name) => (res.headers['set-cookie'] || []).map(c => c.split(';')[0]).find(c => c.startsWith(name + '='));
+  const sam = await joinAs('mfa-user@example.com');
+  const S = as(sam);
+  const setup = (await S('POST', '/api/me/2fa/setup', { body: {} })).json;
+  assert.match(setup.qr, /^<svg/);
+  const enabled = await S('POST', '/api/me/2fa/enable', { body: { code: totpCode(setup.secret) } });
+  assert.equal(enabled.status, 200, enabled.text);
+  assert.equal(enabled.json.recoveryCodes.length, 10);
+  assert.equal(enabled.json.user.twoFactor, true);
+
+  const signIn = () => request('POST', '/api/auth/login', { origin: ORIGIN, secFetchSite: 'same-origin', body: { email: 'mfa-user@example.com', password: PASSWORD } });
+  const first = await signIn();
+  assert.equal(first.status, 200);
+  assert.deepEqual(first.json.mfa.methods, ['totp', 'recovery']);
+  assert.equal(first.json.user, undefined, 'no account before the second step');
+  assert.equal(cookieNamed(first, 'token'), undefined, 'and no session');
+  const challenge = cookieNamed(first, 'oq_mfa');
+  assert.ok(challenge);
+  const finish = (cookieValue, body) => request('POST', '/api/auth/mfa', { origin: ORIGIN, secFetchSite: 'same-origin', cookie: cookieValue, body });
+
+  assert.equal((await finish('', { code: totpCode(setup.secret, Date.now() + 30000) })).json.restart, true, 'no challenge, no second step');
+  assert.equal((await finish(challenge, { code: '000000' })).status, 401);
+  assert.equal((await finish(challenge, { code: totpCode(setup.secret) })).status, 401, 'the code used to enroll cannot be replayed');
+  const done = await finish(challenge, { code: totpCode(setup.secret, Date.now() + 30000) });
+  assert.equal(done.status, 200, done.text);
+  assert.equal(done.json.user.email, 'mfa-user@example.com');
+  const session = cookieNamed(done, 'token');
+  assert.ok(session);
+  assert.equal((await request('GET', '/api/me', { cookie: session })).status, 200);
+  assert.equal((await finish(challenge, { recovery: enabled.json.recoveryCodes[0] })).status, 401, 'a challenge opens one session');
+
+  const again = cookieNamed(await signIn(), 'oq_mfa');
+  assert.equal((await finish(again, { recovery: enabled.json.recoveryCodes[0] })).status, 200, 'a recovery code signs in');
+  const third = cookieNamed(await signIn(), 'oq_mfa');
+  assert.equal((await finish(third, { recovery: enabled.json.recoveryCodes[0] })).status, 401, 'once');
+
+  assert.equal((await browser('PUT', '/api/admin/auth/mfa', { body: { policy: 'everyone' } })).status, 400, 'an owner without two-factor cannot require it');
+  const mine = (await browser('POST', '/api/me/2fa/setup', { body: {} })).json;
+  assert.equal((await browser('POST', '/api/me/2fa/enable', { body: { code: totpCode(mine.secret) } })).status, 200);
+  try {
+    assert.equal((await as(sam)('PUT', '/api/admin/auth/mfa', { body: { policy: 'everyone' } })).status, 403, 'only the owner sets the policy');
+    const policy = await browser('PUT', '/api/admin/auth/mfa', { body: { policy: 'everyone' } });
+    assert.equal(policy.status, 200, policy.text);
+    const late = await joinAs('mfa-late@example.com');
+    const L = as(late);
+    const blocked = await L('GET', '/api/models');
+    assert.equal(blocked.status, 403);
+    assert.equal(blocked.json.gate, 'mfa');
+    assert.equal((await L('GET', '/api/me')).json.user.gate, 'mfa', 'the account can see why');
+    const lateSetup = (await L('POST', '/api/me/2fa/setup', { body: {} })).json;
+    assert.equal((await L('POST', '/api/me/2fa/enable', { body: { code: totpCode(lateSetup.secret) } })).status, 200, 'and enroll');
+    assert.equal((await L('GET', '/api/models')).status, 200, 'which lifts the gate on the same session');
+    assert.equal((await L('POST', '/api/me/2fa/disable', { body: { password: PASSWORD } })).status, 403, 'a required factor cannot be turned off');
+
+    assert.equal((await S('POST', `/api/admin/users/${late.id}/mfa-reset`)).status, 403, 'a user cannot reset anyone');
+    assert.equal((await browser('POST', `/api/admin/users/${late.id}/mfa-reset`)).status, 200);
+    assert.equal((await L('GET', '/api/me')).status, 401, 'a reset ends the account’s sessions');
+    assert.equal((await browser('DELETE', `/api/admin/users/${late.id}`)).status, 200);
+  } finally {
+    assert.equal((await browser('PUT', '/api/admin/auth/mfa', { body: { policy: 'optional' } })).status, 200);
+    assert.equal((await browser('POST', '/api/me/2fa/disable', { body: { password: PASSWORD } })).status, 200);
+    assert.equal((await browser('DELETE', `/api/admin/users/${sam.id}`)).status, 200);
+  }
+});

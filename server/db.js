@@ -36,6 +36,8 @@ function keyPragma(key) {
 }
 
 const KEY = loadKey();
+
+export const deriveKey = (label) => Buffer.from(crypto.hkdfSync('sha256', Buffer.from(KEY), Buffer.alloc(0), Buffer.from('open-quill ' + label), 32));
 const sdb = new Database(FILE);
 try { fs.chmodSync(FILE, 0o600); } catch {}
 sdb.pragma(`cipher='sqlcipher'`);
@@ -362,7 +364,8 @@ export const db = {
   groups: groupsCol,
   groupMembers: groupMembersCol,
   acl: aclCol,
-  uploads: collection('uploads')
+  uploads: collection('uploads'),
+  mfaFactors: collection('mfa_factors')
 };
 
 const sGet = sdb.prepare('SELECT value FROM settings WHERE key=?');

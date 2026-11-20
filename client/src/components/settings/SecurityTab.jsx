@@ -3,6 +3,7 @@ import { api } from '../../lib/api.js';
 import { t, tp, fmtDateTime, fmtRelative } from '../../i18n.jsx';
 import { Skel, SkelRows } from '../ui/Skeleton.jsx';
 import { browserName, systemName } from '../../lib/useragent.js';
+import TotpEnroll, { RecoveryCodes } from './TotpEnroll.jsx';
 
 const MIN_PASSWORD = 8;
 
@@ -52,10 +53,10 @@ function PasswordForm({ email }) {
 
 function TwoFactor({ user, onUpdated }) {
   const [on, setOn] = useState(!!user.twoFactor);
-  const [setup, setSetup] = useState(null);
-  const [code, setCode] = useState('');
+  const [enrolling, setEnrolling] = useState(false);
   const [password, setPassword] = useState('');
   const [recovery, setRecovery] = useState(null);
+  const [left, setLeft] = useState(user.recoveryLeft || 0);
   const [err, setErr] = useState('');
 
   async function run(fn, fallback) {
@@ -63,63 +64,47 @@ function TwoFactor({ user, onUpdated }) {
     try { await fn(); }
     catch (e) { setErr(e?.message || fallback); }
   }
-  const start = () => run(async () => { setRecovery(null); setSetup(await api.post('/api/me/2fa/setup', {})); }, t('Could not start setup.'));
-  const confirm = (e) => {
-    e.preventDefault();
-    if (code.length !== 6) return;
-    run(async () => {
-      const r = await api.post('/api/me/2fa/enable', { code });
-      setSetup(null); setCode(''); setOn(true); setRecovery(r.recoveryCodes);
-      onUpdated?.({ ...user, twoFactor: true });
-    }, t('Invalid code.'));
-  };
+  function enabled(r) {
+    setEnrolling(false); setOn(true); setRecovery(r.recoveryCodes); setLeft(r.recoveryCodes.length);
+    onUpdated?.(r.user || { ...user, twoFactor: true });
+  }
   const disable = () => run(async () => {
     await api.post('/api/me/2fa/disable', { password });
-    setOn(false); setPassword(''); setRecovery(null);
-    onUpdated?.({ ...user, twoFactor: false });
+    setOn(false); setPassword(''); setRecovery(null); setLeft(0);
+    onUpdated?.({ ...user, twoFactor: false, recoveryLeft: 0 });
   }, t('Could not disable.'));
   const regenerate = () => run(async () => {
     const r = await api.post('/api/me/2fa/recovery', { password });
-    setPassword(''); setRecovery(r.recoveryCodes);
+    setPassword(''); setRecovery(r.recoveryCodes); setLeft(r.recoveryCodes.length);
   }, t('Could not regenerate codes.'));
 
   return (
     <div className="sec-block">
       <div className="me-section-h">{t("Two-factor authentication")} {on && <span className="you-tag">{t("enabled")}</span>}</div>
       <div className="dz-err" role="alert">{err}</div>
-      {recovery && (
-        <div className="recovery-box">
-          <div className="muted-note">{t("Save these recovery codes somewhere safe. Each works once if you lose your authenticator. They will not be shown again.")}</div>
-          <div className="recovery-grid">{recovery.map(c => <code key={c}>{c}</code>)}</div>
-        </div>
-      )}
-      {!on && !setup && (
+      {recovery && <RecoveryCodes codes={recovery} />}
+      {!on && !enrolling && (
         <>
-          <div className="muted-note">{t("Require a code from an authenticator app as a second step at login.")}</div>
-          <button className="btn" onClick={start}>{t("Set up two-factor")}</button>
+          <div className="muted-note">
+            {user.twoFactorRequired ? t('Your organization requires two-factor authentication.') : t("Require a code from an authenticator app as a second step at login.")}
+          </div>
+          <button className="btn" onClick={() => { setRecovery(null); setEnrolling(true); }}>{t("Set up two-factor")}</button>
         </>
       )}
-      {!on && setup && (
-        <form onSubmit={confirm}>
-          <div className="muted-note">{t("In your authenticator app, add an account using this key, then enter the 6-digit code it shows.")}</div>
-          <div className="field"><label className="sub">{t("Secret key")}</label><code className="totp-secret">{setup.secret}</code></div>
-          <div className="field"><label className="sub">{t("Or paste this setup URL")}</label><code className="totp-uri">{setup.otpauth}</code></div>
-          <input className="code-input" placeholder="123456" inputMode="numeric" autoComplete="one-time-code" aria-label={t("Two-factor code")}
-            value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} />
-          <div className="edit-actions">
-            <button type="button" className="btn ghost" onClick={() => { setSetup(null); setCode(''); }}>{t("Cancel")}</button>
-            <button type="submit" className="btn primary" disabled={code.length !== 6}>{t("Verify & enable")}</button>
-          </div>
-        </form>
-      )}
+      {!on && enrolling && <TotpEnroll onEnabled={enabled} onCancel={() => setEnrolling(false)} />}
       {on && (
         <>
-          <div className="muted-note">{t("Enter your password to regenerate recovery codes or turn off two-factor.")}</div>
+          <div className="muted-note">
+            {tp(left, '{n} recovery code left.', '{n} recovery codes left.')}{' '}
+            {user.twoFactorRequired
+              ? t('Your organization requires two-factor authentication, so it cannot be turned off. Enter your password to regenerate recovery codes.')
+              : t("Enter your password to regenerate recovery codes or turn off two-factor.")}
+          </div>
           <input type="password" className="short-input" placeholder={t("Password")} aria-label={t("Password")} autoComplete="current-password"
             value={password} onChange={(e) => setPassword(e.target.value)} />
           <div className="edit-actions">
             <button className="btn ghost" onClick={regenerate} disabled={!password}>{t("Regenerate recovery codes")}</button>
-            <button className="btn ghost" onClick={disable} disabled={!password}>{t("Disable two-factor")}</button>
+            {!user.twoFactorRequired && <button className="btn ghost" onClick={disable} disabled={!password}>{t("Disable two-factor")}</button>}
           </div>
         </>
       )}

@@ -4,8 +4,9 @@ import crypto from 'crypto';
 import * as cookie from 'cookie';
 import { db, uid, now, getSetting, setSetting } from './db.js';
 import { clientIp } from './lib/audit.js';
-import { permissionsOf, roleOf, gateOf, isActive, isOwner } from './lib/authz/effective.js';
+import { permissionsOf, roleOf, gateOf, isActive, isOwner, mfaRequired } from './lib/authz/effective.js';
 import { roleName } from './lib/authz/roles.js';
+import { hasTotp, recoveryLeft } from './lib/identity/mfa.js';
 
 let SECRET = getSetting('jwt_secret');
 if (!SECRET) { SECRET = crypto.randomBytes(48).toString('base64url'); setSetting('jwt_secret', SECRET); }
@@ -34,7 +35,7 @@ function maxSessions() {
 export function hash(pw) { return argon2.hash(pw, ARGON_OPTS); }
 export async function check(pw, h) { try { return await argon2.verify(h, pw); } catch { return false; } }
 
-export function createSession(user, req, method = 'password') {
+export function createSession(user, req, method = 'password', mfa = null) {
   const t = now();
   const ua = String(req?.headers?.['user-agent'] || '').slice(0, 300);
   const ip = clientIp(req);
@@ -46,7 +47,7 @@ export function createSession(user, req, method = 'password') {
       db.sessions.removeByIds(sorted.slice(0, existing.length - cap + 1).map(o => o.id));
     }
   }
-  const s = db.sessions.insert({ id: uid(), user_id: user.id, ip, user_agent: ua, method, auth_at: t, last_seen: t, created_at: t });
+  const s = db.sessions.insert({ id: uid(), user_id: user.id, ip, user_agent: ua, method, mfa, auth_at: t, mfa_at: mfa ? t : null, last_seen: t, created_at: t });
   return s.id;
 }
 export function sign(user, sessionId) { return jwt.sign({ id: user.id, sid: sessionId }, SECRET, { expiresIn: `${tokenLifeDays()}d` }); }
@@ -58,7 +59,7 @@ export function publicUser(u) {
   return {
     id: u.id, email: u.email, displayName: u.display_name || (u.email || '').split('@')[0],
     role: roleOf(u), roleName: roleName(roleOf(u)), owner: isOwner(u), gate: gateOf(u), source: u.source || 'local', hasPassword: !!u.password_hash,
-    permissions: [...permissionsOf(u)], twoFactor: !!u.totp_enabled,
+    permissions: [...permissionsOf(u)], twoFactor: hasTotp(u.id), twoFactorRequired: mfaRequired(u), recoveryLeft: recoveryLeft(u.id),
     prefs: u.prefs || {}, instructions: u.instructions || '', styles: Array.isArray(u.styles) ? u.styles : []
   };
 }
@@ -87,7 +88,8 @@ export function authAccount(req, res, next) {
 export function authMiddleware(req, res, next) {
   authAccount(req, res, () => {
     const gate = gateOf(req.user);
-    if (gate) return res.status(403).json({ error: 'Your account is waiting for approval.', gate });
+    if (gate === 'pending') return res.status(403).json({ error: 'Your account is waiting for approval.', gate });
+    if (gate) return res.status(403).json({ error: 'Set up two-factor authentication to continue.', gate });
     next();
   });
 }

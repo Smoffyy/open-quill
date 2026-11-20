@@ -1,6 +1,7 @@
 import { permissionsOfRole, rankOfRole, rolesKey, PENDING, ADMIN, OWNER } from './roles.js';
 import { graph, groupsOfUser, pathTo } from './groups.js';
-import { MEMBER, tierOf } from './permissions.js';
+import { MEMBER, ADMIN as ADMIN_TIER, tierOf } from './permissions.js';
+import { mfaPolicy, hasTotp } from '../identity/mfa.js';
 
 export const ACTIVE = 'active';
 export const DISABLED = 'disabled';
@@ -13,7 +14,15 @@ export const roleOf = (user) => (user && typeof user.role === 'string' && user.r
 export const isActive = (user) => !!user && user.status !== DISABLED;
 export const isOwner = (user) => isActive(user) && roleOf(user) === OWNER;
 export const rankOf = (user) => rankOfRole(roleOf(user));
-export const gateOf = (user) => (roleOf(user) === PENDING ? 'pending' : null);
+export function mfaRequired(user) {
+  const policy = mfaPolicy();
+  return policy === 'everyone' || (policy === 'admins' && [...permissionsOfRole(roleOf(user))].some(p => tierOf(p) === ADMIN_TIER));
+}
+
+export function gateOf(user) {
+  if (roleOf(user) === PENDING) return 'pending';
+  return mfaRequired(user) && !hasTotp(user.id) ? 'mfa' : null;
+}
 
 const holdsEverything = (role) => role === OWNER || role === ADMIN;
 

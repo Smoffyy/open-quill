@@ -43,15 +43,27 @@ export default function Login({ onLogin, cfg }) {
     if (!pw) { setBad('pw'); setErr(t('Enter your email and password.')); return; }
     setBusy(true);
     try {
-      const body = { email: email.trim(), password: pw };
-      if (twofa) { if (useRecovery) body.recovery = code; else body.code = code; }
-      const { user } = await api.post('/api/auth/login', body);
+      const r = await api.post('/api/auth/login', { email: email.trim(), password: pw });
+      if (r.mfa) { setTwofa(true); setCode(''); setUseRecovery(false); }
+      else onLogin(r.user);
+    } catch (e) {
+      setBad('credentials');
+      setErr(String(e?.message || ''));
+    }
+    setBusy(false);
+  }
+
+  async function verify() {
+    setErr(''); setBad('');
+    if (!code.trim()) { setBad('code'); setErr(useRecovery ? t('Enter a recovery code') : t('Enter your two-factor code')); return; }
+    setBusy(true);
+    try {
+      const { user } = await api.post('/api/auth/mfa', useRecovery ? { recovery: code } : { code });
       onLogin(user);
     } catch (e) {
-      const m = String(e?.message || '');
-      if (/two-factor required/i.test(m)) { setTwofa(true); setErr(''); setCode(''); }
-      else if (/two-factor code/i.test(m)) { setTwofa(true); setBad('code'); setErr(t('That code was not valid. Try again.')); }
-      else { setBad('credentials'); setErr(m); }
+      if (e?.body?.restart) { setTwofa(false); setCode(''); setPw(''); setBad('credentials'); }
+      else setBad('code');
+      setErr(String(e?.message || ''));
     }
     setBusy(false);
   }
@@ -70,7 +82,7 @@ export default function Login({ onLogin, cfg }) {
     setBusy(false);
   }
 
-  const submit = (twofa || mode !== 'signup') ? signIn : signUp;
+  const submit = twofa ? verify : mode !== 'signup' ? signIn : signUp;
   const onSubmit = (e) => { e.preventDefault(); if (!busy) submit(); };
   const clear = () => { if (err || bad) { setErr(''); setBad(''); } };
   const errId = 'login-err';
@@ -101,6 +113,7 @@ export default function Login({ onLogin, cfg }) {
               <button type="button" className="back" onClick={() => { setUseRecovery(r => !r); setCode(''); setErr(''); setBad(''); }}>
                 {useRecovery ? t('Use authenticator code instead') : t('Use a recovery code instead')}
               </button>
+              <button type="button" className="back" onClick={() => switchMode('signin')}>{t('Back to sign in')}</button>
             </>
           ) : (
             <>

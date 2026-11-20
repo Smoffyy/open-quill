@@ -45,6 +45,7 @@ export function purgeUser(userId) {
   });
   purgeUnreferencedUploads(new Set(db.uploads.where('user_id', userId).map(u => '/uploads/' + u.file)));
   db.groupMembers.dropMember('user', userId);
+  db.mfaFactors.removeWhere('user_id', userId);
   const sessions = db.sessions.byUser(userId);
   db.sessions.removeWhere('user_id', userId);
   for (const s of sessions) killSessionSockets(s.id);

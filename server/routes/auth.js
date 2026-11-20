@@ -6,7 +6,10 @@ import { isLastOwner } from '../lib/authz/rules.js';
 import { PENDING, USER, OWNER } from '../lib/authz/roles.js';
 import { signupPolicy, domainAllowed, setupTokenMatches } from '../lib/identity/signup.js';
 import { oneShot, stripThink } from '../llm/index.js';
-import { randomSecret, verifyTotp, otpauthUri, makeRecoveryCodes, hashRecovery } from '../lib/totp.js';
+import { randomSecret } from '../lib/totp.js';
+import { hasTotp, startEnrollment, confirmEnrollment, regenerateCodes, removeFactors, verifySecondFactor, issueChallenge, readChallenge, spendChallenge, CHALLENGE_SECONDS } from '../lib/identity/mfa.js';
+import { mfaRequired } from '../lib/authz/effective.js';
+import { broadcastToUser } from '../lib/ws/broadcast.js';
 import { logAudit, clientIp } from '../lib/audit.js';
 import { plainSnippet } from '../lib/history.js';
 import { purgeUserChats, purgeUser } from '../lib/purge.js';
@@ -26,6 +29,15 @@ const setCookie = (req, res, token) =>
     `token=${token}`, 'HttpOnly', 'Path=/',
     `Max-Age=${token ? sessionMaxAgeSeconds() : 0}`,
     'SameSite=Lax',
+    ...(isHttps(req) ? ['Secure'] : [])
+  ].join('; '));
+
+const MFA_COOKIE = 'oq_mfa';
+const challengeCookie = (req, res, value) =>
+  res.append('Set-Cookie', [
+    `${MFA_COOKIE}=${value}`, 'HttpOnly', 'Path=/api/auth',
+    `Max-Age=${value ? CHALLENGE_SECONDS : 0}`,
+    'SameSite=Strict',
     ...(isHttps(req) ? ['Secure'] : [])
   ].join('; '));
 
@@ -112,25 +124,44 @@ export default function registerAuthRoutes(app) {
       return res.status(401).json({ error: 'Incorrect email or password.' });
     }
     if (!isActive(u)) return res.status(403).json({ error: 'This account is disabled. Contact your administrator.' });
-    if (u.totp_enabled && u.totp_secret) {
-      const code = String(req.body?.code || '').trim();
-      const recovery = String(req.body?.recovery || '').trim();
-      if (!code && !recovery) return res.status(401).json({ error: 'two-factor required', twoFactor: true });
-      let ok = false;
-      if (code) ok = verifyTotp(u.totp_secret, code);
-      if (!ok && recovery) {
-        const h = hashRecovery(recovery);
-        const left = (u.recovery_codes || []).filter(c => c !== h);
-        if (left.length !== (u.recovery_codes || []).length) { ok = true; db.users.update(u.id, { recovery_codes: left }); }
-      }
-      // The counter is cleared only once the whole login succeeds, so a stolen password
-      // still cannot be used to grind second-factor codes without limit.
-      if (!ok) { keys.forEach(noteLoginFail); return res.status(401).json({ error: 'Invalid two-factor code.', twoFactor: true }); }
+    // The counter is cleared only once the whole login succeeds, so a stolen password
+    // still cannot be used to grind second-factor codes without limit.
+    if (hasTotp(u.id)) {
+      challengeCookie(req, res, issueChallenge(u, 'password'));
+      return res.json({ mfa: { methods: ['totp', 'recovery'] } });
     }
     keys.forEach(k => loginFails.delete(k));
     const sid = createSession(u, req);
     setCookie(req, res, sign(u, sid));
     logAudit(req, 'auth.login', { type: 'user', id: u.id });
+    res.json({ user: publicUser(u) });
+  });
+
+  app.post('/api/auth/mfa', (req, res) => {
+    const found = readChallenge(req.cookies?.[MFA_COOKIE]);
+    if (!found) {
+      challengeCookie(req, res, '');
+      return res.status(401).json({ error: 'Your sign-in expired. Enter your email and password again.', restart: true });
+    }
+    const { user: u, challenge } = found;
+    const keys = [...limitKeys(req, u.email), `acct:${u.id}`];
+    if (anyLimited(keys)) return res.status(429).json({ error: TOO_MANY });
+    if (!isActive(u)) {
+      challengeCookie(req, res, '');
+      return res.status(403).json({ error: 'This account is disabled. Contact your administrator.' });
+    }
+    const via = verifySecondFactor(u.id, { code: String(req.body?.code || '').trim(), recovery: String(req.body?.recovery || '').trim() });
+    if (!via) {
+      keys.forEach(noteLoginFail);
+      logAudit(req, 'auth.mfa_fail', { type: 'user', id: u.id });
+      return res.status(401).json({ error: 'That code is not valid. Check your authenticator and try again.' });
+    }
+    spendChallenge(challenge);
+    keys.forEach(k => loginFails.delete(k));
+    const sid = createSession(u, req, challenge.method, via);
+    setCookie(req, res, sign(u, sid));
+    challengeCookie(req, res, '');
+    logAudit(req, 'auth.login', { type: 'user', id: u.id, meta: { mfa: via } });
     res.json({ user: publicUser(u) });
   });
 
@@ -324,42 +355,37 @@ export default function registerAuthRoutes(app) {
     res.json({ ok: true });
   });
 
-  app.post('/api/me/2fa/setup', authAccount, (req, res) => {
-    if (req.user.totp_enabled) return res.status(400).json({ error: 'Two-factor is already enabled.' });
-    const secret = randomSecret();
-    db.users.update(req.user.id, { totp_pending: secret });
-    const appName = getSetting('app_name', 'open-quill') || 'open-quill';
-    res.json({ secret, otpauth: otpauthUri(secret, req.user.email, appName) });
+  app.post('/api/me/2fa/setup', authAccount, async (req, res) => {
+    if (hasTotp(req.user.id)) return res.status(400).json({ error: 'Two-factor is already enabled.' });
+    res.json(await startEnrollment(req.user));
   });
   app.post('/api/me/2fa/enable', authAccount, (req, res) => {
-    const u = db.users.byId(req.user.id);
-    if (u.totp_enabled) return res.status(400).json({ error: 'Two-factor is already enabled.' });
-    if (!u.totp_pending) return res.status(400).json({ error: 'Start setup first.' });
-    if (loginLimited(`acct:${u.id}`)) return res.status(429).json({ error: TOO_MANY });
-    if (!verifyTotp(u.totp_pending, String(req.body?.code || '').trim())) {
-      noteLoginFail(`acct:${u.id}`);
-      return res.status(401).json({ error: 'That code is not valid. Check your authenticator and try again.' });
+    const key = `acct:${req.user.id}`;
+    if (hasTotp(req.user.id)) return res.status(400).json({ error: 'Two-factor is already enabled.' });
+    if (loginLimited(key)) return res.status(429).json({ error: TOO_MANY });
+    const r = confirmEnrollment(req.user.id, String(req.body?.code || '').trim());
+    if (r.error) {
+      if (r.status === 401) noteLoginFail(key);
+      return res.status(r.status).json({ error: r.error });
     }
-    const codes = makeRecoveryCodes();
-    db.users.update(u.id, { totp_secret: u.totp_pending, totp_enabled: 1, totp_pending: null, recovery_codes: codes.map(hashRecovery) });
-    logAudit(req, 'account.2fa_enable', { type: 'user', id: u.id });
-    res.json({ ok: true, recoveryCodes: codes });
+    db.sessions.update(req.sessionId, { mfa: 'totp', mfa_at: now() });
+    logAudit(req, 'account.2fa_enable', { type: 'user', id: req.user.id });
+    broadcastToUser(req.user.id, { type: 'account' });
+    res.json({ ok: true, recoveryCodes: r.recoveryCodes, user: publicUser(db.users.byId(req.user.id)) });
   });
   app.post('/api/me/2fa/disable', authAccount, async (req, res) => {
-    const u = db.users.byId(req.user.id);
-    if (!u.totp_enabled) return res.json({ ok: true });
+    if (!hasTotp(req.user.id)) return res.json({ ok: true });
+    if (mfaRequired(req.user)) return res.status(403).json({ error: 'Your organization requires two-factor authentication.' });
     if (!(await reauth(req, res, req.body?.password))) return;
-    db.users.update(u.id, { totp_secret: null, totp_enabled: 0, totp_pending: null, recovery_codes: [] });
-    logAudit(req, 'account.2fa_disable', { type: 'user', id: u.id });
+    removeFactors(req.user.id);
+    logAudit(req, 'account.2fa_disable', { type: 'user', id: req.user.id });
     res.json({ ok: true });
   });
   app.post('/api/me/2fa/recovery', authAccount, async (req, res) => {
-    const u = db.users.byId(req.user.id);
-    if (!u.totp_enabled) return res.status(400).json({ error: 'Two-factor is not enabled.' });
+    if (!hasTotp(req.user.id)) return res.status(400).json({ error: 'Two-factor is not enabled.' });
     if (!(await reauth(req, res, req.body?.password))) return;
-    const codes = makeRecoveryCodes();
-    db.users.update(u.id, { recovery_codes: codes.map(hashRecovery) });
-    logAudit(req, 'account.2fa_recovery', { type: 'user', id: u.id });
+    const codes = regenerateCodes(req.user.id);
+    logAudit(req, 'account.2fa_recovery', { type: 'user', id: req.user.id });
     res.json({ ok: true, recoveryCodes: codes });
   });
 

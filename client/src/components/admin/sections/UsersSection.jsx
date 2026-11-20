@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAdmin } from '../store.jsx';
 import { Card, Rows, Row, Input, Area, Seg, Select, Btn, IconBtn, Acts, Table, Badge, Empty, KV, Note, fmtMoney, fmtAgo } from '../ui.jsx';
-import { Trash, Users, Logout, Alert, Eye } from '../../ui/icons.jsx';
+import { Trash, Users, Logout, Alert, Eye, Shield } from '../../ui/icons.jsx';
 import { t, tk, tp } from '../../../i18n.jsx';
 import { Skel, SkelTable } from '../../ui/Skeleton.jsx';
 import { roleLabel } from '../../ui/roleLabel.jsx';
@@ -17,11 +17,37 @@ const POLICIES = [
   { value: 'closed', label: tk('Closed'), note: tk('Nobody can create an account. Existing accounts keep working.') }
 ];
 
+const MFA_POLICIES = [
+  { value: 'optional', label: tk('Optional'), note: tk('Everyone can choose whether to use two-factor.') },
+  { value: 'admins', label: tk('Admins'), note: tk('Anyone with an admin permission must set up two-factor before using the app.') },
+  { value: 'everyone', label: tk('Everyone'), note: tk('Every account must set up two-factor before using the app.') }
+];
+
 const VIEWS = [
   { value: 'all', label: tk('All'), filter: { role: '', status: '' } },
   { value: 'pending', label: tk('Pending'), filter: { role: 'pending', status: '' } },
   { value: 'disabled', label: tk('Disabled'), filter: { role: '', status: 'disabled' } }
 ];
+
+function TwoFactorPolicy({ mfa, save }) {
+  if (!mfa) return null;
+  const policy = MFA_POLICIES.find(p => p.value === mfa.policy) || MFA_POLICIES[0];
+  return (
+    <Card title={t('Two-factor authentication')} sub={mfa.editable ? null : t('Only an owner can change who must use two-factor.')}>
+      <Rows>
+        <Row label={t('Required for')} note={t(policy.note)}>
+          {mfa.editable
+            ? <Seg value={policy.value} label={t('Required for')} onChange={save}
+              options={MFA_POLICIES.map(p => ({ value: p.value, label: t(p.label) }))} />
+            : <span className="dim">{t(policy.label)}</span>}
+        </Row>
+        <Row label={t('Coverage')} note={mfa.owing ? tp(mfa.owing, '{n} account has to set it up before it can continue.', '{n} accounts have to set it up before they can continue.') : null}>
+          <span className="dim">{t('{n} of {total} accounts', { n: mfa.enrolled, total: mfa.total })}</span>
+        </Row>
+      </Rows>
+    </Card>
+  );
+}
 
 function Registration({ signup, save }) {
   const [domains, setDomains] = useState('');
@@ -91,6 +117,7 @@ function UserRow({ u, me, roleName, order, M, onAccess }) {
           {u.manage && (
             <Btn size="sm" onClick={() => M.setStatus(u.id, disabled ? 'active' : 'disabled')}>{disabled ? t('Enable') : t('Disable')}</Btn>
           )}
+          {u.manage && u.twoFactor && <IconBtn label={t('Reset two-factor')} onClick={() => M.resetMfa(u)}><Shield /></IconBtn>}
           {u.manage && <IconBtn label={t('Sign out everywhere')} onClick={() => M.revokeSessions(u.id)}><Logout /></IconBtn>}
           {u.manage && <IconBtn kind="danger" label={t('Remove account')} onClick={() => M.remove(u)}><Trash /></IconBtn>}
         </Acts>
@@ -119,6 +146,7 @@ export default function UsersSection() {
   return (
     <>
       <Registration signup={M.signup} save={M.saveSignup} />
+      <TwoFactorPolicy mfa={M.mfa} save={M.saveMfa} />
 
       {M.counts.pending > 0 && view !== 'pending' && (
         <Note tone="warn" icon={<Alert />}>

@@ -13,6 +13,7 @@ export function useUsers({ confirm, enabled }) {
   const [roles, setRoles] = useState([]);
   const [registry, setRegistry] = useState([]);
   const [signup, setSignup] = useState(null);
+  const [mfa, setMfa] = useState(null);
   const seq = useRef(0);
 
   const fetchPage = useCallback(async (offset, append) => {
@@ -37,6 +38,7 @@ export function useUsers({ confirm, enabled }) {
     if (!enabled) return;
     api.get('/api/admin/roles').then(d => { setRoles(d.roles || []); setRegistry(d.permissions || []); }).catch(() => {});
     api.get('/api/admin/auth/signup').then(setSignup).catch(() => {});
+    api.get('/api/admin/auth/mfa').then(setMfa).catch(() => {});
   }, [enabled]);
 
   const setFilter = useCallback((patch) => setFilterRaw(f => ({ ...f, ...patch })), []);
@@ -86,8 +88,26 @@ export function useUsers({ confirm, enabled }) {
     catch (e) { notify(e?.message || t('The sign-up policy could not be saved.'), { kind: 'error' }); }
   }, []);
 
+  const saveMfa = useCallback(async (policy) => {
+    try { setMfa(await api.put('/api/admin/auth/mfa', { policy })); }
+    catch (e) { notify(e?.message || t('The two-factor policy could not be saved.'), { kind: 'error' }); }
+  }, []);
+
+  const resetMfa = useCallback((user) => {
+    confirm({
+      title: t('Reset two-factor'),
+      message: t('{who} will be signed out everywhere and can sign in with their password alone until they set up two-factor again.', { who: user.email || t('this account') }),
+      confirm: t('Reset two-factor'),
+      onConfirm: async () => {
+        if (await act(() => api.post('/api/admin/users/' + user.id + '/mfa-reset', {}), t('Two-factor could not be reset.'))) {
+          api.get('/api/admin/auth/mfa').then(setMfa).catch(() => {});
+        }
+      }
+    });
+  }, [confirm, act]);
+
   return {
-    ...state, filter, setFilter, loadMore, reload, roles, registry, signup,
-    setRole, setStatus, revokeSessions, setBudget, remove, saveSignup
+    ...state, filter, setFilter, loadMore, reload, roles, registry, signup, mfa,
+    setRole, setStatus, revokeSessions, setBudget, remove, saveSignup, saveMfa, resetMfa
   };
 }

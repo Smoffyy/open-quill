@@ -11,7 +11,7 @@ import { layoutOf } from './lib/layout.js';
 import { LayoutContext } from './lib/uselayout.js';
 import { kwargValuesArr, defaultValueOf, isRange, kwargAccepts } from './lib/kwargs.js';
 import Login from './components/pages/Login.jsx';
-import Pending from './components/pages/Pending.jsx';
+import Pending, { MfaRequired } from './components/pages/Pending.jsx';
 import Sidebar from './components/sidebar/Sidebar.jsx';
 import AppBackground from './components/chat/AppBackground.jsx';
 import Composer from './components/composer/Composer.jsx';
@@ -1604,6 +1604,7 @@ export default function App() {
 
   if (user === undefined) return <div style={{ height: '100%', background: 'var(--bg)' }} />;
   if (!user) return <Login cfg={authCtx} onLogin={(u) => setUser(u)} />;
+  if (user.gate === 'mfa') return <MfaRequired user={user} cfg={authCtx} onUser={setUser} />;
   if (user.gate) return <Pending user={user} cfg={authCtx} onUser={setUser} />;
 
   const model = modelById.get(currentId);

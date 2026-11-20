@@ -10,6 +10,7 @@ import { roleList, roleExists, isBuiltinRole, CUSTOM_MIN_RANK, CUSTOM_MAX_RANK, 
 import { PERMISSIONS, MEMBER, cleanPermissions } from '../lib/authz/permissions.js';
 import { setStatus, endActivity, accountChanged } from '../lib/authz/accounts.js';
 import { broadcastAll } from '../lib/ws/index.js';
+import { hasTotp, removeFactors } from '../lib/identity/mfa.js';
 
 const OUTRANKED = 'You can only manage accounts below your own role.';
 const LAST_OWNER = 'The organization needs at least one active owner.';
@@ -46,7 +47,7 @@ function userRow(actor, u, spend, seen, roles) {
   return {
     id: u.id, email: u.email, displayName: u.display_name || (u.email || '').split('@')[0],
     role: roleOf(u), status: u.status === DISABLED ? DISABLED : ACTIVE, owner: isOwner(u), source: u.source || 'local',
-    createdAt: u.created_at || 0, lastSeen: seen.get(u.id) || 0, twoFactor: !!u.totp_enabled,
+    createdAt: u.created_at || 0, lastSeen: seen.get(u.id) || 0, twoFactor: hasTotp(u.id),
     budget: u.budget == null ? null : Number(u.budget), monthSpend: spend.get(u.id) || 0,
     manage, assignable: manage ? roles.filter(r => r !== roleOf(u) && canAssign(actor, u, r)) : []
   };
@@ -124,6 +125,17 @@ export default function registerPeopleRoutes(app) {
     if (!u) return;
     endActivity(u.id);
     logAudit(req, 'user.sessions_revoke', { type: 'user', id: u.id, meta: { email: u.email } });
+    res.json({ ok: true });
+  });
+
+  app.post('/api/admin/users/:id/mfa-reset', ...users, (req, res) => {
+    const u = loadTarget(req, res);
+    if (!u) return;
+    if (u.id === req.user.id) return res.status(403).json({ error: 'Turn off your own two-factor in Settings.' });
+    if (!hasTotp(u.id)) return res.json({ ok: true });
+    removeFactors(u.id);
+    endActivity(u.id);
+    logAudit(req, 'user.mfa_reset', { type: 'user', id: u.id, meta: { email: u.email } });
     res.json({ ok: true });
   });
 

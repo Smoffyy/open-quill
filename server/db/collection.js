@@ -22,7 +22,8 @@ export const MIRROR = {
   user_groups: { name_key: o => o.name_key ?? null, source: o => o.source ?? 'local', updated_at: o => o.updated_at ?? 0 },
   group_members: { group_id: o => o.group_id ?? null, member_type: o => o.member_type ?? null, member_id: o => o.member_id ?? null, source: o => o.source ?? 'manual' },
   acl: { resource_type: o => o.resource_type ?? null, resource_id: o => o.resource_id ?? null, principal_type: o => o.principal_type ?? null, principal_id: o => o.principal_id ?? null, level: o => o.level ?? null },
-  uploads: { user_id: o => o.user_id ?? null, created_at: o => o.created_at ?? 0 }
+  uploads: { user_id: o => o.user_id ?? null, created_at: o => o.created_at ?? 0 },
+  mfa_factors: { user_id: o => o.user_id ?? null, type: o => o.type ?? null }
 };
 
 const bumps = new Map();

@@ -121,7 +121,10 @@ CREATE INDEX IF NOT EXISTS idx_group_members_member ON group_members(member_type
 CREATE UNIQUE INDEX IF NOT EXISTS idx_acl_entry ON acl(resource_type, resource_id, principal_type, principal_id);
 CREATE INDEX IF NOT EXISTS idx_acl_principal ON acl(principal_type, principal_id);
 CREATE TABLE IF NOT EXISTS uploads (id TEXT PRIMARY KEY, user_id TEXT, created_at INTEGER, data TEXT NOT NULL);
-CREATE INDEX IF NOT EXISTS idx_uploads_user ON uploads(user_id);`
+CREATE INDEX IF NOT EXISTS idx_uploads_user ON uploads(user_id);`,
+
+  `CREATE TABLE IF NOT EXISTS mfa_factors (id TEXT PRIMARY KEY, user_id TEXT, type TEXT, data TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_mfa_factors_user ON mfa_factors(user_id, type);`
 ];
 
 export const LATEST_VERSION = MIGRATIONS.length + 1;
