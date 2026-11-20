@@ -2414,3 +2414,25 @@ test('SCIM provisions users and groups the way Okta and Entra ID drive it, and n
     for (const g of (await browser('GET', '/api/admin/groups')).json.groups.filter(g => g.source === 'scim')) await browser('DELETE', `/api/admin/groups/${g.id}`);
   }
 });
+
+test('the event log records failed sign-ins, filters by category and exports JSON Lines', async () => {
+  const signIn = (password) => request('POST', '/api/auth/login', { origin: ORIGIN, secFetchSite: 'same-origin', body: { email: 'nobody-here@example.com', password } });
+  assert.equal((await signIn('wrong-password')).status, 401);
+  assert.equal((await browser('PUT', '/api/admin/auth/mfa', { body: { policy: 'optional' } })).status, 200);
+  const signins =(await browser('GET', '/api/admin/audit?category=signin&limit=200')).json;
+  assert.ok(signins.entries.every(e => e.category === 'signin'));
+  const failed = signins.entries.find(e => e.action === 'auth.login_fail');
+  assert.ok(failed, 'a failed sign-in is recorded');
+  assert.equal(failed.meta.email, 'nobody-here@example.com');
+  assert.equal(failed.meta.method, 'password');
+  const admin = (await browser('GET', '/api/admin/audit?category=administration&limit=200')).json;
+  assert.ok(admin.entries.length > 0 && admin.entries.every(e => e.category === 'administration'));
+  assert.equal((await browser('GET', '/api/admin/audit?category=bogus')).json.total, (await browser('GET', '/api/admin/audit')).json.total, 'an unknown category filters nothing');
+  const csv = await browser('GET', '/api/admin/audit/export');
+  assert.match(csv.text.split('\n')[0], /^timestamp,actor,action,category,/);
+  const lines = await browser('GET', '/api/admin/audit/export?format=jsonl');
+  assert.match(lines.headers['content-type'], /application\/x-ndjson/);
+  const rows = lines.text.trim().split('\n').map(l => JSON.parse(l));
+  assert.ok(rows.some(r => r.action === 'auth.login_fail' && r.category === 'signin'));
+  assert.ok(rows.every(r => r.timestamp && r.action && r.category));
+});

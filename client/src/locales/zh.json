@@ -1303,7 +1303,6 @@
   "Thumbs users left on replies, newest first.": "用户对回复留下的赞和踩，按时间从新到旧排列。",
   "feedback thumbs quality reviews votes": "反馈 赞踩 质量 评价 投票",
   "Event log": "事件日志",
-  "Sensitive admin actions, retained for 120 days.": "敏感的管理操作，保留 120 天。",
   "audit history trail security actions": "审计 历史 记录 安全 操作",
   "Actor": "操作者",
   "Action": "操作",
@@ -3929,5 +3928,9 @@
   "provisioned": "已预配",
   "directory": "目录",
   "proxy": "代理",
-  "Your organization manages this account, so it can’t be deleted here.": "此账号由你的组织管理，因此无法在这里删除。"
+  "Your organization manages this account, so it can’t be deleted here.": "此账号由你的组织管理，因此无法在这里删除。",
+  "Access": "访问",
+  "Export JSON Lines": "导出 JSON Lines",
+  "Category": "类别",
+  "Sign-ins, access changes, provisioning and admin actions, retained for 120 days.": "登录、访问变更、预配和管理操作，保留 120 天。"
 }

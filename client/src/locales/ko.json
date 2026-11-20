@@ -1403,7 +1403,6 @@
   "Send to": "전송 대상",
   "Send while hidden": "숨겨진 상태에서 전송",
   "Sensitive admin actions appear here as they happen.": "민감한 관리자 작업이 발생할 때마다 여기에 표시됩니다.",
-  "Sensitive admin actions, retained for 120 days.": "민감한 관리자 작업이며, 120일간 보관됩니다.",
   "Sent": "전송됨",
   "Sent as a new message when this reply finishes.": "이 답변이 끝나면 새 메시지로 전송됩니다.",
   "Sent in": "전송 위치",
@@ -3929,5 +3928,9 @@
   "provisioned": "프로비저닝됨",
   "directory": "디렉터리",
   "proxy": "프록시",
-  "Your organization manages this account, so it can’t be deleted here.": "조직에서 관리하는 계정이므로 여기에서 삭제할 수 없습니다."
+  "Your organization manages this account, so it can’t be deleted here.": "조직에서 관리하는 계정이므로 여기에서 삭제할 수 없습니다.",
+  "Access": "접근",
+  "Export JSON Lines": "JSON Lines로 내보내기",
+  "Category": "범주",
+  "Sign-ins, access changes, provisioning and admin actions, retained for 120 days.": "로그인, 접근 변경, 프로비저닝, 관리 작업. 120일 동안 보관됩니다."
 }

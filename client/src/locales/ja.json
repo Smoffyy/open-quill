@@ -1403,7 +1403,6 @@
   "Send to": "送信先",
   "Send while hidden": "非表示のまま送信",
   "Sensitive admin actions appear here as they happen.": "機密性の高い管理者操作が、発生するたびにここに表示されます。",
-  "Sensitive admin actions, retained for 120 days.": "機密性の高い管理者操作。120日間保持されます。",
   "Sent": "送信済み",
   "Sent as a new message when this reply finishes.": "この返信が完了すると新しいメッセージとして送信されます。",
   "Sent in": "送信先",
@@ -3929,5 +3928,9 @@
   "provisioned": "プロビジョニング済み",
   "directory": "ディレクトリ",
   "proxy": "プロキシ",
-  "Your organization manages this account, so it can’t be deleted here.": "このアカウントは組織が管理しているため、ここでは削除できません。"
+  "Your organization manages this account, so it can’t be deleted here.": "このアカウントは組織が管理しているため、ここでは削除できません。",
+  "Access": "アクセス",
+  "Export JSON Lines": "JSON Lines で書き出し",
+  "Category": "カテゴリ",
+  "Sign-ins, access changes, provisioning and admin actions, retained for 120 days.": "サインイン、アクセスの変更、プロビジョニング、管理操作。120 日間保持されます。"
 }

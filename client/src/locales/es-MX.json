@@ -1693,7 +1693,6 @@
   "Send button": "Botón de enviar",
   "Send to": "Enviar a",
   "Sensitive admin actions appear here as they happen.": "Las acciones sensibles de administración aparecen aquí conforme ocurren.",
-  "Sensitive admin actions, retained for 120 days.": "Acciones sensibles de administración, conservadas durante 120 días.",
   "Sent verbatim to the backend. Must match what the provider reports.": "Se envía tal cual al backend. Debe coincidir con lo que reporta el proveedor.",
   "Serialise across models": "Serializar entre modelos",
   "Serve every asset from this origin": "Servir todos los recursos desde este origen",
@@ -3930,5 +3929,9 @@
   "provisioned": "aprovisionado",
   "directory": "directorio",
   "proxy": "proxy",
-  "Your organization manages this account, so it can’t be deleted here.": "Tu organización administra esta cuenta, así que no se puede eliminar aquí."
+  "Your organization manages this account, so it can’t be deleted here.": "Tu organización administra esta cuenta, así que no se puede eliminar aquí.",
+  "Access": "Acceso",
+  "Export JSON Lines": "Exportar JSON Lines",
+  "Category": "Categoría",
+  "Sign-ins, access changes, provisioning and admin actions, retained for 120 days.": "Inicios de sesión, cambios de acceso, aprovisionamiento y acciones de administración, conservados 120 días."
 }

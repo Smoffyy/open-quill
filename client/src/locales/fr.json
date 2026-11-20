@@ -1303,7 +1303,6 @@
   "Thumbs users left on replies, newest first.": "Les pouces que les utilisateurs ont laissés sur les réponses, du plus récent au plus ancien.",
   "feedback thumbs quality reviews votes": "retours pouces qualité avis votes",
   "Event log": "Journal des événements",
-  "Sensitive admin actions, retained for 120 days.": "Actions d’administration sensibles, conservées 120 jours.",
   "audit history trail security actions": "audit historique piste sécurité actions",
   "Actor": "Acteur",
   "Action": "Action",
@@ -3930,5 +3929,9 @@
   "provisioned": "provisionné",
   "directory": "annuaire",
   "proxy": "proxy",
-  "Your organization manages this account, so it can’t be deleted here.": "Votre organisation gère ce compte, il ne peut donc pas être supprimé ici."
+  "Your organization manages this account, so it can’t be deleted here.": "Votre organisation gère ce compte, il ne peut donc pas être supprimé ici.",
+  "Access": "Accès",
+  "Export JSON Lines": "Exporter en JSON Lines",
+  "Category": "Catégorie",
+  "Sign-ins, access changes, provisioning and admin actions, retained for 120 days.": "Connexions, changements d’accès, provisionnement et actions d’administration, conservés 120 jours."
 }

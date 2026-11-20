@@ -5,6 +5,7 @@ import { DATA_ROOT, dataPath } from './lib/dataroot.js';
 import { migrate } from './db/schema.js';
 import { makeCollection, bumpTable } from './db/collection.js';
 import { BRAND_ICON_FIELDS, LEGACY_MARK_SET, MODEL_WEAVE, remapBrandPath, retireLegacyMark } from './lib/brand.js';
+import { auditCategory } from './lib/auditcategory.js';
 
 const DATA_DIR = DATA_ROOT;
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -65,6 +66,8 @@ sdb.function('oq_icontains', { deterministic: true }, (hay, needle) => {
   if (typeof hay !== 'string' || !hay || !needle) return 0;
   return hay.toLowerCase().includes(needle) ? 1 : 0;
 });
+
+sdb.function('oq_audit_category', { deterministic: true }, (action) => auditCategory(action));
 
 export function tx(fn) { return sdb.transaction(fn)(); }
 
@@ -198,7 +201,8 @@ auditCol.prune = before => { try { return auditPruneStmt.run(before).changes; } 
 const AUDIT_WHERE = `
   WHERE ts >= @since
     AND (@action = '' OR oq_icontains(json_extract(data,'$.action'), @action))
-    AND (@actor  = '' OR oq_icontains(json_extract(data,'$.actor_email'), @actor))`;
+    AND (@actor  = '' OR oq_icontains(json_extract(data,'$.actor_email'), @actor))
+    AND (@category = '' OR oq_audit_category(json_extract(data,'$.action')) = @category)`;
 const auditQueryStmt = sdb.prepare(`SELECT data FROM audit ${AUDIT_WHERE} ORDER BY ts DESC LIMIT @limit OFFSET @offset`);
 const auditCountStmt = sdb.prepare(`SELECT count(*) AS n FROM audit ${AUDIT_WHERE}`);
 const auditActionsStmt = sdb.prepare(`SELECT DISTINCT json_extract(data,'$.action') AS action FROM audit WHERE action IS NOT NULL ORDER BY action`);

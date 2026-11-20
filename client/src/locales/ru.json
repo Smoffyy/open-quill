@@ -1403,7 +1403,6 @@
   "Send to": "Отправить в",
   "Send while hidden": "Отправлять, пока скрыто",
   "Sensitive admin actions appear here as they happen.": "Важные действия администратора появляются здесь по мере их совершения.",
-  "Sensitive admin actions, retained for 120 days.": "Важные действия администратора, хранятся 120 дней.",
   "Sent": "Отправлено",
   "Sent as a new message when this reply finishes.": "Отправляется как новое сообщение по завершении этого ответа.",
   "Sent in": "Отправлено через",
@@ -3962,5 +3961,9 @@
   "provisioned": "подготовлен",
   "directory": "каталог",
   "proxy": "прокси",
-  "Your organization manages this account, so it can’t be deleted here.": "Этой учётной записью управляет ваша организация, поэтому её нельзя удалить здесь."
+  "Your organization manages this account, so it can’t be deleted here.": "Этой учётной записью управляет ваша организация, поэтому её нельзя удалить здесь.",
+  "Access": "Доступ",
+  "Export JSON Lines": "Экспорт в JSON Lines",
+  "Category": "Категория",
+  "Sign-ins, access changes, provisioning and admin actions, retained for 120 days.": "Входы, изменения доступа, подготовка учётных записей и действия администраторов, хранятся 120 дней."
 }

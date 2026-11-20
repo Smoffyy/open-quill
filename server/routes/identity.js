@@ -149,7 +149,7 @@ export default function registerIdentityRoutes(app) {
 
   function scimView(req) {
     const base = publicBase() || `${isHttps(req) ? 'https' : 'http'}://${req.get('host')}`;
-    const recent = db.audit.query({ action: 'scim.', actor: '', since: 0, limit: 20, offset: 0 })
+    const recent = db.audit.query({ action: 'scim.', actor: '', category: '', since: 0, limit: 20, offset: 0 })
       .map(r => ({ id: r.id, ts: r.ts, action: r.action, actor: r.actor_email || '', meta: r.meta || null }));
     return {
       ...scimConfig(), baseUrl: `${base}/scim/v2`, baseFromRequest: !publicBase(), tokens: tokenList(), recent,

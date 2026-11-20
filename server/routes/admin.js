@@ -8,6 +8,7 @@ import { logAudit } from '../lib/audit.js';
 import { plainSnippet } from '../lib/history.js';
 import * as dataroot from '../lib/dataroot.js';
 import { toolStatsReport } from '../lib/toolstats.js';
+import { AUDIT_CATEGORIES, auditCategory } from '../lib/auditcategory.js';
 import { USAGE_WINDOWS } from './auth.js';
 
 export default function registerAdminRoutes(app) {
@@ -153,10 +154,11 @@ export default function registerAdminRoutes(app) {
     const actor = String(req.query.actor || '').trim().toLowerCase();
     const sinceDays = parseInt(req.query.days) || 0;
     const since = sinceDays > 0 ? now() - sinceDays * 24 * 60 * 60 * 1000 : 0;
-    const filter = { action, actor, since, limit, offset };
+    const category = AUDIT_CATEGORIES.includes(req.query.category) ? req.query.category : '';
+    const filter = { action, actor, category, since, limit, offset };
     const total = db.audit.countMatching(filter);
     const page = db.audit.query(filter).map(r => ({
-      id: r.id, ts: r.ts, actorEmail: r.actor_email || 'system', action: r.action,
+      id: r.id, ts: r.ts, actorEmail: r.actor_email || 'system', action: r.action, category: auditCategory(r.action),
       targetType: r.target_type || null, targetId: r.target_id || null, meta: r.meta || null, ip: r.ip || ''
     }));
     res.json({ entries: page, total, offset, hasMore: offset + page.length < total, actions: db.audit.actions() });
@@ -164,9 +166,10 @@ export default function registerAdminRoutes(app) {
 
   app.get('/api/admin/audit/export', authMiddleware, requirePermission('admin.audit'), (req, res) => {
     const esc = v => { const s = v == null ? '' : (typeof v === 'object' ? JSON.stringify(v) : String(v)); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
-    logAudit(req, 'audit.export', {});
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="audit-${new Date().toISOString().slice(0, 10)}.csv"`);
+    const jsonl = req.query.format === 'jsonl';
+    logAudit(req, 'audit.export', { meta: { format: jsonl ? 'jsonl' : 'csv' } });
+    res.setHeader('Content-Type', jsonl ? 'application/x-ndjson; charset=utf-8' : 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="audit-${new Date().toISOString().slice(0, 10)}.${jsonl ? 'jsonl' : 'csv'}"`);
     // Streamed a row at a time, paused when the socket is full: the whole log never has
     // to exist in memory, in Node's write buffer, or as one joined string.
     const rows = db.audit.stream();
@@ -174,12 +177,14 @@ export default function registerAdminRoutes(app) {
       for (;;) {
         const { value: r, done } = rows.next();
         if (done) return res.end();
-        const line = [new Date(r.ts).toISOString(), r.actor_email || 'system', r.action, r.target_type || '', r.target_id || '', r.ip || '', r.meta].map(esc).join(',') + '\n';
+        const line = jsonl
+          ? JSON.stringify({ timestamp: new Date(r.ts).toISOString(), actor: r.actor_email || 'system', actor_id: r.actor_id || null, action: r.action, category: auditCategory(r.action), target_type: r.target_type || null, target_id: r.target_id || null, ip: r.ip || '', meta: r.meta || null }) + '\n'
+          : [new Date(r.ts).toISOString(), r.actor_email || 'system', r.action, auditCategory(r.action), r.target_type || '', r.target_id || '', r.ip || '', r.meta].map(esc).join(',') + '\n';
         if (!res.write(line)) return res.once('drain', pump);
       }
     };
     res.on('close', () => { try { rows.return(); } catch {} });
-    res.write('timestamp,actor,action,target_type,target_id,ip,meta\n');
+    if (!jsonl) res.write('timestamp,actor,action,category,target_type,target_id,ip,meta\n');
     pump();
   });
 

@@ -1,7 +1,7 @@
 import { db, now } from '../db.js';
 import { sign, sessionFromRequest, createSession, sessionMaxAgeSeconds } from '../auth.js';
 import { isActive } from '../lib/authz/effective.js';
-import { logAudit, clientIp } from '../lib/audit.js';
+import { logAudit, actingAs, clientIp } from '../lib/audit.js';
 import { enabledProviders, publicBase } from '../lib/identity/providers.js';
 import { startFlow, readFlow, finishFlow, resolveAccount, FLOW_SECONDS } from '../lib/identity/sso.js';
 import { hasTotp, issueChallenge, CHALLENGE_SECONDS } from '../lib/identity/mfa.js';
@@ -71,7 +71,7 @@ export default function registerSsoRoutes(app) {
     const sid = createSession(u, req, 'sso:' + p.id, p.require_mfa ? null : 'idp');
     sessionCookie(req, res, sign(u, sid), sessionMaxAgeSeconds());
     db.users.update(u.id, { last_login_at: now() });
-    logAudit(req, 'auth.login', { type: 'user', id: u.id, meta: { method: 'sso', provider: p.id } });
+    logAudit(actingAs(req, u), 'auth.login', { type: 'user', id: u.id, meta: { method: 'sso', provider: p.id } });
     leave(flow.ret);
   });
 }

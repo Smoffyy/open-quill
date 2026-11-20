@@ -116,7 +116,7 @@ export const NAV = [
       find: tk('feedback thumbs quality reviews votes'),
       index: [tk('Ratings')] },
     { id: 'events', label: tk('Event log'), Icon: Clock, title: tk('Event log'),
-      blurb: tk('Sensitive admin actions, retained for 120 days.'),
+      blurb: tk('Sign-ins, access changes, provisioning and admin actions, retained for 120 days.'),
       find: tk('audit history trail security actions'),
       index: [tk('Export CSV'), tk('Actor'), tk('Action')] },
     { id: 'storage', label: tk('Storage'), Icon: Box, title: tk('Storage'),

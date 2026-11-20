@@ -10,7 +10,7 @@ import { randomSecret } from '../lib/totp.js';
 import { hasTotp, startEnrollment, confirmEnrollment, regenerateCodes, removeFactors, verifySecondFactor, issueChallenge, readChallenge, spendChallenge, CHALLENGE_SECONDS } from '../lib/identity/mfa.js';
 import { mfaRequired } from '../lib/authz/effective.js';
 import { broadcastToUser } from '../lib/ws/broadcast.js';
-import { logAudit, clientIp } from '../lib/audit.js';
+import { logAudit, actingAs, clientIp } from '../lib/audit.js';
 import { plainSnippet } from '../lib/history.js';
 import { purgeUserChats, purgeUser } from '../lib/purge.js';
 import { resolveModelOrDefault } from '../lib/models.js';
@@ -122,6 +122,7 @@ export default function registerAuthRoutes(app) {
       if (r.error === 'unavailable') return res.status(503).json({ error: 'Sign-in is temporarily unavailable. Try again later.' });
       if (r.error === 'credentials') {
         keys.forEach(noteLoginFail);
+        logAudit(req, 'auth.login_fail', { meta: { email, method: 'ldap' } });
         return res.status(401).json({ error: 'Incorrect email or password.' });
       }
       if (r.error) {
@@ -130,9 +131,10 @@ export default function registerAuthRoutes(app) {
       }
       u = r.user;
       method = 'ldap';
-      if (r.created) logAudit({ user: u, headers: req.headers, socket: req.socket }, 'user.provision', { type: 'user', id: u.id, meta: { email: u.email, provider: 'ldap', role: u.role } });
+      if (r.created) logAudit(actingAs(req, u), 'user.provision', { type: 'user', id: u.id, meta: { email: u.email, provider: 'ldap', role: u.role } });
     } else if (!(await passwordMatches(pw, u?.password_hash))) {
       keys.forEach(noteLoginFail);
+      logAudit(u ? actingAs(req, u) : req, 'auth.login_fail', { type: u ? 'user' : null, id: u?.id || null, meta: { email, method: 'password' } });
       return res.status(401).json({ error: 'Incorrect email or password.' });
     }
     if (!isActive(u)) return res.status(403).json({ error: 'This account is disabled. Contact your administrator.' });
@@ -145,7 +147,7 @@ export default function registerAuthRoutes(app) {
     keys.forEach(k => loginFails.delete(k));
     const sid = createSession(u, req, method);
     setCookie(req, res, sign(u, sid));
-    logAudit(req, 'auth.login', { type: 'user', id: u.id, meta: { method } });
+    logAudit(actingAs(req, u), 'auth.login', { type: 'user', id: u.id, meta: { method } });
     res.json({ user: publicUser(u) });
   });
 
@@ -165,7 +167,7 @@ export default function registerAuthRoutes(app) {
     const via = verifySecondFactor(u.id, { code: String(req.body?.code || '').trim(), recovery: String(req.body?.recovery || '').trim() });
     if (!via) {
       keys.forEach(noteLoginFail);
-      logAudit(req, 'auth.mfa_fail', { type: 'user', id: u.id });
+      logAudit(actingAs(req, u), 'auth.mfa_fail', { type: 'user', id: u.id });
       return res.status(401).json({ error: 'That code is not valid. Check your authenticator and try again.' });
     }
     spendChallenge(challenge);
@@ -173,7 +175,7 @@ export default function registerAuthRoutes(app) {
     const sid = createSession(u, req, challenge.method, via);
     setCookie(req, res, sign(u, sid));
     challengeCookie(req, res, '');
-    logAudit(req, 'auth.login', { type: 'user', id: u.id, meta: { mfa: via } });
+    logAudit(actingAs(req, u), 'auth.login', { type: 'user', id: u.id, meta: { mfa: via } });
     res.json({ user: publicUser(u) });
   });
 
@@ -203,7 +205,7 @@ export default function registerAuthRoutes(app) {
     const role = owner ? OWNER : signupPolicy() === 'approval' ? PENDING : USER;
     const u = db.users.insert({ id: uid(), email, password_hash: passwordHash, display_name: '', role, status: 'active', source: 'local', prefs: {}, created_at: now() });
     if (owner) setSetting('setup_complete', '0');
-    logAudit(req, 'user.register', { type: 'user', id: u.id, meta: { email, role } });
+    logAudit(actingAs(req, u), 'user.register', { type: 'user', id: u.id, meta: { email, role } });
     const sid = createSession(u, req);
     setCookie(req, res, sign(u, sid));
     res.json({ user: publicUser(u) });
@@ -211,7 +213,10 @@ export default function registerAuthRoutes(app) {
 
   app.post('/api/auth/logout', (req, res) => {
     const r = sessionFromRequest(req);
-    if (r?.sessionId) revokeSession(r.sessionId);
+    if (r?.sessionId) {
+      revokeSession(r.sessionId);
+      logAudit(actingAs(req, r.user), 'auth.logout', { type: 'user', id: r.user.id });
+    }
     setCookie(req, res, '');
     res.json({ ok: true });
   });
@@ -372,6 +377,7 @@ export default function registerAuthRoutes(app) {
     const others = db.sessions.byUser(req.user.id).filter(s => s.id !== req.sessionId);
     revokeOtherSessions(req.user.id, req.sessionId);
     for (const s of others) killSessionSockets(s.id);
+    if (others.length) logAudit(req, 'account.sessions_revoke', { type: 'user', id: req.user.id, meta: { count: others.length } });
     res.json({ ok: true, revoked: others.length });
   });
 

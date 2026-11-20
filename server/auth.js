@@ -3,7 +3,7 @@ import argon2 from 'argon2';
 import crypto from 'crypto';
 import * as cookie from 'cookie';
 import { db, uid, now, getSetting, setSetting } from './db.js';
-import { clientIp, logAudit } from './lib/audit.js';
+import { actingAs, clientIp, logAudit } from './lib/audit.js';
 import { permissionsOf, roleOf, gateOf, isActive, isOwner, isManaged, mfaRequired } from './lib/authz/effective.js';
 import { roleName } from './lib/authz/roles.js';
 import { hasTotp, recoveryLeft } from './lib/identity/mfa.js';
@@ -114,7 +114,7 @@ function headerSession(req, res, token) {
   const session = db.sessions.update(sid, { header_email: ident.email });
   syncHeaderGroups(session, found.user.id, ident.groups);
   if (res) sessionCookie(req, res, sign(found.user, sid), sessionMaxAgeSeconds());
-  const actor = { user: found.user, socket: req.socket, headers: req.headers };
+  const actor = actingAs(req, found.user);
   if (found.created) logAudit(actor, 'user.provision', { type: 'user', id: found.user.id, meta: { email: found.user.email, provider: 'header' } });
   logAudit(actor, 'auth.login', { type: 'user', id: found.user.id, meta: { method: 'header' } });
   return { user: found.user, sessionId: sid, session };

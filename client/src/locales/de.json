@@ -1403,7 +1403,6 @@
   "Send to": "Senden an",
   "Send while hidden": "Im verborgenen Zustand senden",
   "Sensitive admin actions appear here as they happen.": "Sensible Administratoraktionen erscheinen hier, sobald sie geschehen.",
-  "Sensitive admin actions, retained for 120 days.": "Sensible Administratoraktionen, 120 Tage aufbewahrt.",
   "Sent": "Gesendet",
   "Sent as a new message when this reply finishes.": "Wird als neue Nachricht gesendet, sobald diese Antwort abgeschlossen ist.",
   "Sent in": "Gesendet in",
@@ -3930,5 +3929,9 @@
   "provisioned": "bereitgestellt",
   "directory": "Verzeichnis",
   "proxy": "Proxy",
-  "Your organization manages this account, so it can’t be deleted here.": "Ihre Organisation verwaltet dieses Konto, daher kann es hier nicht gelöscht werden."
+  "Your organization manages this account, so it can’t be deleted here.": "Ihre Organisation verwaltet dieses Konto, daher kann es hier nicht gelöscht werden.",
+  "Access": "Zugriff",
+  "Export JSON Lines": "JSON Lines exportieren",
+  "Category": "Kategorie",
+  "Sign-ins, access changes, provisioning and admin actions, retained for 120 days.": "Anmeldungen, Zugriffsänderungen, Bereitstellung und Admin-Aktionen, 120 Tage aufbewahrt."
 }
