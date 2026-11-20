@@ -2436,3 +2436,63 @@ test('the event log records failed sign-ins, filters by category and exports JSO
   assert.ok(rows.some(r => r.action === 'auth.login_fail' && r.category === 'signin'));
   assert.ok(rows.every(r => r.timestamp && r.action && r.category));
 });
+
+test('the recommended enterprise setup: SCIM provisions, single sign-on links by email, deprovisioning locks out at once', async () => {
+  const { mockOidc } = await import('./mockapis.js');
+  const idp = await mockOidc();
+  const cookieNamed = (res, name) => (res.headers['set-cookie'] || []).map(c => c.split(';')[0]).find(c => c.startsWith(name + '='));
+  const scim = (method, path, token, body) => request(method, '/scim/v2' + path, body === undefined
+    ? { headers: { Authorization: `Bearer ${token}` } }
+    : { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/scim+json' }, raw: Buffer.from(JSON.stringify(body)) });
+  const PATCH_OP = 'urn:ietf:params:scim:api:messages:2.0:PatchOp';
+  let providerId = null;
+  let userId = null;
+  try {
+    providerId = (await browser('POST', '/api/admin/auth/providers', { body: { type: 'oidc' } })).json.created;
+    await browser('PUT', '/api/admin/auth/public-url', { body: { url: ORIGIN } });
+    const configured = await browser('PATCH', `/api/admin/auth/providers/${providerId}`, {
+      body: { label: 'Corp SSO', clientId: idp.clientId, clientSecret: idp.clientSecret, issuer: idp.url, provision: 'off', linkByEmail: true, enabled: true }
+    });
+    assert.equal(configured.status, 200, configured.text);
+    await browser('PUT', '/api/admin/auth/scim', { body: { enabled: true, provision: 'user' } });
+    const token = (await browser('POST', '/api/admin/auth/scim/tokens', { body: { name: 'Entra' } })).json.token;
+
+    const signIn = async (claims) => {
+      const begun = await request('POST', `/api/auth/sso/${providerId}/start`, { origin: ORIGIN, secFetchSite: 'same-origin', body: {} });
+      const back = idp.authorize(begun.json.url, claims);
+      return request('GET', back.pathname + back.search, { cookie: cookieNamed(begun, 'oq_sso') });
+    };
+    const claims = { sub: 'entra-pat', email: 'pat.morgan@corp.test', email_verified: true, name: 'Pat Morgan' };
+
+    assert.match((await signIn(claims)).headers.location, /sso_error=/, 'nobody gets in before they are provisioned');
+    const created = await scim('POST', '/Users', token, {
+      schemas: ['urn:ietf:params:scim:schemas:core:2.0:User'], userName: 'pat.morgan@corp.test', externalId: 'entra-pat',
+      emails: [{ value: 'pat.morgan@corp.test', type: 'work', primary: true }], name: { givenName: 'Pat', familyName: 'Morgan' }, active: true
+    });
+    assert.equal(created.status, 201, created.text);
+    userId = created.json.id;
+
+    const first = await signIn(claims);
+    assert.equal(first.headers.location, '/', 'the provisioned account links itself at its first sign-in');
+    const session = cookieNamed(first, 'token');
+    const me = (await request('GET', '/api/me', { cookie: session })).json.user;
+    assert.equal(me.id, userId);
+    assert.equal(me.source, 'scim');
+    assert.equal(me.managed, true);
+    assert.equal((await request('DELETE', '/api/me', { origin: ORIGIN, secFetchSite: 'same-origin', cookie: session, body: {} })).status, 403, 'a managed account cannot delete itself');
+
+    const off = await scim('PATCH', `/Users/${userId}`, token, { schemas: [PATCH_OP], Operations: [{ op: 'Replace', path: 'active', value: 'False' }] });
+    assert.equal(off.json.active, false);
+    assert.equal((await request('GET', '/api/me', { cookie: session })).status, 401, 'deprovisioning ends the open session at once');
+    assert.match((await signIn(claims)).headers.location, /sso_error=disabled/, 'and single sign-on refuses the disabled account');
+
+    await scim('PATCH', `/Users/${userId}`, token, { schemas: [PATCH_OP], Operations: [{ op: 'replace', value: { active: true } }] });
+    assert.equal((await signIn(claims)).headers.location, '/', 'reactivation lets the same identity back in');
+  } finally {
+    if (userId) await browser('DELETE', `/api/admin/users/${userId}`);
+    if (providerId) await browser('DELETE', `/api/admin/auth/providers/${providerId}`);
+    await browser('PUT', '/api/admin/auth/scim', { body: { enabled: false } });
+    for (const t of (await browser('GET', '/api/admin/auth/scim')).json.tokens) await browser('DELETE', `/api/admin/auth/scim/tokens/${t.id}`);
+    await idp.close();
+  }
+});
