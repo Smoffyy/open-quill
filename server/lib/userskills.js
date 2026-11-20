@@ -1,5 +1,6 @@
 import { db, uid, now } from '../db.js';
 import { normalizeName, validate, buildSkillFile, parseSkillFile, skillLines } from './skillfile.js';
+import { sharedWith, atLeast } from './authz/acl.js';
 
 export const SKILL_LIMIT = 200;
 
@@ -8,7 +9,25 @@ export function list(userId) {
 }
 
 export function enabledFor(userId) {
-  return list(userId).filter(s => s.enabled);
+  const own = list(userId);
+  const user = db.users.byId(userId);
+  const off = new Set(user?.skills_off || []);
+  const taken = new Set(own.map(s => s.name));
+  const shared = [];
+  for (const id of sharedWith(user, 'skill').keys()) {
+    const s = db.skills.byId(id);
+    if (!s || off.has(s.id) || taken.has(s.name)) continue;
+    taken.add(s.name);
+    shared.push(s);
+  }
+  return [...own.filter(s => s.enabled), ...shared];
+}
+
+export function setSharedEnabled(user, id, enabled) {
+  const off = new Set(user.skills_off || []);
+  if (enabled) off.delete(id);
+  else off.add(id);
+  db.users.update(user.id, { skills_off: [...off].slice(-SKILL_LIMIT) });
 }
 
 export function byId(userId, id) {
@@ -65,7 +84,7 @@ export function fromFile(text, fallbackName) {
   };
 }
 
-export function view(s, author) {
+export function view(s, author, { access = 'owner', enabled = s.enabled !== false } = {}) {
   return {
     id: s.id,
     name: s.name,
@@ -73,11 +92,12 @@ export function view(s, author) {
     body: s.body || '',
     file: buildSkillFile(s),
     lines: skillLines(s.body),
-    enabled: s.enabled !== false,
+    enabled,
     source: s.source || 'custom',
-    scope: 'user',
+    scope: access === 'owner' ? 'user' : 'shared',
     author: author || '',
-    editable: true,
+    editable: atLeast(access, 'edit'),
+    access,
     created_at: s.created_at,
     updated_at: s.updated_at
   };

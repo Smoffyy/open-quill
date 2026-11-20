@@ -9,6 +9,7 @@ import { sandboxCap, attachName, cleanPath, createEmpty, renameTo, fileInfo, sen
 import { workspaceOfProject } from '../lib/projectfiles.js';
 import { listArtifacts } from '../lib/artifacts.js';
 import { activeTurn } from '../lib/ws/live.js';
+import { access } from '../lib/authz/acl.js';
 
 const wsOf = (c) => workspaceFor(c);
 const artOf = (c) => sandbox.artifactKey(c.id);
@@ -19,6 +20,12 @@ function ownChat(req, res) {
   const c = db.chats.byId(req.params.id);
   if (!c || c.user_id !== req.user.id) { res.status(404).json({ error: 'not found' }); return null; }
   return c;
+}
+
+function viewChat(req, res) {
+  const r = access(req.user, 'chat', req.params.id);
+  if (r.error) { res.status(r.status).json({ error: r.error }); return null; }
+  return r.resource;
 }
 
 const LIBRARY_PAGE = 60;
@@ -71,23 +78,23 @@ export default function registerArtifactRoutes(app) {
   });
 
   app.get('/api/chats/:id/artifacts', authMiddleware, (req, res) => {
-    const c = ownChat(req, res); if (!c) return;
+    const c = viewChat(req, res); if (!c) return;
     res.json({ files: listArtifacts(c.id) });
   });
 
   app.get('/api/chats/:id/artifacts/file', authMiddleware, (req, res) => {
-    const c = ownChat(req, res); if (!c) return;
+    const c = viewChat(req, res); if (!c) return;
     const r = fileInfo(artOf(c), String(req.query.path || ''), parseInt(req.query.v), `/api/chats/${c.id}/artifacts`);
     res.status(r.status).json(r.body);
   });
 
   app.get('/api/chats/:id/artifacts/download', authMiddleware, (req, res) => {
-    const c = ownChat(req, res); if (!c) return;
+    const c = viewChat(req, res); if (!c) return;
     sendDownload(res, artOf(c), String(req.query.path || ''), parseInt(req.query.v));
   });
 
   app.get('/api/chats/:id/artifacts/zip', authMiddleware, (req, res) => {
-    const c = ownChat(req, res); if (!c) return;
+    const c = viewChat(req, res); if (!c) return;
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${attachName((c.title || 'artifacts').replace(/[^a-zA-Z0-9_-]/g, '_'))}.zip"`);
     res.send(sandbox.zipAll(artOf(c)));
@@ -116,9 +123,10 @@ export default function registerArtifactRoutes(app) {
   });
 
   function saveToProject(req, res, c, from) {
-    const projectId = String(req.body?.projectId || c.project_id || c.origin_project_id || '');
-    const p = projectId ? db.projects.byId(projectId) : null;
-    if (!p || p.user_id !== req.user.id) return res.status(400).json({ error: 'Choose a project to save it to.' });
+    const target = access(req.user, 'project', String(req.body?.projectId || c.project_id || c.origin_project_id || ''), 'edit');
+    if (target.status === 403) return res.status(403).json({ error: target.error });
+    if (target.error) return res.status(400).json({ error: 'Choose a project to save it to.' });
+    const p = target.resource;
     const rel = String(req.body?.path || '');
     if (!sandbox.list(from).some(f => f.path === rel)) return res.status(404).json({ error: 'not found' });
     const ws = workspaceOfProject(p.id);

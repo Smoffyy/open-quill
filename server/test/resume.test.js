@@ -1,3 +1,4 @@
+import './isolate.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { resumeParts, resumeTurn, stitch, createStitcher, isPrefillRefusal, RESUME_INSTRUCTION, RESUME_TOOLS_INSTRUCTION, stoppedCall, fenceFor, fileStep, fileRest, joinFile, STOPPED_FILE } from '../lib/resume.js';

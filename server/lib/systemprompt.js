@@ -4,7 +4,8 @@ import {
   BLOCKS, blockId, blockText, eligibleBlocks, addBlocks, setBlockBody, syncPrompt, syncModelPrompt, renderPrompt
 } from './promptblocks.js';
 import { artifactsText } from './artifacts.js';
-import { projectFilesText } from './projecttools.js';
+import { projectFilesText, projectFor } from './projecttools.js';
+import { atLeast } from './authz/acl.js';
 import * as referenceFiles from './referencefiles.js';
 import * as workspaceSkills from './workspaceskills.js';
 import * as userskills from './userskills.js';
@@ -81,13 +82,15 @@ export function toolState(chat, model, { sandboxOn = false, webSearchOn = false,
   const askUserOn = !!model.ask_user_allowed && !!chat?.id && canAsk;
   const consultWith = model.consult_allowed && can(user, 'tools.consult') ? consultTargets(model, user) : [];
   const consultOn = consultWith.length > 0;
-  const projectOn = !!row?.project_id && !!userId;
+  const project = userId ? projectFor(row) : null;
+  const projectOn = !!project;
+  const projectNotesOn = projectOn && atLeast(project.level, 'edit');
   const artifactsOn = model.artifacts_allowed !== 0 && !!chat?.id;
   const toolsOn = sandboxOn || searchOn || membankOn || chatSearchOn || skillsOn || mcpOn || endChatOn || memoryOn
     || calculatorOn || todoOn || askUserOn || consultOn || projectOn || artifactsOn;
   return {
     sandboxOn, webSearchOn: searchOn, membankOn, chatSearchOn, skillsOn, userSkills, mcpSchemas, mcpOn, mcpUser: userId, mcpScope, mcpAsk: canAsk, recallOn: toolsOn && !!row?.summary,
-    endChatOn, memoryAllowed, memoryOn, calculatorOn, todoOn, askUserOn, consultOn, consultWith, projectOn, artifactsOn, toolsOn
+    endChatOn, memoryAllowed, memoryOn, calculatorOn, todoOn, askUserOn, consultOn, consultWith, projectOn, projectNotesOn, artifactsOn, toolsOn
   };
 }
 
@@ -108,7 +111,7 @@ export function promptVarMap(chat, model, state, { userId = null, styleText = ''
   const row = chat ? (db.chats.byId(chat.id) || chat) : null;
   const uid = row?.user_id || userId;
   const u = row?.user_id ? db.users.byId(row.user_id) : null;
-  const project = row?.project_id ? db.projects.byId(row.project_id) : null;
+  const project = row ? projectFor(row)?.project : null;
   return {
     ...promptVars(uid, { model, client }),
     chatTitle: row?.title && row.title !== 'New chat' ? row.title : '',

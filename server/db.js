@@ -97,6 +97,9 @@ messagesCol.lastUserText = chatId => lastUserStmt.get(chatId)?.content || '';
 
 const mentionStmt = sdb.prepare('SELECT 1 FROM messages WHERE instr(data, ?) > 0 LIMIT 1');
 messagesCol.mentions = text => !!(text && mentionStmt.get(String(text)));
+const mentionedInStmt = sdb.prepare('SELECT 1 FROM messages WHERE chat_id IN (SELECT value FROM json_each(?)) AND instr(data, ?) > 0 LIMIT 1');
+messagesCol.mentionedIn = (chatIds, text) => !!mentionedInStmt.get(JSON.stringify(chatIds), String(text));
+messagesCol.attachmentOwners = () => sdb.prepare("SELECT c.user_id AS user_id, json_extract(m.data,'$.attachments') AS attachments FROM messages m JOIN chats c ON c.id = m.chat_id WHERE json_array_length(json_extract(m.data,'$.attachments')) > 0").all();
 
 const chatsCol = collection('chats');
 const byUserStmt = sdb.prepare('SELECT data FROM chats WHERE user_id=?');
@@ -311,6 +314,27 @@ groupMembersCol.counts = () => groupCountsStmt.all();
 groupMembersCol.link = (groupId, type, memberId) => { const r = groupLinkStmt.get(groupId, type, memberId); return r ? JSON.parse(r.data) : null; };
 groupMembersCol.dropMember = (type, memberId) => { if (dropMemberStmt.run(type, memberId).changes) bumpTable('group_members'); };
 
+const aclCol = collection('acl');
+const aclForResourceStmt = sdb.prepare('SELECT data FROM acl WHERE resource_type=? AND resource_id=?');
+const aclEntryStmt = sdb.prepare('SELECT data FROM acl WHERE resource_type=? AND resource_id=? AND principal_type=? AND principal_id=?');
+const aclSharedStmt = sdb.prepare("SELECT resource_id, level FROM acl WHERE resource_type=? AND ((principal_type='user' AND principal_id=?) OR (principal_type='group' AND principal_id IN (SELECT value FROM json_each(?))))");
+const aclDropResourceStmt = sdb.prepare('DELETE FROM acl WHERE resource_type=? AND resource_id=?');
+aclCol.forResource = (type, id) => aclForResourceStmt.all(type, id).map(r => JSON.parse(r.data));
+aclCol.entry = (type, id, principalType, principalId) => { const r = aclEntryStmt.get(type, id, principalType, principalId); return r ? JSON.parse(r.data) : null; };
+aclCol.sharedWith = (type, userId, groupIds) => aclSharedStmt.all(type, userId, JSON.stringify(groupIds));
+aclCol.dropResource = (type, id) => { if (aclDropResourceStmt.run(type, id).changes) bumpTable('acl'); };
+const aclPruneStmts = [
+  "DELETE FROM acl WHERE resource_type='project' AND resource_id NOT IN (SELECT id FROM projects)",
+  "DELETE FROM acl WHERE resource_type='chat' AND resource_id NOT IN (SELECT id FROM chats)",
+  "DELETE FROM acl WHERE resource_type='skill' AND resource_id NOT IN (SELECT id FROM skills)",
+  "DELETE FROM acl WHERE principal_type='user' AND principal_id NOT IN (SELECT id FROM users)",
+  "DELETE FROM acl WHERE principal_type='group' AND principal_id NOT IN (SELECT id FROM user_groups)"
+].map(s => sdb.prepare(s));
+aclCol.prune = () => { if (aclPruneStmts.reduce((n, s) => n + s.run().changes, 0)) bumpTable('acl'); };
+const chatsByProjectStmt = sdb.prepare("SELECT data FROM chats WHERE json_extract(data,'$.project_id') = ? OR json_extract(data,'$.origin_project_id') = ?");
+chatsCol.byProject = projectId => chatsByProjectStmt.all(projectId, projectId).map(r => JSON.parse(r.data));
+chatsCol.withPins = () => sdb.prepare("SELECT data FROM chats WHERE json_array_length(json_extract(data,'$.pinned_files')) > 0").all().map(r => JSON.parse(r.data));
+
 const repliesBetweenStmt = sdb.prepare("SELECT data FROM messages WHERE created_at >= ? AND created_at <= ? AND json_extract(data,'$.role') = 'assistant' ORDER BY created_at DESC LIMIT ?");
 messagesCol.repliesBetween = (from, to, limit) => repliesBetweenStmt.all(from, to, limit).map(r => JSON.parse(r.data));
 
@@ -336,7 +360,9 @@ export const db = {
   qualityChecks: qualityCol,
   roles: collection('roles'),
   groups: groupsCol,
-  groupMembers: groupMembersCol
+  groupMembers: groupMembersCol,
+  acl: aclCol,
+  uploads: collection('uploads')
 };
 
 const sGet = sdb.prepare('SELECT value FROM settings WHERE key=?');

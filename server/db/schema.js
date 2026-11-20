@@ -115,7 +115,13 @@ DELETE FROM settings WHERE key IN ('allow_signups', 'draft:allow_signups');`,
 CREATE UNIQUE INDEX IF NOT EXISTS idx_user_groups_name ON user_groups(source, name_key);
 CREATE TABLE IF NOT EXISTS group_members (id TEXT PRIMARY KEY, group_id TEXT, member_type TEXT, member_id TEXT, source TEXT, data TEXT NOT NULL, FOREIGN KEY(group_id) REFERENCES user_groups(id) ON DELETE CASCADE);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_group_members_link ON group_members(group_id, member_type, member_id);
-CREATE INDEX IF NOT EXISTS idx_group_members_member ON group_members(member_type, member_id);`
+CREATE INDEX IF NOT EXISTS idx_group_members_member ON group_members(member_type, member_id);`,
+
+  `CREATE TABLE IF NOT EXISTS acl (id TEXT PRIMARY KEY, resource_type TEXT, resource_id TEXT, principal_type TEXT, principal_id TEXT, level TEXT, data TEXT NOT NULL);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_acl_entry ON acl(resource_type, resource_id, principal_type, principal_id);
+CREATE INDEX IF NOT EXISTS idx_acl_principal ON acl(principal_type, principal_id);
+CREATE TABLE IF NOT EXISTS uploads (id TEXT PRIMARY KEY, user_id TEXT, created_at INTEGER, data TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_uploads_user ON uploads(user_id);`
 ];
 
 export const LATEST_VERSION = MIGRATIONS.length + 1;

@@ -125,7 +125,7 @@ function ModeSwitch({ mode, onMode }) {
   );
 }
 
-function ChatRow({ c, active, showTrash, projects = [], projectsReady = true, allTags, unreadIds, onMoveToProject, onOpen, onDelete, onToggleStar, onToggleArchive, onSetTags, busyIds, onStopChat }) {
+function ChatRow({ c, active, showTrash, projects = [], projectsReady = true, allTags, unreadIds, onMoveToProject, onShare, onOpen, onDelete, onToggleStar, onToggleArchive, onSetTags, busyIds, onStopChat }) {
   const busy = !!(busyIds && busyIds.has(c.id));
   const unread = !busy && !active && !!(unreadIds && unreadIds.has(c.id));
   const [menu, setMenu] = useState(null);
@@ -153,7 +153,7 @@ function ChatRow({ c, active, showTrash, projects = [], projectsReady = true, al
           onClick={(e) => { e.stopPropagation(); const at = menuAtButton(e.currentTarget); setMenu(m => m ? null : at); }}><DotsV /></button>
       )}
       {menu && <ChatMenu chat={c} at={menu} projects={projects} projectsReady={projectsReady} busy={busy} anchorRef={btnRef} allTags={allTags}
-        onStopChat={onStopChat} onToggleStar={onToggleStar} onToggleArchive={onToggleArchive} onSetTags={onSetTags} onMoveToProject={onMoveToProject}
+        onStopChat={onStopChat} onToggleStar={onToggleStar} onToggleArchive={onToggleArchive} onSetTags={onSetTags} onMoveToProject={onMoveToProject} onShare={onShare}
         onDelete={onDelete} onClose={() => setMenu(null)} />}
     </div>
   );
@@ -162,7 +162,7 @@ function ChatRow({ c, active, showTrash, projects = [], projectsReady = true, al
 function Sidebar({
   user, chats, onSearch, chatsLoaded = true, activeId, appName, appIcon, onNew, onOpen, onDelete, onToggleStar,
   collapsed, onToggle, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onPrivacy, onLogout, version, onChatsOverview,
-  projects = [], projectsReady = true, onProjects, onOpenProject, onNewProject, onMoveToProject, mobileOpen = false, onMobileClose,
+  projects = [], projectsReady = true, onProjects, onOpenProject, onNewProject, onMoveToProject, onShare = null, mobileOpen = false, onMobileClose,
   onArtifacts, onScheduled, onCustomize, onModelDocs, showModelDocs = true, onVersion, dest = null,
   docs = null, busyChats = [], onStopChat, mode = 'chat', onMode, onToggleArchive, onSetTags, unreadChats = []
 }) {
@@ -270,7 +270,7 @@ function Sidebar({
     }
     return g;
   })();
-  const rowProps = { onOpen, onDelete, onToggleStar, onToggleArchive, onSetTags, allTags, unreadIds, busyIds, onStopChat, projects, projectsReady, onMoveToProject };
+  const rowProps = { onOpen, onDelete, onToggleStar, onToggleArchive, onSetTags, allTags, unreadIds, busyIds, onStopChat, projects, projectsReady, onMoveToProject, onShare };
   const row = (c) => <ChatRow key={c.id} c={c} active={c.id === activeId} showTrash={showTrash} {...rowProps} />;
 
   return (

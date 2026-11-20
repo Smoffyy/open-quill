@@ -4,6 +4,7 @@ import { WebSocketServer } from 'ws';
 import { db, uid, now, getSetting } from '../../db.js';
 import { sessionFromRequest } from '../../auth.js';
 import { can, isActive, gateOf } from '../authz/effective.js';
+import { ownsUpload } from '../authz/acl.js';
 import { buildMessages, streamCompletion, canPrefill, refusePrefill } from '../../llm/index.js';
 import * as websearch from '../websearch.js';
 import * as sandbox from '../../sandbox.js';
@@ -41,13 +42,13 @@ function textField(v, cap = MAX_CONTENT) {
 
 const UPLOAD_URL = /^\/uploads\/[A-Za-z0-9._-]+$/;
 
-function sanitizeAttachments(list) {
+function sanitizeAttachments(list, user) {
   if (!Array.isArray(list)) return [];
   const out = [];
   for (const a of list) {
     if (!a || typeof a !== 'object') continue;
     const url = textField(a.url, 512);
-    if (!UPLOAD_URL.test(url) || url.includes('..')) continue;
+    if (!UPLOAD_URL.test(url) || url.includes('..') || !ownsUpload(user, url)) continue;
     out.push({ url, name: textField(a.name, 256), type: textField(a.type, 128), size: Number(a.size) || 0 });
     if (out.length >= MAX_ATTACHMENTS) break;
   }
@@ -211,7 +212,7 @@ export function initWs(server) {
       if (msg.type !== 'chat' && msg.type !== 'regenerate' && msg.type !== 'edit' && msg.type !== 'continue') return;
       if (typeof msg.chatId !== 'string' || !msg.chatId) return;
       const content = textField(msg.content);
-      const attachments = sanitizeAttachments(msg.attachments);
+      const attachments = sanitizeAttachments(msg.attachments, u);
       if (!allowed('chats.create') || (msg.type === 'edit' && !allowed('chats.edit')) || (attachments.length && !allowed('uploads.create')) || (msg.call && !allowed('voice.call'))) {
         refuse(msg.chatId);
         return;

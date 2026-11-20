@@ -4,7 +4,8 @@ import { authMiddleware } from '../auth.js';
 import { requirePermission, requireAnyPermission } from '../lib/authz/middleware.js';
 import { can } from '../lib/authz/effective.js';
 import * as referenceFiles from '../lib/referencefiles.js';
-import { diskStore, ensureSidecars, uploadPreview } from '../lib/uploads.js';
+import { diskStore, ensureSidecars, uploadPreview, recordUploads } from '../lib/uploads.js';
+import { canReadUpload } from '../lib/authz/acl.js';
 import { roleLimit } from '../lib/models.js';
 
 const upload = multer({ storage: diskStore, defParamCharset: 'utf8', limits: { fileSize: 8 * 1024 * 1024 } });
@@ -17,6 +18,7 @@ export default function registerMediaRoutes(app) {
     upload.single('file')(req, res, (err) => {
       if (err) return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'That file is too large (max 8 MB).' : 'Upload failed.' });
       if (!req.file) return res.status(400).json({ error: 'No file received.' });
+      recordUploads([req.file], req.user.id, true);
       res.json({ url: `/uploads/${req.file.filename}` });
     });
   });
@@ -36,6 +38,7 @@ export default function registerMediaRoutes(app) {
     const mb = Math.max(1, roleLimit('upload_limit_mb', can(req.user, 'admin.panel'), 8) || 8);
     uploaderFor(mb)(req, res, async (err) => {
       if (err) return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? `That file is too large (max ${mb} MB).` : 'Upload failed.' });
+      recordUploads(req.files || [], req.user.id);
       const files = (req.files || []).map(f => ({ url: `/uploads/${f.filename}`, name: f.originalname, type: f.mimetype, size: f.size }));
       await ensureSidecars(files);
       res.json({ files });
@@ -44,6 +47,7 @@ export default function registerMediaRoutes(app) {
 
   app.get('/api/uploads/:file/text', authMiddleware, async (req, res) => {
     const file = String(req.params.file || '');
+    if (!canReadUpload(req.user, file)) return res.status(404).json({ error: 'not found' });
     const a = { url: '/uploads/' + file, name: file };
     await ensureSidecars([a]);
     const r = uploadPreview(a);

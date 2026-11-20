@@ -34,6 +34,7 @@ import registerQualityRoutes from './routes/quality.js';
 import registerPeopleRoutes from './routes/people.js';
 import registerIdentityRoutes from './routes/identity.js';
 import registerGroupRoutes from './routes/groups.js';
+import registerSharingRoutes from './routes/sharing.js';
 import { gateOf } from './lib/authz/effective.js';
 import { announceSetup } from './lib/identity/signup.js';
 import { settleInterrupted } from './lib/regression.js';
@@ -41,6 +42,7 @@ import { localOnlyMiddleware } from './lib/localonly.js';
 import { installEgressGuard } from './lib/egress.js';
 import { sameOriginGuard, isHttps } from './lib/origin.js';
 import { uploadHeaders, isPublicUpload } from './lib/uploads.js';
+import { canReadUpload } from './lib/authz/acl.js';
 import { migratePromptBlocks } from './lib/systemprompt.js';
 import { ensureInitialRelease } from './lib/releases.js';
 
@@ -80,7 +82,7 @@ app.use(parseCookies);
 const uploadAuth = (req, res, next) => {
   if (isPublicUpload(req.path)) return next();
   const r = sessionFromRequest(req);
-  if (r && !gateOf(r.user)) return next();
+  if (r && !gateOf(r.user) && canReadUpload(r.user, req.path)) return next();
   res.status(404).json({ error: 'not found' });
 };
 app.use('/uploads', uploadHeaders, uploadAuth, express.static(UPLOADS, { index: false, dotfiles: 'deny' }));
@@ -104,6 +106,7 @@ registerQualityRoutes(app);
 registerPeopleRoutes(app);
 registerIdentityRoutes(app);
 registerGroupRoutes(app);
+registerSharingRoutes(app);
 registerMiscRoutes(app);
 
 // Unknown API routes answer in JSON. Falling through to the SPA handler below served a

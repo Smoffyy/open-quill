@@ -183,6 +183,8 @@ The admin panel, playground, model docs, setup guide and build mode are `React.l
 
 `server/test/http.test.js` spawns the real server against a throwaway database and drives it over `node:http` (not `fetch`) with the exact header shapes a browser sends, direct and behind a dev proxy. It exists because a CSRF-guard regression broke every write from the real UI while the unit suite passed. The other suites cover pure logic only, which is why logic is pulled out of components: `node --test` cannot parse JSX. Keep test discovery glob-based, or a new test file silently stops running in CI.
 
+A server test that loads the database, directly or through any module that imports `db.js`, either sets `OPEN_QUILL_DB` before a dynamic import or starts with `import './isolate.js';`, which points it at a throwaway database and removes it afterwards. Without one of those it opens whatever the root `.env` names, which is usually someone's real data, and runs every pending migration on it.
+
 ## Conventions
 
 - ESLint: `react-hooks/exhaustive-deps` is a warning on purpose (hooks key on a narrower dependency and read the rest through refs, which is what keeps the socket from reconnecting on every render). React Compiler rules are off.

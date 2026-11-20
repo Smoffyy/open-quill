@@ -1,3 +1,4 @@
+import './isolate.js';
 import { test } from 'node:test';
 import { livePreview } from '../tools/preview.js';
 import assert from 'node:assert/strict';

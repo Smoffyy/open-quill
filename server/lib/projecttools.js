@@ -2,6 +2,7 @@ import { db, now } from '../db.js';
 import * as sandbox from '../sandbox.js';
 import { workspaceOfProject } from './projectfiles.js';
 import { runChatSearchTool, formatChatSearchResult, chatSearchPayload } from './prompts.js';
+import { levelOf, atLeast } from './authz/acl.js';
 
 export const PROJECT_TOOLS = new Set(['project_files', 'project_read', 'project_search', 'project_chats', 'project_notes']);
 export const NOTES_MAX = 20000;
@@ -10,9 +11,10 @@ const LIST_CAP = 100;
 const SEARCH_CAP = 40;
 const DOC_EXT = new Set(['pdf', 'docx', 'doc', 'xlsx', 'xls', 'pptx', 'ppt', 'odt', 'ods', 'odp', 'rtf', 'epub']);
 
-function projectOf(chat) {
-  const p = chat?.project_id ? db.projects.byId(chat.project_id) : null;
-  return p && p.user_id === chat.user_id ? p : null;
+export function projectFor(chat) {
+  const project = chat?.project_id ? db.projects.byId(chat.project_id) : null;
+  const level = project ? levelOf(db.users.byId(chat.user_id), 'project', project) : null;
+  return level ? { project, level } : null;
 }
 
 function isDocument(f) {
@@ -52,8 +54,9 @@ function changeNotes(project, call) {
 }
 
 export async function runProjectTool(chat, call) {
-  const project = projectOf(chat);
-  if (!project) return { ok: false, error: 'This chat is not part of a project.' };
+  const found = projectFor(chat);
+  if (!found) return { ok: false, error: 'This chat is not part of a project.' };
+  const { project, level } = found;
   const key = workspaceOfProject(project.id);
   switch (call.tool) {
     case 'project_files': {
@@ -72,6 +75,7 @@ export async function runProjectTool(chat, call) {
       return { ...runChatSearchTool(chat.user_id, chat.id, inner, project.id), inner };
     }
     case 'project_notes':
+      if (!atLeast(level, 'edit')) return { ok: false, error: 'This project is shared with the user to read only, so its notes cannot be changed.' };
       return changeNotes(project, call);
     default:
       return { ok: false, error: `Unknown project tool ${call.tool}.` };

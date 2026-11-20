@@ -194,7 +194,7 @@ test('every frame the server can send has a handler', () => {
   const SENT = ['session_revoked', 'config', 'resume', 'files', 'tool_live', 'tool_live_delta',
     'tool_exec', 'tool', 'compacting', 'compacted', 'ctx_rolling', 'title', 'chat_ended',
     'routed', 'queued', 'status', 'prompt_size', 'telemetry', 'steered', 'start',
-    'reasoning', 'content', 'rewrite', 'error', 'done', 'task_started', 'hello', 'admin_draft', 'presence', 'folded'];
+    'reasoning', 'content', 'rewrite', 'error', 'done', 'task_started', 'hello', 'admin_draft', 'presence', 'folded', 'account', 'shared'];
   for (const type of SENT) assert.ok(handlers[type], 'no handler for ' + type);
 });
 

@@ -22,6 +22,8 @@ import CompactingBar from './components/chat/CompactingBar.jsx';
 import EngineStrip from './components/chat/EngineStrip.jsx';
 import ThreadSkeleton from './components/chat/ThreadSkeleton.jsx';
 import SummaryModal from './components/dialogs/SummaryModal.jsx';
+import ShareDialog from './components/dialogs/ShareDialog.jsx';
+import SharedBar from './components/chat/SharedBar.jsx';
 import CommandPalette from './components/dialogs/CommandPalette.jsx';
 import { computeActiveBg } from './lib/appbg.js';
 import { nextTheme } from './lib/palettes.js';
@@ -160,6 +162,7 @@ export default function App() {
   const sbMoveToProject = useCallback((...a) => sidebarFns.current.moveChatToProject(...a), []);
   const sbToggleArchive = useCallback((...a) => sidebarFns.current.toggleArchive(...a), []);
   const sbSetTags = useCallback((...a) => sidebarFns.current.setChatTags(...a), []);
+  const sbShareChat = useCallback((...a) => sidebarFns.current.shareChat(...a), []);
   const navTo = useCallback((to) => {
     setMobileDrawer(false);
     const library = LIBRARY_PAGES.includes(to);
@@ -358,6 +361,10 @@ export default function App() {
   const [chatPins, setChatPins] = useState([]);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
+  const [shareTarget, setShareTarget] = useState(null);
+  const [chatShared, setChatShared] = useState(null);
+  const [copying, setCopying] = useState(false);
+  const [sharedTick, setSharedTick] = useState(0);
   const [callOpen, setCallOpen] = useState(false);
   const [callRender, setCallRender] = useState(false);
   useEffect(() => {
@@ -788,11 +795,11 @@ export default function App() {
       : libPage === 'sessions' ? t('Sessions')
       : incognito ? t('Incognito chat')
       : codeMode ? (activeId ? ((chats.find(c => c.id === activeId)?.title) || t('Untitled session')) : t('New session'))
-      : activeId ? ((chats.find(c => c.id === activeId)?.title) || t('Untitled chat'))
+      : activeId ? ((chats.find(c => c.id === activeId)?.title) || chatShared?.title || t('Untitled chat'))
       : t('New chat')
     );
     document.title = titleWithUnread(codeMode ? `${head} - ${appName} ${t('Code')}` : `${head} - ${appName}`, unreadChats.length);
-  }, [activeId, chats, cfg.appName, incognito, notFound, showAdmin, showPlayground, docsTarget, showProjects, projectOpenId, projects, libPage, codeMode, unreadChats.length]);
+  }, [activeId, chats, cfg.appName, incognito, notFound, showAdmin, showPlayground, docsTarget, showProjects, projectOpenId, projects, libPage, codeMode, unreadChats.length, chatShared]);
   function exportAllChats() { window.open('/api/chats/export-all', '_blank'); }
   async function importChatsFile(file) {
     const job = notify(t('Importing chats'), { icon: 'upload', progress: true });
@@ -868,7 +875,8 @@ export default function App() {
       setAsk: (chatId, q) => setAsk(chatId, q),
       contextChanged: () => setCtxTick(n => n + 1),
       taskStarted: (m) => notify(t('Running scheduled task "{title}"', { title: m.title || t('New chat') }), { icon: 'clock' }),
-      turnFinished: (chatId, failed) => turnFinished(chatId, failed)
+      turnFinished: (chatId, failed) => turnFinished(chatId, failed),
+      shared: (frame) => sharedChanged(frame)
     }
   };
 
@@ -1099,7 +1107,37 @@ export default function App() {
     api.patch('/api/chats/' + key, { mcpOff: next }).catch(() => warn());
   }
 
+  function shareChat(c) {
+    setShareTarget({ type: 'chat', id: c.id, title: c.title });
+  }
+  async function copySharedChat() {
+    if (!activeId || copying) return;
+    setCopying(true);
+    try {
+      const r = await api.post('/api/chats/' + activeId + '/copy');
+      await loadChats();
+      openChat(r.id);
+      notify(t('Copied into your chats'), { kind: 'success' });
+    } catch (e) {
+      notify(e.message, { kind: 'error' });
+    } finally {
+      setCopying(false);
+    }
+  }
+  function sharedChanged(frame) {
+    loadProjects();
+    loadSkills();
+    setSharedTick(n => n + 1);
+    if (frame.resource !== 'chat' || frame.id !== activeIdRef.current || !chatShared) return;
+    chatCache.current.delete(frame.id);
+    api.get('/api/chats/' + frame.id).catch(() => {
+      notify(t('This chat is no longer shared with you.'), { kind: 'warn' });
+      newChat();
+    });
+  }
+
   function resetChatView() {
+    setChatShared(null);
     setPlanDismissed(null);
     setChatMcpOff([]);
     setFiles([]); setPendingFiles({}); setHasSummary(false);
@@ -1121,6 +1159,7 @@ export default function App() {
     setHasSummary(!!chat.hasSummary);
     setChatEnded(!!chat.ended);
     setChatEndedReason(chat.endedReason || '');
+    setChatShared(chat.access && chat.access !== 'owner' ? { owner: chat.owner || '', title: chat.title || '' } : null);
     setChatGenParams(chat.genParams || null);
     setChatSysOverride(chat.systemOverride || '');
     setChatPins(Array.isArray(chat.pinnedFiles) ? chat.pinnedFiles : []);
@@ -1733,7 +1772,7 @@ export default function App() {
   );
   const originProject = activeChat?.originProjectId ? projects.find(p => p.id === activeChat.originProjectId) : null;
 
-  sidebarFns.current = { newChat, openChat, deleteChat, toggleStar, toggleArchive, setChatTags, logout, openProjects, moveChatToProject, switchMode, alignMode, newProject: () => { openProjects(null); setProjectCreate(true); } };
+  sidebarFns.current = { newChat, openChat, deleteChat, toggleStar, toggleArchive, setChatTags, logout, openProjects, moveChatToProject, switchMode, alignMode, shareChat, newProject: () => { openProjects(null); setProjectCreate(true); } };
 
   const streamKey = assistantIdRef.current || '_stream';
   const codeLive = !codeMode ? null
@@ -1786,7 +1825,7 @@ export default function App() {
         onSettings={onSettingsCb} onAdmin={onAdminCb} onPlayground={onPlaygroundCb}
         onCredits={onCreditsCb} onChangelog={onChangelogCb} onLicense={onLicenseCb} onPrivacy={onPrivacyCb} onLogout={sbLogout} version={cfg.version}
         onChatsOverview={onChatsOverviewCb}
-        projects={projects} onProjects={sbProjects} onOpenProject={sbOpenProject} onNewProject={sbNewProject} onMoveToProject={sbMoveToProject}
+        projects={projects} onProjects={sbProjects} onOpenProject={sbOpenProject} onNewProject={sbNewProject} onMoveToProject={sbMoveToProject} onShare={can(user, 'chats.share') ? sbShareChat : null}
         busyChats={busyChats} unreadChats={unreadChats} onStopChat={stopChat} />
 
       {collapsed && !docsTarget && (
@@ -1847,7 +1886,7 @@ export default function App() {
         ) : libPage ? (
           <div className="lib-overlay chats-overview" role="region" aria-label={libPage === 'sessions' ? t('Sessions') : t('Chats')}>
             {pageMenuBtn}
-            <ChatsOverview key={libPage} mode={libPage === 'sessions' ? 'code' : 'chat'} onSearch={() => setShowSearch(true)}
+            <ChatsOverview key={libPage} mode={libPage === 'sessions' ? 'code' : 'chat'} sharedTick={sharedTick} onSearch={() => setShowSearch(true)}
               onOpen={(id) => { setLibPage(null); openChat(id); }} onChatsChanged={() => loadChats()} />
           </div>
         ) : null}
@@ -1902,10 +1941,10 @@ export default function App() {
           <>
             <ChatTopbar
               lead={<ModelPickerSlot at="topbar">{modelPicker}</ModelPickerSlot>}
-              chat={activeChat} chatId={activeId} project={activeProject} booting={booting}
+              chat={activeChat} chatId={activeId} project={activeProject} booting={booting} shared={chatShared}
               projects={projects} busy={busyChats.includes(activeId)}
               onOpenMenu={() => setMobileDrawer(true)} onOpenProject={openProjects} onRename={renameChat}
-              onStopChat={stopChat} onToggleStar={toggleStar} onToggleArchive={toggleArchive} onSetTags={setChatTags} allTags={allTags} onMoveToProject={moveChatToProject} onDelete={deleteChat}
+              onStopChat={stopChat} onToggleStar={toggleStar} onToggleArchive={toggleArchive} onSetTags={setChatTags} allTags={allTags} onMoveToProject={moveChatToProject} onDelete={deleteChat} onShare={can(user, 'chats.share') ? shareChat : null}
               actions={
               <TopbarActions
                 items={[
@@ -1933,14 +1972,14 @@ export default function App() {
                   let lastA = null;
                   for (let i = renderList.length - 1; i >= 0; i--) if (renderList[i].role === 'assistant') { lastA = renderList[i]; break; }
                   return renderList.map(msg => (
-                    <Message key={msg._k || msg.id} msg={msg} latest={msg === lastA} model={resolveMsgModel(msg, model)} chatId={activeId} pins={chatPins} chatEnded={chatEnded}
+                    <Message key={msg._k || msg.id} msg={msg} latest={msg === lastA} model={resolveMsgModel(msg, model)} chatId={chatShared ? null : activeId} pins={chatPins} chatEnded={chatEnded}
                       canContinue={(canContinue || !!msg.truncated) && !streaming && !chatEnded && msg === lastA && !msg._streaming}
                       onContinue={continueReply}
                       steers={msg._streaming ? liveSteers : (msg.steers || null)}
                       status={msg._streaming ? modelStatus : null}
                       statusDelay={statusDelay}
                       streaming={!!msg._streaming} phase={msg._streaming ? ((modelById.get(currentId)?.hideThinking && phase === 'thinking') ? 'generating' : phase) : 'static'} liveCall={msg._streaming ? liveCall : null} liveCalls={msg._streaming ? liveCalls : EMPTY_CALLS}
-                      onTogglePinFile={togglePinFile} onRegenerate={regenerate} onEdit={editMessage} onEditAssistant={editAssistantMessage} onDelete={deleteMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin}
+                      onTogglePinFile={chatShared ? null : togglePinFile} onRegenerate={regenerate} onEdit={editMessage} onEditAssistant={editAssistantMessage} onDelete={deleteMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin}
                       showSpeed={showMsgSpeed}
                       showIcon={msg.role === 'assistant' && (layout.replyIcon === 'every' || (lastA && msg.id === lastA.id))}
                       fadeWords={fadeWords} />
@@ -1960,10 +1999,10 @@ export default function App() {
             <div className={'composer-wrap active-composer' + (layout.floatingComposer ? ' floating' : '')}>
               {user?.prefs?.engineStrip === true && <EngineStrip telemetry={telemetry} streaming={streaming} route={routeInfo} />}
               {callDock}
-              <Composer {...composerProps} thread focusKey={focusTick}
+              {chatShared ? <SharedBar owner={chatShared.owner} busy={copying} onCopy={can(user, 'chats.create') ? copySharedChat : null} /> : <Composer {...composerProps} thread focusKey={focusTick}
                 jump={showJump ? <button className="to-bottom" onClick={jumpDown} data-tip={t('Jump to latest')} aria-label={t('Jump to latest')}><Down style={{ width: 17 }} /></button> : null}
                 panel={!incognito && (plans.plan || question) ? <AgentPanel plan={plans.plan} previousPlan={plans.previousPlan} onDismissPlan={dismissPlan} question={question} onAnswer={answerQuestion} onSkip={() => answerQuestion(null)} /> : null}
-                contextRing={contextRing} footer={layout.id === 'card' ? <Disclaimer text={cfg.disclaimer} /> : null} />
+                contextRing={contextRing} footer={layout.id === 'card' ? <Disclaimer text={cfg.disclaimer} /> : null} />}
               {layout.id !== 'card' && <Disclaimer text={cfg.disclaimer} />}
             </div>
           </>
@@ -1979,6 +2018,7 @@ export default function App() {
         <ChatControls chatId={activeId || null} initialParams={chatGenParams} initialOverride={chatSysOverride} onChange={(p, o) => { setChatGenParams(p && Object.keys(p).length ? p : null); setChatSysOverride(o || ''); }} onClose={() => setCtlOpen(false)} />
       )}
 
+      {shareTarget && <ShareDialog {...shareTarget} onClose={() => setShareTarget(null)} onLeft={() => setSharedTick(n => n + 1)} />}
       {summaryOpen && activeId && (
         <SummaryModal chatId={activeId} onClose={() => setSummaryOpen(false)}
           onChanged={(has) => { setHasSummary(has); }} />

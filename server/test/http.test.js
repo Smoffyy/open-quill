@@ -446,55 +446,63 @@ test('admin settings and branding survive hostile input rather than 500', async 
   await browser('PATCH', '/api/admin/app-config', { body: { appName: 'open-quill' } });
 });
 
+const uploadFile = async (call, name, type, body, route = '/api/upload') => {
+  const boundary = 'oqfile' + Date.now() + Math.random().toString(36).slice(2);
+  const field = route === '/api/upload' ? 'files' : 'file';
+  const raw = Buffer.concat([
+    Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${field}"; filename="${name}"\r\nContent-Type: ${type}\r\n\r\n`, 'utf8'),
+    Buffer.from(body), Buffer.from(`\r\n--${boundary}--\r\n`)
+  ]);
+  const res = await call('POST', route, { raw, headers: { 'Content-Type': 'multipart/form-data; boundary=' + boundary } });
+  assert.equal(res.status, 200, res.text);
+  return route === '/api/upload' ? res.json.files[0].url : res.json.url;
+};
+
 test('uploads are served defensively and misses are honest', async () => {
   const missing = await request('GET', '/uploads/does-not-exist.html', { cookie });
   assert.equal(missing.status, 404, 'a missing upload is not the app HTML with a 200');
   assert.match(missing.headers['content-type'] || '', /json/);
 
-  const uploadsDir = path.join(SERVER_ROOT, 'data', 'databases', DB_NAME, 'uploads');
-  fs.mkdirSync(uploadsDir, { recursive: true });
-  fs.writeFileSync(path.join(uploadsDir, 'probe.html'), '<script>alert(1)</script>');
-  fs.writeFileSync(path.join(uploadsDir, 'probe.png'), 'not really a png');
-
-  const page = await request('GET', '/uploads/probe.html', { cookie });
+  const page = await request('GET', await uploadFile(browser, 'probe.html', 'text/html', '<script>alert(1)</script>'), { cookie });
   assert.equal(page.status, 200);
   assert.equal(page.headers['content-disposition'], 'attachment', 'html downloads, it does not become a live document');
   assert.match(page.headers['content-security-policy'] || '', /default-src 'none'/);
   assert.match(page.headers['content-security-policy'] || '', /sandbox/);
   assert.equal(page.headers['x-content-type-options'], 'nosniff');
 
-  const img = await request('GET', '/uploads/probe.png', { cookie });
+  const img = await request('GET', await uploadFile(browser, 'probe.png', 'image/png', 'not really a png'), { cookie });
   assert.equal(img.status, 200);
   assert.equal(img.headers['content-disposition'], undefined, 'images still render in place');
+
+  fs.writeFileSync(path.join(SERVER_ROOT, 'data', 'databases', DB_NAME, 'uploads', 'dropped.png'), 'put there by hand');
+  assert.equal((await request('GET', '/uploads/dropped.png', { cookie })).status, 404, 'a file the app never took in is not served');
 });
 
 test('uploads need a session, except the icon the sign-in screen shows', async () => {
-  const uploadsDir = path.join(SERVER_ROOT, 'data', 'databases', DB_NAME, 'uploads');
-  fs.mkdirSync(uploadsDir, { recursive: true });
-  fs.writeFileSync(path.join(uploadsDir, 'attachment.png'), 'someone else’s file');
-  fs.writeFileSync(path.join(uploadsDir, 'brand.png'), 'the app icon');
+  const attachment = await uploadFile(browser, 'attachment.png', 'image/png', 'someone else’s file');
+  const brand = await uploadFile(browser, 'brand.png', 'image/png', 'the app icon', '/api/admin/upload');
 
   // Attachments are other people's conversations. Knowing the URL is not authorisation,
   // and 404 rather than 401 so a signed-out caller cannot even confirm the file exists.
-  const anon = await request('GET', '/uploads/attachment.png');
+  const anon = await request('GET', attachment);
   assert.equal(anon.status, 404);
-  assert.equal((await request('GET', '/uploads/attachment.png', { cookie })).status, 200, 'a member still sees it');
+  assert.equal((await request('GET', attachment, { cookie })).status, 200, 'its owner still sees it');
 
   // The sign-in screen shows the app icon to someone who by definition has no session.
-  assert.equal((await request('GET', '/uploads/brand.png')).status, 404, 'not public until it is the icon');
-  const set = await browser('PATCH', '/api/admin/app-config', { body: { appIcon: '/uploads/brand.png' } });
+  assert.equal((await request('GET', brand)).status, 404, 'not public until it is the icon');
+  const set = await browser('PATCH', '/api/admin/app-config', { body: { appIcon: brand } });
   assert.equal(set.status, 200);
   // An admin edit only stages the value, so the icon is not public on the strength
   // of a draft: it has to be published first.
-  assert.equal((await request('GET', '/uploads/brand.png')).status, 404, 'a staged icon is still private');
+  assert.equal((await request('GET', brand)).status, 404, 'a staged icon is still private');
   assert.equal((await browser('POST', '/api/admin/changes/publish', { body: {} })).status, 200);
-  assert.equal((await request('GET', '/uploads/brand.png')).status, 200, 'now the login screen can load it');
-  assert.equal((await request('GET', '/uploads/attachment.png')).status, 404, 'and only that one file');
+  assert.equal((await request('GET', brand)).status, 200, 'now the login screen can load it');
+  assert.equal((await request('GET', attachment)).status, 404, 'and only that one file');
 
   // the exemption follows the setting rather than being latched on first use
   await browser('PATCH', '/api/admin/app-config', { body: { appIcon: '' } });
   await browser('POST', '/api/admin/changes/publish', { body: {} });
-  assert.equal((await request('GET', '/uploads/brand.png')).status, 404, 'unset the icon and it is private again');
+  assert.equal((await request('GET', brand)).status, 404, 'unset the icon and it is private again');
 });
 
 test('a chat upload keeps its UTF-8 name and any format previews as the text the model reads', async () => {
@@ -1289,9 +1297,9 @@ test('consult settings are admin-only, sanitised and add their block', async () 
   await browser('POST', '/api/admin/changes/publish', { body: {} });
 });
 
-function chatTurn(send, { timeoutMs = 20000, onFrame = null } = {}) {
+function chatTurn(send, { timeoutMs = 20000, onFrame = null, session = cookie } = {}) {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`, { headers: { Cookie: cookie, Origin: ORIGIN } });
+    const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`, { headers: { Cookie: session, Origin: ORIGIN } });
     const got = [];
     const finish = (fn, arg) => { clearTimeout(timer); try { ws.terminate(); } catch {} fn(arg); };
     const timer = setTimeout(() => finish(reject, new Error('no done frame: ' + JSON.stringify(got.slice(-5)))), timeoutMs);
@@ -1887,6 +1895,141 @@ test('a regression run grades both sides, and a sampled reply is checked and ope
     await browser('POST', '/api/admin/models/remove', { body: { ids: [base, cand] } });
     await browser('DELETE', `/api/admin/providers/${provider_id}`);
   } finally {
+    await mock.close();
+  }
+});
+
+test('sharing hands out exactly the granted level, and nobody reaches what was not shared with them', async () => {
+  const { mockOpenAi } = await import('./mockapis.js');
+  const mock = await mockOpenAi({ key: 'k-share', models: ['share-model'], respond: () => ({ text: 'Seen it.' }) });
+  const ana = await joinAs('share-owner@example.com');
+  const ben = await joinAs('share-reader@example.com');
+  const cy = await joinAs('share-stranger@example.com');
+  const A = as(ana), B = as(ben), C = as(cy);
+  const share = (call, type, id, principalId, level, principalType = 'user') => call('PUT', `/api/shares/${type}/${id}`, { body: { principalType, principalId, level } });
+  const unshare = (call, type, id, principalId, principalType = 'user') => call('DELETE', `/api/shares/${type}/${id}`, { body: { principalType, principalId } });
+  let provider_id = null;
+  let modelId = null;
+  const groups = [];
+  try {
+    const project = (await A('POST', '/api/projects', { body: { name: 'Roadmap' } })).json;
+    assert.equal((await A('POST', `/api/projects/${project.id}/files/new`, { body: { path: 'plan.md' } })).status, 200);
+    assert.equal((await B('GET', `/api/projects/${project.id}`)).status, 404, 'an unshared project looks missing');
+    assert.equal((await B('GET', `/api/projects/${project.id}/files`)).status, 404);
+    assert.equal((await B('GET', `/api/shares/project/${project.id}`)).status, 404, 'and so does who has it');
+    assert.equal((await B('GET', '/api/directory?q=share-owner')).json.people[0].id, ana.id, 'people can be found to share with');
+
+    assert.equal((await share(A, 'project', project.id, ben.id, 'view')).status, 200);
+    const seen = (await B('GET', `/api/projects/${project.id}`)).json;
+    assert.equal(seen.access, 'view');
+    assert.equal(seen.canShare, false);
+    assert.ok((await B('GET', '/api/projects')).json.some(p => p.id === project.id && p.owner), 'it is listed with its owner');
+    assert.equal((await B('GET', `/api/projects/${project.id}/file?path=plan.md`)).status, 200, 'a viewer reads the knowledge');
+    assert.equal((await B('POST', `/api/projects/${project.id}/files/new`, { body: { path: 'mine.md' } })).status, 403, 'but cannot add to it');
+    assert.equal((await B('PATCH', `/api/projects/${project.id}`, { body: { instructions: 'Be terse.' } })).status, 403);
+    assert.equal((await share(B, 'project', project.id, cy.id, 'view')).status, 403, 'or share it on');
+    assert.equal((await B('DELETE', `/api/projects/${project.id}`)).status, 403);
+    assert.equal((await B('POST', '/api/chats', { body: { projectId: project.id } })).json.projectId, project.id, 'a viewer chats inside it');
+
+    assert.equal((await share(A, 'project', project.id, ben.id, 'edit')).status, 200);
+    assert.equal((await B('POST', `/api/projects/${project.id}/files/new`, { body: { path: 'mine.md' } })).status, 200, 'an editor adds files');
+    assert.equal((await B('DELETE', `/api/projects/${project.id}`)).status, 403, 'only the owner deletes');
+    const who = (await A('GET', `/api/shares/project/${project.id}`)).json;
+    assert.deepEqual(who.people.map(p => [p.id, p.level]), [[ben.id, 'edit']]);
+    assert.equal((await B('GET', `/api/shares/project/${project.id}`)).json.people.length, 0, 'only managers see everyone who has it');
+
+    assert.equal((await unshare(A, 'project', project.id, ben.id)).status, 200);
+    assert.equal((await B('GET', `/api/projects/${project.id}/files`)).status, 404, 'revoking applies on the next request');
+    assert.equal((await B('POST', '/api/chats', { body: { projectId: project.id } })).json.projectId, null, 'and the project can no longer be picked');
+
+    const outer = await groupNamed('Readers');
+    const inner = await groupNamed('New readers');
+    groups.push(outer, inner);
+    assert.equal((await browser('PUT', `/api/admin/groups/${outer}/groups/${inner}`)).status, 200);
+    assert.equal((await browser('PUT', `/api/admin/groups/${inner}/members`, { body: { add: [cy.id] } })).status, 200);
+    assert.equal((await share(A, 'project', project.id, outer, 'view', 'group')).status, 200);
+    assert.equal((await C('GET', `/api/projects/${project.id}`)).status, 200, 'shared through a nested group');
+    const why = (await A('GET', `/api/shares/project/${project.id}`)).json.people.find(p => p.id === cy.id);
+    assert.deepEqual(why.reasons[0].path.map(g => g.name), ['Readers', 'New readers']);
+    assert.equal((await browser('PUT', `/api/admin/groups/${inner}/members`, { body: { remove: [cy.id] } })).status, 200);
+    assert.equal((await C('GET', `/api/projects/${project.id}`)).status, 404, 'leaving the group ends it');
+
+    provider_id = await connection('openrouter', mock.url, 'k-share');
+    modelId = (await browser('POST', '/api/admin/models', { body: { display_name: 'Share', internal_name: 'share-model', provider_id } })).json.id;
+    assert.equal((await browser('POST', '/api/admin/changes/publish', { body: {} })).status, 200);
+
+    const notes = await uploadFile(A, 'notes.txt', 'text/plain', 'secret notes');
+    const chat = (await A('POST', '/api/chats', { body: {} })).json;
+    const sent = await chatTurn({ type: 'chat', chatId: chat.id, modelId, content: 'Read this', attachments: [{ url: notes, name: 'notes.txt', type: 'text/plain', size: 12 }] }, { session: ana.cookie });
+    assert.equal(sent.find(f => f.type === 'error'), undefined, JSON.stringify(sent.find(f => f.type === 'error')));
+    assert.ok(JSON.stringify(mock.requests.filter(r => r.body.stream).at(-1).body).includes('secret notes'), 'the owner attaches their own file');
+
+    const theirs = (await B('POST', '/api/chats', { body: {} })).json;
+    assert.equal((await B('POST', `/api/chats/${theirs.id}/pins`, { body: { url: notes, name: 'notes.txt' } })).status, 404, 'nobody pins a file they did not upload');
+    await chatTurn({ type: 'chat', chatId: theirs.id, modelId, content: 'What does it say?', attachments: [{ url: notes, name: 'notes.txt', type: 'text/plain', size: 12 }] }, { session: ben.cookie });
+    assert.ok(!JSON.stringify(mock.requests.filter(r => r.body.stream).at(-1).body).includes('secret notes'), 'a borrowed attachment never reaches the model');
+    assert.deepEqual((await B('GET', `/api/chats/${theirs.id}`)).json.messages.find(m => m.role === 'user').attachments, [], 'and is not stored');
+    assert.equal((await request('GET', notes, { cookie: ben.cookie })).status, 404, 'knowing the address is not access');
+    assert.equal((await B('GET', `/api/uploads/${notes.split('/').pop()}/text`)).status, 404);
+
+    assert.equal((await B('GET', `/api/chats/${chat.id}`)).status, 404);
+    assert.equal((await share(B, 'chat', chat.id, ben.id, 'view')).status, 404, 'a stranger cannot share it to themselves');
+    assert.equal((await share(A, 'chat', chat.id, ben.id, 'edit')).status, 400, 'chats are shared to read only');
+    assert.equal((await share(A, 'chat', chat.id, ben.id, 'view')).status, 200);
+    const read = (await B('GET', `/api/chats/${chat.id}`)).json;
+    assert.equal(read.chat.access, 'view');
+    assert.equal(read.messages.length, 2);
+    assert.ok((await B('GET', '/api/shared/chats')).json.chats.some(c => c.id === chat.id));
+    assert.equal((await request('GET', notes, { cookie: ben.cookie })).status, 200, 'a reader sees what the chat shows');
+    assert.equal((await request('GET', notes, { cookie: cy.cookie })).status, 404, 'and nobody else does');
+
+    await B('PATCH', `/api/chats/${chat.id}`, { body: { title: 'Taken over' } });
+    await B('DELETE', `/api/chats/${chat.id}`);
+    assert.equal((await B('POST', `/api/chats/${chat.id}/fork`, { body: {} })).status, 404);
+    const hijack = await exchange({ Cookie: ben.cookie, Origin: ORIGIN }, { type: 'chat', chatId: chat.id, modelId, content: 'Mine now' });
+    assert.equal(hijack[0]?.type, 'error', 'a reader cannot write to it');
+    const intact = (await A('GET', `/api/chats/${chat.id}`)).json;
+    assert.notEqual(intact.chat.title, 'Taken over');
+    assert.equal(intact.messages.length, 2, 'the owner’s chat is untouched');
+
+    const copy = await B('POST', `/api/chats/${chat.id}/copy`);
+    assert.equal(copy.status, 200, copy.text);
+    const mine = (await B('GET', `/api/chats/${copy.json.id}`)).json;
+    assert.equal(mine.chat.access, 'owner');
+    const copied = mine.messages.find(m => m.role === 'user').attachments[0].url;
+    assert.notEqual(copied, notes, 'the copy owns its own file');
+    assert.equal((await unshare(A, 'chat', chat.id, ben.id)).status, 200);
+    assert.equal((await B('GET', `/api/chats/${chat.id}`)).status, 404, 'revoked at once');
+    assert.equal((await request('GET', notes, { cookie: ben.cookie })).status, 404, 'with its attachment');
+    assert.equal((await request('GET', copied, { cookie: ben.cookie })).status, 200, 'while the copy stays theirs');
+
+    const skill = (await A('POST', '/api/skills', { body: { name: 'house-style', description: 'How we write', body: '# House style' } })).json;
+    assert.equal((await share(A, 'skill', skill.id, ben.id, 'view')).status, 200);
+    const listed = (await B('GET', '/api/skills')).json.skills.find(s => s.id === skill.id);
+    assert.equal(listed.scope, 'shared');
+    assert.equal(listed.editable, false);
+    assert.equal(listed.enabled, true);
+    assert.equal((await B('PATCH', `/api/skills/${skill.id}`, { body: { body: '# Mine now' } })).status, 403);
+    assert.equal((await B('PATCH', `/api/skills/${skill.id}`, { body: { enabled: false } })).json.enabled, false, 'a reader switches it off for themselves');
+    assert.equal((await A('GET', '/api/skills')).json.skills.find(s => s.id === skill.id).enabled, true, 'without touching the owner');
+    assert.equal((await B('DELETE', `/api/skills/${skill.id}`)).status, 404);
+    assert.equal((await share(A, 'skill', skill.id, ben.id, 'edit')).status, 200);
+    assert.equal((await B('PATCH', `/api/skills/${skill.id}`, { body: { body: '# Written together' } })).status, 200, 'an editor edits it');
+    assert.equal((await A('GET', '/api/skills')).json.skills.find(s => s.id === skill.id).body, '# Written together');
+
+    assert.equal((await share(A, 'project', project.id, ben.id, 'view')).status, 200);
+    assert.equal((await browser('DELETE', `/api/admin/users/${ana.id}`)).status, 200);
+    assert.equal((await B('GET', `/api/projects/${project.id}`)).status, 404, 'removing the owner removes what they shared');
+    assert.ok(!(await B('GET', '/api/skills')).json.skills.some(s => s.id === skill.id));
+    assert.deepEqual((await B('GET', '/api/shared/chats')).json.chats, []);
+  } finally {
+    for (const g of groups) await browser('DELETE', `/api/admin/groups/${g}`);
+    for (const who of [ana, ben, cy]) await browser('DELETE', `/api/admin/users/${who.id}`);
+    if (modelId) {
+      await browser('POST', '/api/admin/models/remove', { body: { ids: [modelId] } });
+      await browser('POST', '/api/admin/changes/publish', { body: {} });
+    }
+    if (provider_id) await browser('DELETE', `/api/admin/providers/${provider_id}`);
     await mock.close();
   }
 });

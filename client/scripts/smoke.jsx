@@ -48,6 +48,8 @@ import GroupsSection from '../src/components/admin/sections/GroupsSection.jsx';
 import RolesSection from '../src/components/admin/sections/RolesSection.jsx';
 import PermissionPicker from '../src/components/admin/people/PermissionPicker.jsx';
 import Pending from '../src/components/pages/Pending.jsx';
+import ShareDialog from '../src/components/dialogs/ShareDialog.jsx';
+import SharedBar from '../src/components/chat/SharedBar.jsx';
 import ChatHistorySection from '../src/components/admin/sections/ChatHistorySection.jsx';
 import ModelsSection from '../src/components/admin/sections/ModelsSection.jsx';
 import Catalog from '../src/components/admin/models/Catalog.jsx';
@@ -96,6 +98,9 @@ cases.push(['Login:signin', () => React.createElement(Login, { onLogin: noop, cf
 cases.push(['Login:firstrun', () => React.createElement(Login, { onLogin: noop, cfg: { signup: 'open', firstRun: true } })]);
 cases.push(['Login:approval', () => React.createElement(Login, { onLogin: noop, cfg: { signup: 'approval', firstRun: false } })]);
 cases.push(['Pending', () => React.createElement(Pending, { user: { email: 'p@b.c', gate: 'pending' }, cfg: { appName: 'Quill' }, onUser: noop })]);
+cases.push(['ShareDialog', () => React.createElement(ShareDialog, { type: 'project', id: 'p1', title: 'Roadmap', onClose: noop })]);
+cases.push(['SharedBar', () => React.createElement(SharedBar, { owner: 'Ana', onCopy: noop })]);
+cases.push(['SharedBar:busy', () => React.createElement(SharedBar, { owner: 'Ana', busy: true, onCopy: noop })]);
 const chatArts = [{ path: 'trip-plan.md', ext: 'md', size: 1200, v: 2 }, { path: 'flow.mmd', ext: 'mmd', size: 80, v: 1 }];
 cases.push(['ChatArtifacts:empty', () => React.createElement(ChatArtifacts, { chatId: 'c1', files: [], onFilesChanged: noop, onClose: noop })]);
 cases.push(['ChatArtifacts:list', () => React.createElement(ChatArtifacts, { chatId: 'c1', files: chatArts, projects: [{ id: 'p1', name: 'Trip' }], onFilesChanged: noop, onClose: noop })]);
@@ -270,7 +275,7 @@ const ADMIN_SECTIONS = [
   ['Skills', SkillsSection], ['Storage', StorageSection], ['Usage', UsageSection],
   ['Voice', VoiceSection], ['Releases', ReleasesSection], ['Evaluations', EvalsSection], ['Quality', QualitySection],
 ];
-const ALL_PERMISSIONS = ['chats.create', 'chats.edit', 'chats.delete', 'chats.export', 'chats.incognito', 'chats.inspect', 'chats.advanced', 'models.unavailable', 'code.use', 'projects.create', 'uploads.create', 'tasks.schedule', 'skills.create', 'mcp.connect', 'tools.web_search', 'tools.mcp', 'tools.memory', 'tools.chat_search', 'tools.reference_files', 'tools.consult', 'voice.dictation', 'voice.call', 'account.delete', 'admin.panel', 'admin.models', 'admin.providers', 'admin.tools', 'admin.interface', 'admin.policy', 'admin.quality', 'admin.usage', 'admin.audit', 'admin.storage', 'admin.publish', 'admin.users', 'admin.groups'];
+const ALL_PERMISSIONS = ['chats.create', 'chats.edit', 'chats.delete', 'chats.export', 'chats.incognito', 'chats.inspect', 'chats.advanced', 'chats.share', 'models.unavailable', 'code.use', 'projects.create', 'projects.share', 'uploads.create', 'tasks.schedule', 'skills.create', 'skills.share', 'mcp.connect', 'tools.web_search', 'tools.mcp', 'tools.memory', 'tools.chat_search', 'tools.reference_files', 'tools.consult', 'voice.dictation', 'voice.call', 'account.delete', 'admin.panel', 'admin.models', 'admin.providers', 'admin.tools', 'admin.interface', 'admin.policy', 'admin.quality', 'admin.usage', 'admin.audit', 'admin.storage', 'admin.publish', 'admin.users', 'admin.groups'];
 const adminUser = { id: 'u1', displayName: 'Admin', email: 'a@b.c', role: 'owner', owner: true, permissions: ALL_PERMISSIONS, prefs: {} };
 for (const [name, Section] of ADMIN_SECTIONS) {
   cases.push(['AdminSection:' + name, () => React.createElement(

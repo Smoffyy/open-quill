@@ -34,6 +34,10 @@ export const handlers = {
     ctx.actions.refreshAccount();
   },
 
+  shared(m, ctx) {
+    ctx.actions.shared(m);
+  },
+
   hello(m, ctx) {
     ctx.actions.syncConfig(m.configVersion, true);
   },

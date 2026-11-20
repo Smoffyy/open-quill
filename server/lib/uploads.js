@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import multer from 'multer';
-import { db, uid, getSetting } from '../db.js';
+import { db, uid, now, tx, getSetting, setSetting } from '../db.js';
 import { dataPath } from './dataroot.js';
 import { looksTextual, extractDocument, isRtf } from './extract.js';
 
@@ -24,6 +24,51 @@ export const diskStore = multer.diskStorage({
   destination: UPLOADS,
   filename: (_r, file, cb) => cb(null, uid() + safeExt(file.originalname))
 });
+
+export function recordUploads(files, userId, workspace = false) {
+  const at = now();
+  tx(() => {
+    for (const f of files) db.uploads.insert({ id: f.filename.toLowerCase(), file: f.filename, user_id: userId, workspace, created_at: at });
+  });
+}
+
+export function copyUpload(url, userId) {
+  const src = uploadPath(url);
+  if (!src) return null;
+  const file = uid() + safeExt(src);
+  const dest = path.join(UPLOADS, file);
+  try {
+    fs.copyFileSync(src, dest);
+    if (fs.existsSync(src + '.txt')) fs.copyFileSync(src + '.txt', dest + '.txt');
+  } catch { return null; }
+  db.uploads.insert({ id: file.toLowerCase(), file, user_id: userId, workspace: false, created_at: now() });
+  return '/uploads/' + file;
+}
+
+function claimLegacyUploads() {
+  const owners = new Map();
+  const claim = (url, userId) => {
+    if (typeof url !== 'string' || !url.startsWith('/uploads/') || !userId) return;
+    const id = path.posix.basename(url).toLowerCase();
+    if (!owners.has(id)) owners.set(id, userId);
+  };
+  for (const r of db.messages.attachmentOwners()) for (const a of JSON.parse(r.attachments)) claim(a?.url, r.user_id);
+  for (const c of db.chats.withPins()) for (const p of c.pinned_files) claim(p?.url, c.user_id);
+  const files = fs.readdirSync(UPLOADS, { withFileTypes: true }).filter(d => d.isFile()).map(d => d.name);
+  const present = new Set(files);
+  const at = now();
+  tx(() => {
+    for (const file of files) {
+      const id = file.toLowerCase();
+      if ((file.endsWith('.txt') && present.has(file.slice(0, -4))) || db.uploads.byId(id)) continue;
+      const owner = owners.get(id) || null;
+      db.uploads.insert({ id, file, user_id: owner, workspace: !owner, created_at: at });
+    }
+  });
+  setSetting('uploads_owned_v1', '1');
+}
+
+if (!getSetting('uploads_owned_v1')) claimLegacyUploads();
 
 const TEXT_EXT = new Set(['.txt', '.md', '.markdown', '.csv', '.tsv', '.json', '.js', '.jsx', '.ts', '.tsx', '.py', '.lua', '.html', '.css', '.xml', '.yml', '.yaml', '.sh', '.c', '.cpp', '.h', '.java', '.rb', '.go', '.rs', '.php', '.sql', '.ini', '.cfg', '.log']);
 const MIME = { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.tif': 'image/tiff', '.tiff': 'image/tiff', '.avif': 'image/avif', '.heic': 'image/heic', '.heif': 'image/heif' };
@@ -254,6 +299,8 @@ export function purgeUnreferencedUploads(urls) {
     const p = path.join(UPLOADS, fname);
     if (!p.startsWith(UPLOADS_PREFIX)) continue;
     try { fs.unlinkSync(p); removed++; } catch {}
+    try { fs.unlinkSync(p + '.txt'); } catch {}
+    db.uploads.removeById(fname.toLowerCase());
   }
   return removed;
 }

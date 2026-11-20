@@ -8,6 +8,7 @@ import { stopTurn } from '../../lib/ws/index.js';
 import { cleanTags } from '../../lib/chattags.js';
 import { removeArtifacts } from '../../lib/artifacts.js';
 import { forgetChats } from '../../lib/quality.js';
+import { levelOf, ownsUpload, forgetResource } from '../../lib/authz/acl.js';
 
 const MAX_PINS = 40;
 
@@ -15,7 +16,7 @@ export default function registerCrudRoutes(app) {
   app.post('/api/chats', authMiddleware, requirePermission('chats.create'), (req, res) => {
     const t = now();
     let projectId = null;
-    if (req.body?.projectId) { const p = db.projects.byId(req.body.projectId); if (p && p.user_id === req.user.id) projectId = p.id; }
+    if (req.body?.projectId) { const p = db.projects.byId(req.body.projectId); if (levelOf(req.user, 'project', p)) projectId = p.id; }
     const mode = req.body?.mode === 'code' ? 'code' : 'chat';
     if (mode === 'code' && !can(req.user, 'code.use')) return res.status(403).json({ error: DENIED });
     const c = db.chats.insert({ id: uid(), user_id: req.user.id, project_id: mode === 'code' ? null : projectId, title: 'New chat', starred: 0, sandbox: 0, mode, created_at: t, updated_at: t });
@@ -32,6 +33,7 @@ export default function registerCrudRoutes(app) {
       forgetChats([c.id]);
       if (!c.project_id) sandbox.remove(c.id);
       removeArtifacts(c.id);
+      forgetResource('chat', c.id);
       purgeUnreferencedUploads(urls);
     }
     res.json({ ok: true });
@@ -60,7 +62,7 @@ export default function registerCrudRoutes(app) {
       if ('projectId' in req.body && c.mode !== 'code') {
         const pid = req.body.projectId;
         if (pid === null || pid === '') patch.project_id = null;
-        else { const p = db.projects.byId(pid); if (p && p.user_id === req.user.id) patch.project_id = pid; }
+        else { const p = db.projects.byId(pid); if (levelOf(req.user, 'project', p)) patch.project_id = p.id; }
       }
       db.chats.update(c.id, patch);
     }
@@ -89,6 +91,7 @@ export default function registerCrudRoutes(app) {
     const url = String(a.url ?? '').slice(0, 512);
     const name = String(a.name ?? '').slice(0, 256);
     if (!url || !name) return res.status(400).json({ error: 'name and url required' });
+    if (!ownsUpload(req.user, url)) return res.status(404).json({ error: 'not found' });
     const pins = Array.isArray(c.pinned_files) ? c.pinned_files.slice() : [];
     if (pins.length >= MAX_PINS) return res.status(400).json({ error: `A chat can pin at most ${MAX_PINS} files.` });
     if (!pins.some(p => p.url === url)) pins.push({ name, url, type: a.type ? String(a.type).slice(0, 128) : '' });

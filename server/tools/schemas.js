@@ -248,10 +248,10 @@ export function recallSchema() {
   }, ['query']);
 }
 
-export function buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, memoryOn = false, calculatorOn = false, todoOn = false, askUserOn = false, recallOn = false, projectOn = false, artifactsOn = false, consultNames = [], hostEnv = null, readOnly = false }) {
+export function buildTools({ sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, mcpSchemas, endChatOn, memoryOn = false, calculatorOn = false, todoOn = false, askUserOn = false, recallOn = false, projectOn = false, projectNotesOn = true, artifactsOn = false, consultNames = [], hostEnv = null, readOnly = false }) {
   const out = [];
   if (sandboxOn) out.push(...sandboxToolSchemas(hostEnv).filter(s => !readOnly || SANDBOX_READONLY.has(s.function.name)));
-  if (projectOn) out.push(...projectSchemas());
+  if (projectOn) out.push(...projectSchemas().filter(s => projectNotesOn || s.function.name !== 'project_notes'));
   if (artifactsOn) out.push(...artifactSchemas());
   if (webSearchOn) out.push(webSearchSchema());
   if (membankOn) out.push(...membankSchemas());

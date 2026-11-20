@@ -135,6 +135,7 @@ export function deleteGroup(id) {
     db.groupMembers.dropMember('group', id);
     db.groupMembers.removeWhere('group_id', id);
     db.groups.removeById(id);
+    db.acl.prune();
   });
   return { ok: true };
 }

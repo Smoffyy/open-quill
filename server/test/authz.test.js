@@ -18,6 +18,7 @@ const { can, permissionsOf, rankOf, isOwner, gateOf, explain, groupIdsOf } = awa
 const { createGroup, updateGroup, deleteGroup, setMembers, nestGroup, unnestGroup, closure, MAX_DEPTH } = await import('../lib/authz/groups.js');
 const { modelAllowed, defaultModelFor, allowedFor } = await import('../lib/authz/access.js');
 const { canActOn, canAssign, isLastOwner } = await import('../lib/authz/rules.js');
+const { levelOf, access, grant, revoke, accessList, sharedWith, usersReached, canReadUpload, ownsUpload } = await import('../lib/authz/acl.js');
 
 after(() => {
   closeDb();
@@ -30,6 +31,7 @@ beforeEach(() => {
   for (const g of db.groups.all()) deleteGroup(g.id);
   for (const u of db.users.all()) db.users.removeById(u.id);
   for (const r of db.roles.all()) db.roles.removeById(r.id);
+  db.acl.prune();
   delSetting('auth_user_baseline');
 });
 
@@ -316,4 +318,113 @@ test('restricted models and servers are open to their groups, nested members and
   assert.ok(modelAllowed(person('admin'), model), 'model admins see everything');
   assert.equal(allowedFor(outsider, [team], 'admin.tools'), false);
   assert.ok(allowedFor(person('admin'), [team], 'admin.tools'));
+});
+
+const project = (owner) => db.projects.insert({ id: uid(), user_id: owner.id, name: 'Plans', created_at: Date.now(), updated_at: Date.now() });
+const chatOf = (owner, mode = 'chat') => db.chats.insert({ id: uid(), user_id: owner.id, title: 'Notes', mode, created_at: Date.now(), updated_at: Date.now() });
+
+test('a shared project gives exactly the granted level, through nested groups, and revoking takes it back', () => {
+  const owner = person('user');
+  const viewer = person('user');
+  const member = person('user');
+  const p = project(owner);
+  assert.equal(levelOf(owner, 'project', p), 'owner');
+  assert.equal(levelOf(viewer, 'project', p), null);
+  assert.ok(grant(owner, 'project', p, 'user', viewer.id, 'view').ok);
+  assert.equal(levelOf(viewer, 'project', p), 'view');
+  assert.equal(access(viewer, 'project', p.id, 'edit').status, 403, 'seen but not editable');
+  assert.equal(access(member, 'project', p.id).status, 404, 'no access looks exactly like no project');
+  assert.equal(access(member, 'project', 'missing').status, 404);
+  assert.equal(access(member, 'project', { id: p.id }).status, 404, 'a non-string id matches nothing');
+
+  const team = group('Team');
+  const inner = group('Inner');
+  nestGroup(team, inner, null);
+  join(inner, member);
+  assert.ok(grant(owner, 'project', p, 'group', team, 'edit').ok);
+  assert.equal(levelOf(member, 'project', p), 'edit', 'members of a nested group get the group grant');
+  assert.deepEqual(usersReached('group', team), [member.id]);
+  assert.ok(grant(owner, 'project', p, 'user', member.id, 'view').ok);
+  assert.equal(levelOf(member, 'project', p), 'edit', 'the highest grant wins');
+  const why = accessList('project', p).people.find(x => x.id === member.id);
+  assert.deepEqual(why.reasons.map(r => r.type).sort(), ['direct', 'group']);
+  assert.deepEqual(why.reasons.find(r => r.type === 'group').path.map(g => g.name), ['Team', 'Inner']);
+  assert.ok(revoke(owner, 'project', p, 'group', team).ok);
+  assert.equal(levelOf(member, 'project', p), 'view', 'the direct grant is all that is left');
+  deleteGroup(inner);
+  assert.ok(grant(owner, 'project', p, 'group', team, 'manage').ok);
+  deleteGroup(team);
+  assert.equal(db.acl.forResource('project', p.id).some(e => e.principal_type === 'group'), false, 'deleting a group removes what was shared with it');
+});
+
+test('only managers share, never above their own level, and only with the share permission', () => {
+  const owner = person('user');
+  const editor = person('user');
+  const manager = person('user');
+  const other = person('user');
+  const p = project(owner);
+  assert.ok(grant(owner, 'project', p, 'user', editor.id, 'edit').ok);
+  assert.ok(grant(owner, 'project', p, 'user', manager.id, 'manage').ok);
+  assert.equal(grant(editor, 'project', p, 'user', other.id, 'view').status, 403, 'an editor cannot share');
+  assert.ok(grant(manager, 'project', p, 'user', other.id, 'manage').ok, 'a manager shares up to manage');
+  assert.equal(grant(owner, 'project', p, 'user', other.id, 'owner').status, 400, 'ownership is not a grant');
+  assert.equal(grant(owner, 'project', p, 'user', owner.id, 'view').status, 400, 'the owner needs no grant');
+  assert.equal(grant(owner, 'project', p, 'user', person('pending').id, 'view').status, 400, 'pending accounts cannot be picked');
+  assert.equal(grant(owner, 'project', p, 'user', 'ghost', 'view').status, 400);
+  assert.equal(grant(owner, 'project', p, 'user', '__proto__', 'view').status, 400);
+  assert.equal(grant(owner, 'project', p, 'user', other.id, '__proto__').status, 400);
+  const stranger = person('user');
+  assert.equal(grant(stranger, 'project', p, 'user', stranger.id, 'view').status, 404, 'a stranger learns nothing');
+  assert.equal(revoke(stranger, 'project', p, 'user', editor.id).status, 404);
+  setSetting('auth_user_baseline', DEFAULT_USER_BASELINE.filter(id => id !== 'projects.share'));
+  assert.equal(grant(owner, 'project', p, 'user', stranger.id, 'view').status, 403, 'without the share permission nobody shares');
+  assert.equal(revoke(editor, 'project', p, 'user', manager.id).status, 403, 'an editor cannot take access away');
+  assert.ok(revoke(editor, 'project', p, 'user', editor.id).ok, 'anyone can leave');
+  assert.equal(levelOf(editor, 'project', p), null);
+});
+
+test('chats share read-only, Code sessions never, and inactive accounts lose what was shared', () => {
+  const owner = person('user');
+  const reader = person('user');
+  const chat = chatOf(owner);
+  assert.equal(grant(owner, 'chat', chat, 'user', reader.id, 'edit').status, 400, 'chats are read-only shares');
+  assert.ok(grant(owner, 'chat', chat, 'user', reader.id, 'view').ok);
+  assert.equal(grant(owner, 'chat', chatOf(owner, 'code'), 'user', reader.id, 'view').status, 400);
+  assert.deepEqual([...sharedWith(reader, 'chat').keys()], [chat.id]);
+  db.users.update(reader.id, { status: 'disabled' });
+  const off = db.users.byId(reader.id);
+  assert.equal(levelOf(off, 'chat', chat), null);
+  assert.equal(sharedWith(off, 'chat').size, 0);
+  assert.equal(accessList('chat', chat).people.length, 0, 'and they drop out of the access list');
+});
+
+test('an upload is read by its owner, by readers of a shared chat that shows it, and workspace files by everyone', () => {
+  const owner = person('user');
+  const reader = person('user');
+  const stranger = person('user');
+  const file = `${uid()}.png`;
+  db.uploads.insert({ id: file, file, user_id: owner.id, workspace: false, created_at: Date.now() });
+  const icon = `${uid()}.svg`;
+  db.uploads.insert({ id: icon, file: icon, user_id: null, workspace: true, created_at: Date.now() });
+  const chat = chatOf(owner);
+  db.messages.insert({ id: uid(), chat_id: chat.id, role: 'user', content: 'look', attachments: [{ url: '/uploads/' + file, name: 'a.png' }], parent_id: null, created_at: Date.now() });
+  const url = '/uploads/' + file;
+  assert.ok(canReadUpload(owner, url));
+  assert.ok(ownsUpload(owner, url));
+  assert.equal(canReadUpload(stranger, url), false);
+  assert.ok(grant(owner, 'chat', chat, 'user', reader.id, 'view').ok);
+  assert.ok(canReadUpload(reader, url), 'shown in a chat shared with them');
+  assert.equal(ownsUpload(reader, url), false, 'reading is not owning, so it cannot be attached anywhere else');
+  assert.equal(canReadUpload(stranger, url), false);
+  assert.ok(canReadUpload(stranger, '/' + icon), 'workspace files are open to members');
+  assert.equal(canReadUpload(person('pending'), '/' + icon), false);
+  assert.ok(canReadUpload(owner, '/' + file.toUpperCase()), 'case does not hide a file from its owner');
+  assert.equal(canReadUpload(stranger, '/' + file.toUpperCase()), false, 'nor open it to anyone else');
+  assert.equal(canReadUpload(stranger, '/' + file + '.'), false, 'a trailing dot is not a way round the owner');
+  assert.equal(canReadUpload(stranger, '/' + file + '::$DATA'), false);
+  assert.equal(canReadUpload(owner, '/' + file + '.txt'), false, 'extracted text is never served');
+  assert.equal(canReadUpload(stranger, '/%2e%2e%2f' + file), false);
+  assert.equal(canReadUpload(owner, '/%E0%A4%A'), false, 'a malformed escape is refused');
+  assert.ok(revoke(owner, 'chat', chat, 'user', reader.id).ok);
+  assert.equal(canReadUpload(reader, url), false, 'revoking the chat revokes what it showed');
 });

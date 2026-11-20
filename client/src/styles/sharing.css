@@ -1,0 +1,39 @@
+.share-modal { width: min(560px, 94vw); max-height: 86vh; background: var(--modal-bg); border: 1px solid var(--border); border-radius: 16px; padding: 22px 24px; display: flex; flex-direction: column; gap: 12px; overflow: hidden auto; box-shadow: 0 8px 32px rgba(0,0,0,.28); }
+.share-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.share-head h3 { margin: 0; font-size: 18px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.share-head .modal-close { position: static; flex-shrink: 0; }
+.share-error { margin: 0; color: var(--danger); font-size: 13px; }
+.share-error:empty { display: none; }
+.share-find { display: flex; gap: 8px; align-items: center; }
+.share-input { flex: 1; min-width: 0; height: 34px; padding: 0 12px; font-size: 14px; background: var(--modal-fill, var(--input-bg)); border: 1px solid var(--modal-line, var(--border-soft)); border-radius: 8px; }
+.share-list { display: flex; flex-direction: column; }
+.share-results { max-height: 30vh; overflow: hidden auto; border: 1px solid var(--border-soft); border-radius: 10px; padding: 0 12px; }
+.share-row { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 6px 0; border-bottom: 1px solid var(--border-soft); }
+.share-row:last-child { border-bottom: 0; }
+.share-who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.share-who strong { display: flex; align-items: center; gap: 6px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.share-who strong svg { width: 15px; height: 15px; flex-shrink: 0; color: var(--text-muted); }
+.share-who > span { font-size: 12.5px; color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.share-level { font-size: 13px; color: var(--text-muted); white-space: nowrap; }
+.share-add { display: inline-flex; align-items: center; gap: 4px; padding: 6px 12px; font-size: 13px; }
+.share-add svg { width: 14px; height: 14px; }
+.share-section h4 { margin: 4px 0 2px; font-size: 13px; font-weight: 500; color: var(--text-muted); }
+.share-people summary { cursor: pointer; font-size: 13px; color: var(--text-muted); padding: 4px 0; }
+.share-note { margin: 0; font-size: 13px; color: var(--text-muted); }
+.composer-stack > .shared-banner { background: var(--composer-bg); border: 1px solid var(--border-soft); border-radius: var(--composer-radius, 14px); }
+.shared-banner .unavail-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.shared-banner .unavail-msg strong { color: var(--text); }
+.shared-banner .btn { flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 13px; }
+.shared-banner .btn svg { width: 14px; height: 14px; }
+.shared-tag { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-faint); white-space: nowrap; }
+.shared-tag svg { width: 13px; height: 13px; }
+.sk-detail-by .shared-tag { margin-left: 8px; }
+.pj-shared { margin: 4px 0 6px; }
+.ct-shared + .shared-tag { margin-left: 10px; }
+
+@media (max-width: 480px) {
+  .share-modal { padding: 18px 16px; }
+  .share-find { flex-wrap: wrap; }
+  .share-input { flex-basis: 100%; }
+  .shared-banner .unavail-row { flex-wrap: wrap; }
+}

@@ -5,7 +5,7 @@ import { notify } from '../../lib/notify.js';
 import { askConfirm } from '../../lib/confirm.js';
 import { t, tk, fmtRelative } from '../../i18n.jsx';
 import { useSkeleton } from '../../lib/skeleton.js';
-import { Check, Chat, Laptop } from '../ui/icons.jsx';
+import { Check, Chat, Laptop, Users } from '../ui/icons.jsx';
 
 const WORDS = {
   chat: {
@@ -26,7 +26,7 @@ const WORDS = {
 
 const counted = (pair, n) => t(pair[n === 1 ? 0 : 1], { n });
 
-export default function ChatsOverview({ mode = 'chat', onOpen, onSearch, onChatsChanged }) {
+export default function ChatsOverview({ mode = 'chat', sharedTick = 0, onOpen, onSearch, onChatsChanged }) {
   const code = mode === 'code';
   const words = WORDS[code ? 'code' : 'chat'];
   const [chats, setChats] = useState([]);
@@ -34,6 +34,7 @@ export default function ChatsOverview({ mode = 'chat', onOpen, onSearch, onChats
   const [loading, setLoading] = useState(false);
   const showSkeleton = useSkeleton(loading);
   const [tab, setTab] = useState('all');
+  const [shared, setShared] = useState(null);
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState(() => new Set());
   const [busy, setBusy] = useState(false);
@@ -43,7 +44,7 @@ export default function ChatsOverview({ mode = 'chat', onOpen, onSearch, onChats
   const tabRef = useRef('all');
 
   const loadMore = useCallback(async (reset) => {
-    if (busyRef.current) return;
+    if (busyRef.current || tabRef.current === 'shared') return;
     busyRef.current = true; setLoading(true);
     if (reset) { offsetRef.current = 0; setChats([]); setHasMore(true); }
     try {
@@ -60,6 +61,16 @@ export default function ChatsOverview({ mode = 'chat', onOpen, onSearch, onChats
   }, [code]);
 
   useEffect(() => { loadMore(true); }, [loadMore]);
+
+  const loadShared = useCallback(() => {
+    setLoading(true);
+    api.get('/api/shared/chats')
+      .then(r => setShared(r.chats || []))
+      .catch(() => setShared([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { if (tabRef.current === 'shared') loadShared(); }, [sharedTick, loadShared]);
 
   useEffect(() => {
     if (!hasMore || loading) return;
@@ -81,7 +92,8 @@ export default function ChatsOverview({ mode = 'chat', onOpen, onSearch, onChats
     if (next === tabRef.current) return;
     setTab(next); tabRef.current = next;
     setSelected(new Set()); setSelecting(false);
-    loadMore(true);
+    if (next === 'shared') loadShared();
+    else loadMore(true);
   }
 
   function onScroll() {
@@ -139,42 +151,58 @@ export default function ChatsOverview({ mode = 'chat', onOpen, onSearch, onChats
       title={t(words.title)}
       onSearch={onSearch}
       scrollRef={bodyRef} onScroll={onScroll}
-      tabs={[{ id: 'all', label: t('Active') }, { id: 'archived', label: t('Archived') }]} tabValue={tab} onTab={switchTab}
-      actions={
+      tabs={[{ id: 'all', label: t('Active') }, { id: 'archived', label: t('Archived') }, ...(code ? [] : [{ id: 'shared', label: t('Shared with you') }])]} tabValue={tab} onTab={switchTab}
+      actions={tab === 'shared' ? null : (
         <button className="lib-pill" aria-pressed={selecting} onClick={() => { setSelecting(v => !v); setSelected(new Set()); }}>
           {selecting ? t('Done') : t('Select')}
         </button>
-      }>
-      {selecting && (
-        <div className="co-bulkbar">
-          <button className="co-bulk-link" onClick={selectAll}>{selected.size === chats.length && chats.length ? t('Clear selection') : t('Select all')}</button>
-          <span className="co-bulk-count">{t('{n} selected', { n: selected.size })}</span>
-          <div className="co-bulk-actions">
-            <button className="btn ghost" disabled={!selected.size || busy} onClick={() => bulkArchive(tab !== 'archived')}>{tab === 'archived' ? t('Unarchive') : t('Archive')}</button>
-            <button className="btn ghost danger" disabled={!selected.size || busy} onClick={bulkDelete}>{t("Delete")}</button>
+      )}>
+      {tab === 'shared' ? (
+        <>
+          {shared && shared.length === 0 && !loading && <LibraryEmpty icon={<Users />} line={t('Nothing has been shared with you yet.')} />}
+          <div className="co-grid">
+            {(shared || []).map((c, i) => (
+              <button key={c.id} className="co-card" style={{ animationDelay: (i % 18) * 22 + 'ms' }} onClick={() => onOpen(c.id)}>
+                <div className="co-title">{c.title && c.title !== 'New chat' ? c.title : t(words.untitled)}</div>
+                <div className="co-time">{t('Shared by {name}', { name: c.owner })} · {fmtRelative(c.updated_at)}</div>
+              </button>
+            ))}
           </div>
-        </div>
-      )}
-      {chats.length === 0 && !loading && (
-        <LibraryEmpty icon={code ? <Laptop /> : <Chat />} line={t(tab === 'archived' ? words.noneArchived : words.none)} />
-      )}
-      <div className="co-grid">
-        {showSkeleton && chats.length === 0 && Array.from({ length: 9 }).map((_, i) => (
-          <div key={'skel' + i} className="co-card co-card-skel" aria-hidden="true">
-            <span className="skeleton" style={{ width: (38 + ((i * 29) % 40)) + '%' }} />
+        </>
+      ) : (
+        <>
+          {selecting && (
+            <div className="co-bulkbar">
+              <button className="co-bulk-link" onClick={selectAll}>{selected.size === chats.length && chats.length ? t('Clear selection') : t('Select all')}</button>
+              <span className="co-bulk-count">{t('{n} selected', { n: selected.size })}</span>
+              <div className="co-bulk-actions">
+                <button className="btn ghost" disabled={!selected.size || busy} onClick={() => bulkArchive(tab !== 'archived')}>{tab === 'archived' ? t('Unarchive') : t('Archive')}</button>
+                <button className="btn ghost danger" disabled={!selected.size || busy} onClick={bulkDelete}>{t("Delete")}</button>
+              </div>
+            </div>
+          )}
+          {chats.length === 0 && !loading && (
+            <LibraryEmpty icon={code ? <Laptop /> : <Chat />} line={t(tab === 'archived' ? words.noneArchived : words.none)} />
+          )}
+          <div className="co-grid">
+            {showSkeleton && chats.length === 0 && Array.from({ length: 9 }).map((_, i) => (
+              <div key={'skel' + i} className="co-card co-card-skel" aria-hidden="true">
+                <span className="skeleton" style={{ width: (38 + ((i * 29) % 40)) + '%' }} />
+              </div>
+            ))}
+            {chats.map((c, i) => (
+              <button key={c.id} className={'co-card' + (selecting && selected.has(c.id) ? ' selected' : '')} style={{ animationDelay: (i % 18) * 22 + 'ms' }}
+                aria-pressed={selecting ? selected.has(c.id) : undefined} onClick={() => clickCard(c)}>
+                {selecting && <span className={'co-check' + (selected.has(c.id) ? ' on' : '')}>{selected.has(c.id) && <Check strokeWidth="2.4" />}</span>}
+                <div className="co-title">{c.starred ? '★ ' : ''}{c.ended ? '🔒 ' : ''}{c.title && c.title !== 'New chat' ? c.title : t(words.untitled)}</div>
+                <div className="co-time">{fmtRelative(c.updated_at)}</div>
+              </button>
+            ))}
           </div>
-        ))}
-        {chats.map((c, i) => (
-          <button key={c.id} className={'co-card' + (selecting && selected.has(c.id) ? ' selected' : '')} style={{ animationDelay: (i % 18) * 22 + 'ms' }}
-            aria-pressed={selecting ? selected.has(c.id) : undefined} onClick={() => clickCard(c)}>
-            {selecting && <span className={'co-check' + (selected.has(c.id) ? ' on' : '')}>{selected.has(c.id) && <Check strokeWidth="2.4" />}</span>}
-            <div className="co-title">{c.starred ? '★ ' : ''}{c.ended ? '🔒 ' : ''}{c.title && c.title !== 'New chat' ? c.title : t(words.untitled)}</div>
-            <div className="co-time">{fmtRelative(c.updated_at)}</div>
-          </button>
-        ))}
-      </div>
-      {showSkeleton && chats.length > 0 && <div className="co-loading"><span className="skeleton" style={{ width: 120, height: 12 }} /></div>}
-      {!hasMore && chats.length > 0 && <div className="co-end">{t("That's all of them.")}</div>}
+          {showSkeleton && chats.length > 0 && <div className="co-loading"><span className="skeleton" style={{ width: 120, height: 12 }} /></div>}
+          {!hasMore && chats.length > 0 && <div className="co-end">{t("That's all of them.")}</div>}
+        </>
+      )}
     </LibraryPage>
   );
 }
