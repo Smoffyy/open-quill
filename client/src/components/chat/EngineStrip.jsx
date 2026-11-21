@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Gauge } from '../ui/icons.jsx';
 import { t, fmtNumber } from '../../i18n.jsx';
 
@@ -26,6 +26,7 @@ export default function EngineStrip({ telemetry, streaming, route }) {
   const [show, setShow] = useState(false);
   const [history, setHistory] = useState([]);
   const [last, setLast] = useState(null);
+  const stopLift = useRef(null);
   useEffect(() => {
     if (!streaming || !telemetry) return;
     const v = Number(telemetry.tps || 0);
@@ -43,6 +44,17 @@ export default function EngineStrip({ telemetry, streaming, route }) {
 
   const shown = show && !!telemetry;
   const data = telemetry || last;
+  const trackLift = useCallback((strip) => {
+    stopLift.current?.();
+    stopLift.current = null;
+    const host = strip?.parentElement?.parentElement;
+    if (!host) return;
+    const sync = () => host.style.setProperty('--es-lift', strip.offsetHeight + 12 + 'px');
+    sync();
+    const observer = new ResizeObserver(sync);
+    observer.observe(strip);
+    stopLift.current = () => { observer.disconnect(); host.style.removeProperty('--es-lift'); };
+  }, []);
   if (!data) return <div className="es-slot" aria-hidden="true" />;
 
   const { tps, promptTps, promptTokens, genTokens, ctx } = data;
@@ -51,7 +63,7 @@ export default function EngineStrip({ telemetry, streaming, route }) {
   const level = pct >= 90 ? ' danger' : pct >= 75 ? ' warn' : '';
   return (
     <div className={'es-slot' + (shown ? ' open' : '')}>
-      <div className={'engine-strip' + (streaming ? '' : ' final')} role="status" aria-live="off">
+      <div ref={trackLift} className={'engine-strip' + (streaming ? '' : ' final')} role="status" aria-live="off">
       <span className="es-icon"><Gauge style={{ width: 13 }} /></span>
       {route && (
         <span className="es-stat es-route" data-tip={t('Chosen by {hub} because of: {via}', { hub: route.hubName, via: route.via })}>

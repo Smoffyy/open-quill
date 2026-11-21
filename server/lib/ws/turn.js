@@ -22,6 +22,7 @@ import { openFence, seamFor, steerInstruction } from '../steer.js';
 import { createLoopGuard, STUCK_NOTES, REPEAT_NOTE } from '../loopguard.js';
 import { changeMemory, memoryToolResult } from '../memory.js';
 import { toolState, systemPrompt, toolsFor } from '../systemprompt.js';
+import { resolveProvider, isLocalType } from '../providers.js';
 import { can } from '../authz/effective.js';
 import { runCalculator, formatCalculatorResult } from '../calculator.js';
 import { runTodo } from '../todo.js';
@@ -45,6 +46,8 @@ const TOOL_PERMISSIONS = {
 const SAVE_EVERY_MS = 2000;
 const TELEMETRY_MS = 220;
 const SILENT_MS = 2500;
+const LOCAL_NO_RESPONSE_MS = 5 * 60 * 1000;
+const HOSTED_NO_RESPONSE_MS = 15 * 60 * 1000;
 const PREVIEW_FREE_CHARS = 4096;
 const PREVIEW_MS = 100;
 const USAGE_KEYS = ['prompt', 'completion', 'total', 'cache_read', 'cache_write', 'cost'];
@@ -208,7 +211,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       const error = 'This tool is no longer allowed for this account.';
       return { payload: { ok: false, error }, formatted: `${call.tool} → ERROR: ${error}`, hide: false };
     }
-    const liveScope = mcp.scopeFor(owner, mcpScope.off);
+    const liveScope = mcp.scopeFor(owner, mcpScope?.off);
     if (call.tool === 'end_conversation') {
       if (!endChatOn) return null;
       const reason = String(call.reason || '').trim().slice(0, 500);
@@ -553,6 +556,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       };
       let silentTimer = null;
       let heardBack = false;
+      let noResponseMs = 0;
       const stopSilenceWatch = () => { if (silentTimer) { clearInterval(silentTimer); silentTimer = null; } };
       const heard = () => { if (heardBack) return; heardBack = true; stopSilenceWatch(); };
       const takeContent = (text) => {
@@ -573,9 +577,18 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       try {
         sendStatus({ phase: 'prefill' }, true);
         const askedAt = Date.now();
+        const provider = resolveProvider(model.provider_id);
+        const limitMs = provider && isLocalType(provider.type) ? LOCAL_NO_RESPONSE_MS : HOSTED_NO_RESPONSE_MS;
         silentTimer = setInterval(() => {
           if (heardBack) { stopSilenceWatch(); return; }
-          sendStatus({ phase: 'waiting', ms: Date.now() - askedAt }, true);
+          const waited = Date.now() - askedAt;
+          if (waited >= limitMs) {
+            noResponseMs = limitMs;
+            stopSilenceWatch();
+            controller.abort();
+            return;
+          }
+          sendStatus({ phase: 'waiting', ms: waited }, true);
         }, SILENT_MS);
         if (typeof silentTimer.unref === 'function') silentTimer.unref();
         await streamCompletion({
@@ -672,6 +685,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       } catch (err) {
         stopSilenceWatch();
         flushStitch();
+        if (noResponseMs && !stopRequested()) throw new Error('The model provider accepted the request but sent nothing back for ' + noResponseMs / 60000 + ' minutes, so it was cancelled. Try again, and restart the model server if it keeps happening.', { cause: err });
         if (err.name === 'AbortError') {
           const notes = takeSteers();
           if (notes && steerBudget > 0) {

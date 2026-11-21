@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [28.2.0] - TBD
+## [28.2.0] - 2026-11-20
 ### Added
 - **Evaluations** - a new admin section for regression testing. Test collections are versioned sets of conversations, each ending on a member message with an optional expert correction. Every edit is a version, so a run can be repeated on the exact same tests, and any version can be restored. A run sends every case to a baseline and a candidate (published or draft configuration, any model, and optionally a different system prompt), then a judge model scores each reply against the correction and explains its score. Results show which cases got better or worse, the average score, the median response time and the cost on each side, with both replies side by side.
 - **Real conversations as tests** - a rated reply (under Ratings) or a reply flagged by a quality check can be added to a test collection in one step, with an expert correction. The playground's test sets now live in the same collections, so existing sets carry over.
@@ -32,6 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Connector requests** - adding, editing, refreshing and trying member connectors is rate limited.
 ### Fixed
 - **Ratings** - reply snippets no longer show raw tool markers.
+- **Jump to latest** - with Engine telemetry on, the button now sits above the telemetry strip instead of behind it.
+- **Code sessions** - every tool call failed with "Cannot read properties of undefined", so files could not be created and commands never ran. Tool calls in a Code session work again.
+- **Unanswered requests** - a model request that gets no response at all is now cancelled with a clear error instead of waiting forever: after 5 minutes for local servers and 15 for hosted providers, which can think silently for a long time. Prompt processing and a loading model are not affected as long as the server reports progress.
 
 
 ## [28.1.1] - 2026-11-17
