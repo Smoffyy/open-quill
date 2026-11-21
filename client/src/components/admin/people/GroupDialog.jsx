@@ -6,6 +6,7 @@ import { Trash, Users, Plus } from '../../ui/icons.jsx';
 import { t } from '../../../i18n.jsx';
 import { Skel, SkelRows } from '../../ui/Skeleton.jsx';
 import PermissionPicker from './PermissionPicker.jsx';
+import { sourceName } from './sources.js';
 
 const SEARCH_DELAY_MS = 250;
 
@@ -90,7 +91,7 @@ export default function GroupDialog({ id, groups, registry, models, editable, on
       </> : <Btn onClick={onClose}>{t('Close')}</Btn>}>
       {!group || !draft ? <Skel when><SkelRows count={6} /></Skel> : (
         <>
-          {synced && <Note>{t('This group is kept in sync by {source}. Its name and members come from there, but you can still choose what it grants.', { source: group.source })}</Note>}
+          {synced && <Note>{t('This group is kept in sync by {source}. Its name and members come from there, but you can still choose what it grants.', { source: sourceName(group.source) })}</Note>}
           <Card title={t('Details')}>
             <Fields>
               <Field label={t('Name')}>

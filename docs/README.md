@@ -21,6 +21,10 @@
 ## Administration
 
 - [Admin guide](admin-guide.md): the Admin Panel, roles and publishing changes
+
+## Running Open Quill for an organization
+
+- [Setting up Open Quill for your organization](organization-setup.md): a step-by-step rollout, from an empty server to everyone signed in
 - [Identity and access](identity-access.md): accounts, roles, permissions, groups, sharing and the event log
 - [Sign-in methods](sign-in.md): passwords, single sign-on, LDAP and Active Directory, a trusted proxy and two-factor
 - [SCIM provisioning](provisioning.md): let Okta, Microsoft Entra ID or another identity provider manage accounts and groups

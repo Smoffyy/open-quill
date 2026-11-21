@@ -3932,5 +3932,7 @@
   "Access": "访问",
   "Export JSON Lines": "导出 JSON Lines",
   "Category": "类别",
-  "Sign-ins, access changes, provisioning and admin actions, retained for 120 days.": "登录、访问变更、预配和管理操作，保留 120 天。"
+  "Sign-ins, access changes, provisioning and admin actions, retained for 120 days.": "登录、访问变更、预配和管理操作，保留 120 天。",
+  "single sign-on": "单点登录",
+  "Single sign-on": "单点登录"
 }

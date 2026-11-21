@@ -59,6 +59,18 @@ Set `HOST=0.0.0.0` in `.env` and restart. Then set **Registration** under **Admi
 - Single sign-on, LDAP and Active Directory, SCIM provisioning and two-factor, for companies
 - Two interface styles, light and dark modes, ten languages
 
+## For organizations
+
+Open Quill can serve a whole company from your own hardware:
+
+- Single sign-on with Microsoft Entra ID, Google Workspace, Okta, GitHub, Keycloak or any OpenID Connect provider
+- LDAP and Active Directory sign-in, and sign-in through an authenticating reverse proxy
+- SCIM 2.0 provisioning, so your identity provider creates, updates and removes accounts and groups
+- Roles, custom roles, nested groups, per-group model access, and sharing of projects, chats and skills
+- A two-factor policy, and an event log of sign-ins, access changes and provisioning with JSON Lines export for your SIEM
+
+Start with [Setting up Open Quill for your organization](docs/organization-setup.md).
+
 ## Docs
 
 - [**Getting Started**](docs/getting-started.md)
@@ -66,6 +78,7 @@ Set `HOST=0.0.0.0` in `.env` and restart. Then set **Registration** under **Admi
 - [**Models & Reasoning**](docs/models.md)
 - [**Admin Guide**](docs/admin-guide.md)
 - [**Privacy & Security**](docs/privacy-security.md)
+- [**Organization Setup**](docs/organization-setup.md)
 - [**Enterprise Deployment**](docs/enterprise.md)
 - [**All documentation**](docs/README.md)
 

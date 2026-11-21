@@ -3965,5 +3965,7 @@
   "Access": "Доступ",
   "Export JSON Lines": "Экспорт в JSON Lines",
   "Category": "Категория",
-  "Sign-ins, access changes, provisioning and admin actions, retained for 120 days.": "Входы, изменения доступа, подготовка учётных записей и действия администраторов, хранятся 120 дней."
+  "Sign-ins, access changes, provisioning and admin actions, retained for 120 days.": "Входы, изменения доступа, подготовка учётных записей и действия администраторов, хранятся 120 дней.",
+  "single sign-on": "единый вход",
+  "Single sign-on": "Единый вход"
 }

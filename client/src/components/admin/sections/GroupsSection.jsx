@@ -8,6 +8,7 @@ import { t, tp } from '../../../i18n.jsx';
 import { Skel, SkelTable } from '../../ui/Skeleton.jsx';
 import { can } from '../../../lib/permissions.js';
 import GroupDialog from '../people/GroupDialog.jsx';
+import { sourceBadge } from '../people/sources.js';
 
 export default function GroupsSection() {
   const { confirm, user } = useAdmin();
@@ -88,7 +89,7 @@ export default function GroupsSection() {
                     <span className="cp-inline">
                       {g.name}
                       <span className="cp-badges">
-                        {g.source !== 'local' && <Badge>{g.source}</Badge>}
+                        {sourceBadge(g.source) && <Badge>{sourceBadge(g.source)}</Badge>}
                         {g.groups > 0 && <Badge>{tp(g.groups, '{n} group inside', '{n} groups inside')}</Badge>}
                       </span>
                     </span>

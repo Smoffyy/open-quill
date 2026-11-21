@@ -18,7 +18,7 @@ An account is identified by its email address. It has a role, a status (**active
 | Source | Created by | Badge in **Users** |
 | --- | --- | --- |
 | Local | Signing up with a password, or the first-run owner | none |
-| Single sign-on | Signing in through Google, Microsoft, GitHub or an OpenID Connect provider | none |
+| Single sign-on | Signing in through Google, Microsoft, GitHub or an OpenID Connect provider | **single sign-on** |
 | Directory | Signing in with an LDAP or Active Directory password | **directory** |
 | Provisioned | Your identity provider, over SCIM | **provisioned** |
 | Proxy | A trusted reverse proxy that has already signed the person in | **proxy** |

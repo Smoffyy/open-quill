@@ -3932,5 +3932,7 @@
   "Access": "アクセス",
   "Export JSON Lines": "JSON Lines で書き出し",
   "Category": "カテゴリ",
-  "Sign-ins, access changes, provisioning and admin actions, retained for 120 days.": "サインイン、アクセスの変更、プロビジョニング、管理操作。120 日間保持されます。"
+  "Sign-ins, access changes, provisioning and admin actions, retained for 120 days.": "サインイン、アクセスの変更、プロビジョニング、管理操作。120 日間保持されます。",
+  "single sign-on": "シングルサインオン",
+  "Single sign-on": "シングルサインオン"
 }

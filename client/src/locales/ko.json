@@ -3932,5 +3932,7 @@
   "Access": "접근",
   "Export JSON Lines": "JSON Lines로 내보내기",
   "Category": "범주",
-  "Sign-ins, access changes, provisioning and admin actions, retained for 120 days.": "로그인, 접근 변경, 프로비저닝, 관리 작업. 120일 동안 보관됩니다."
+  "Sign-ins, access changes, provisioning and admin actions, retained for 120 days.": "로그인, 접근 변경, 프로비저닝, 관리 작업. 120일 동안 보관됩니다.",
+  "single sign-on": "통합 로그인",
+  "Single sign-on": "통합 로그인"
 }

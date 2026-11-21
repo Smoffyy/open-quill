@@ -7,6 +7,7 @@ import { Skel, SkelRows } from '../../ui/Skeleton.jsx';
 import { roleLabel } from '../../ui/roleLabel.jsx';
 import { PERMISSION_CATEGORIES } from '../../../lib/permissionlabels.js';
 import { permissionLabel } from './PermissionPicker.jsx';
+import { sourceBadge } from './sources.js';
 
 const chain = (path) => path.map(p => p.name).join(' ⊂ ');
 
@@ -61,7 +62,7 @@ export default function AccessDialog({ person, roles, registry, canEditGroups, o
               <Table head={[{ label: t('Group') }, { label: t('How'), fit: true }, { label: '', fit: true }]}>
                 {access.groups.map(g => (
                   <tr key={g.id}>
-                    <td>{g.name} {g.source !== 'local' && <Badge>{g.source}</Badge>}</td>
+                    <td>{g.name} {sourceBadge(g.source) && <Badge>{sourceBadge(g.source)}</Badge>}</td>
                     <td className="fit dim">{g.depth === 0 ? t('Direct member') : t('Through {path}', { path: chain(g.path) })}</td>
                     <td className="acts">
                       <Acts end>

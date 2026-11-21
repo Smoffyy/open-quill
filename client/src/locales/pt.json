@@ -3933,5 +3933,7 @@
   "Access": "Acesso",
   "Export JSON Lines": "Exportar JSON Lines",
   "Category": "Categoria",
-  "Sign-ins, access changes, provisioning and admin actions, retained for 120 days.": "Logins, mudanças de acesso, provisionamento e ações de administração, mantidos por 120 dias."
+  "Sign-ins, access changes, provisioning and admin actions, retained for 120 days.": "Logins, mudanças de acesso, provisionamento e ações de administração, mantidos por 120 dias.",
+  "single sign-on": "login único",
+  "Single sign-on": "Login único"
 }
