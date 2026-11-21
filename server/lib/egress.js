@@ -1,5 +1,6 @@
 import dns from 'dns';
 import net from 'net';
+import { Agent } from 'undici';
 import { getSetting } from '../db.js';
 
 const lookup = dns.promises.lookup;
@@ -72,10 +73,14 @@ function isPrivateV6(ip) {
 
 let rawFetch = null;
 
-export function unguardedFetch(input, init) {
+export function directFetch(reason, input, init) {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input?.url || '';
-  try { if (url) recordEgress(new URL(url).hostname, true, 'web search'); } catch {}
+  try { if (url) recordEgress(new URL(url).hostname, true, reason); } catch {}
   return (rawFetch || globalThis.fetch)(input, init);
+}
+
+export function unguardedFetch(input, init) {
+  return directFetch('web search', input, init);
 }
 
 export function webSearchEgressAllowed() {
@@ -163,16 +168,71 @@ export async function assertAllowed(url) {
   recordEgress(host, true, 'resolves to a private address');
 }
 
+const MAX_REDIRECTS = 5;
+const REDIRECTS = new Set([301, 302, 303, 307, 308]);
+const CREDENTIAL_HEADERS = ['authorization', 'cookie', 'proxy-authorization'];
+
+export function connectLookup(hostname, options, callback) {
+  lookup(hostname, { ...options, all: true }).then(addrs => {
+    if (egressLocalOnly() && !hostAllowed(hostname, egressAllowlist()) && (!addrs.length || !addrs.every(a => isPrivateAddress(a.address)))) {
+      recordEgress(hostname, false, 'resolved to a public address on connect');
+      return callback(new EgressBlockedError(hostname));
+    }
+    if (options?.all) callback(null, addrs);
+    else callback(null, addrs[0].address, addrs[0].family);
+  }, callback);
+}
+
+const guardedAgent = new Agent({ connect: { lookup: connectLookup } });
+
+function urlOf(input) {
+  if (typeof input === 'string') return input;
+  if (input instanceof URL) return input.href;
+  return input && typeof input.url === 'string' ? input.url : '';
+}
+
+function redirected(request, status, from, to) {
+  const headers = new Headers(request.headers);
+  if (to.origin !== from.origin) for (const h of CREDENTIAL_HEADERS) headers.delete(h);
+  const method = String(request.method || 'GET').toUpperCase();
+  if ((status === 303 && method !== 'HEAD') || ((status === 301 || status === 302) && method === 'POST')) {
+    headers.delete('content-type');
+    headers.delete('content-length');
+    return { ...request, method: 'GET', body: undefined, headers };
+  }
+  return { ...request, headers };
+}
+
+async function guardedRequest(inner, input, init = {}) {
+  let url = urlOf(input);
+  if (url) await assertAllowed(url);
+  if (!egressLocalOnly()) return inner(input, init);
+  if (typeof input !== 'string' && !(input instanceof URL) && url) {
+    init = { method: input.method, headers: input.headers, body: input.body, signal: input.signal, ...(input.body ? { duplex: 'half' } : {}), ...init };
+    input = url;
+  }
+  if (init.redirect === 'manual' || init.redirect === 'error') return inner(input, { ...init, dispatcher: init.dispatcher || guardedAgent });
+  let request = { ...init, redirect: 'manual', dispatcher: init.dispatcher || guardedAgent };
+  let res = await inner(input, request);
+  for (let hop = 0; REDIRECTS.has(res.status) && res.headers.has('location'); hop++) {
+    if (hop >= MAX_REDIRECTS) throw new TypeError('fetch failed: too many redirects');
+    const from = new URL(url);
+    const to = new URL(res.headers.get('location'), from);
+    await res.body?.cancel().catch(() => {});
+    await assertAllowed(to.href);
+    request = redirected(request, res.status, from, to);
+    url = to.href;
+    res = await inner(url, request);
+  }
+  return res;
+}
+
 export function installEgressGuard(target = globalThis) {
   if (target.__oqEgressGuard) return target.fetch;
   const inner = target.fetch;
   rawFetch = inner;
-  const guarded = async function fetch(input, init) {
-    const url = typeof input === 'string' ? input
-      : input instanceof URL ? input.href
-      : input && typeof input.url === 'string' ? input.url : '';
-    if (url) await assertAllowed(url);
-    return inner(input, init);
+  const guarded = function fetch(input, init) {
+    return guardedRequest(inner, input, init);
   };
   target.fetch = guarded;
   target.__oqEgressGuard = true;

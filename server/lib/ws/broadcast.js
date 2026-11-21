@@ -16,7 +16,11 @@ export function requestedKwargs(msg) {
 function send(ws, msg) { if (ws.readyState !== 1) return; try { ws.send(msg); } catch {} }
 
 export function broadcastConfig(version) {
-  const msg = JSON.stringify({ type: 'config', version });
+  broadcastAll({ type: 'config', version });
+}
+
+export function broadcastAll(payload) {
+  const msg = JSON.stringify(payload);
   for (const ws of clients.keys()) send(ws, msg);
 }
 
@@ -35,6 +39,16 @@ export function killSessionSockets(sessionId) {
       try { ws.close(); } catch {}
     }
   }
+}
+
+export function setSocketRole(userId, isAdmin) {
+  for (const st of clients.values()) if (st.userId === userId) st.isAdmin = !!isAdmin;
+}
+
+export function closeUserSockets(userId) {
+  const sessions = new Set();
+  for (const st of clients.values()) if (st.userId === userId) sessions.add(st.sessionId);
+  for (const id of sessions) killSessionSockets(id);
 }
 
 export function broadcastToUser(userId, payload) {

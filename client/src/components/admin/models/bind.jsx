@@ -4,7 +4,7 @@ import { useAdmin } from '../store.jsx';
 import { Input, Area, Select, Switch, Btn, PointMenu, MenuItem, clampToViewport } from '../ui.jsx';
 import { ChevDown, X } from '../../ui/icons.jsx';
 import InfoTip from '../../ui/InfoTip.jsx';
-import { t, tk } from '../../../i18n.jsx';
+import { t, tk, fmtNumber } from '../../../i18n.jsx';
 import {
   shared, variants, flagOn, folderOf, folderPatch, applyText, approxTokens, norm, revertPatch, FLAGS, TEXT_OPS
 } from '../../../lib/modelcatalog.js';
@@ -468,7 +468,7 @@ export function LongText({ k, label, hint, placeholder, rows = 6, mono, counter,
         <div className="mc-text-foot">
           {counter && (
             <span className="cp-note-line">
-              {t('{n} characters', { n: text.length.toLocaleString() })}{' · '}{t('~{n} tokens', { n: approxTokens(text).toLocaleString() })}
+              {t('{n} characters', { n: fmtNumber(text.length) })}{' · '}{t('~{n} tokens', { n: fmtNumber(approxTokens(text)) })}
             </span>
           )}
           {variables && <span className="cp-note-line">{t('Right-click to insert a variable. Shift and right-click for the browser’s own menu.')}</span>}

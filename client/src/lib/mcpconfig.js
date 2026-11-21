@@ -51,3 +51,41 @@ export function parseMcpConfig(text) {
   servers = servers.filter(Boolean);
   return { servers, error: servers.length ? '' : 'no-servers' };
 }
+
+const SAMPLE = { __proto__: null, string: '', number: 0, integer: 0, boolean: false, array: [], object: {} };
+
+export function exampleArgs(schema) {
+  const props = isObj(schema?.properties) ? schema.properties : {};
+  const out = {};
+  for (const [name, spec] of Object.entries(props)) {
+    if (spec && 'default' in spec) out[name] = spec.default;
+    else if (Array.isArray(spec?.enum) && spec.enum.length) out[name] = spec.enum[0];
+    else {
+      const type = Array.isArray(spec?.type) ? spec.type.find(x => x !== 'null') : spec?.type;
+      out[name] = type in SAMPLE ? structuredClone(SAMPLE[type]) : '';
+    }
+  }
+  return out;
+}
+
+export function argList(schema) {
+  const props = isObj(schema?.properties) ? schema.properties : {};
+  const required = new Set(Array.isArray(schema?.required) ? schema.required : []);
+  return Object.entries(props).map(([name, spec]) => ({
+    name,
+    type: Array.isArray(spec?.type) ? spec.type.join(' | ') : String(spec?.type || (spec?.enum ? 'enum' : 'any')),
+    description: String(spec?.description || ''),
+    required: required.has(name)
+  }));
+}
+
+export function parseArgs(text) {
+  const raw = String(text || '').trim();
+  if (!raw) return { args: {} };
+  try {
+    const value = JSON.parse(raw);
+    return isObj(value) ? { args: value } : { error: 'not-object' };
+  } catch {
+    return { error: 'not-json' };
+  }
+}

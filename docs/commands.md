@@ -22,6 +22,7 @@ Run these from the repository root unless a row says otherwise.
 | `npm run i18n:check` | List missing and unused translation keys. Add `-- --json` for machine-readable output |
 | `npm run i18n:sync` | Remove unused keys, merge a translation patch, or create a new language |
 | `npm run check:release` | Check that the version, release folder and changelog agree. Add `-- --final` to also require dates |
+| `npm run auth:recover -- --email <address>` | Break-glass recovery: remove an account's two-factor, end its sessions and print a temporary password. Uses the database named in `.env`. See [Enterprise deployment](enterprise.md#break-glass-recovery) |
 | `cd server && npm test` | Run the server test suite |
 
 ## Server tests

@@ -4,7 +4,7 @@ import { api } from '../../../lib/api.js';
 import { useAdmin } from '../store.jsx';
 import { Card, Btn, Empty, KV, Note, fmtAgo } from '../ui.jsx';
 import { Upload } from '../../ui/icons.jsx';
-import { t } from '../../../i18n.jsx';
+import { t, fmtDateTime } from '../../../i18n.jsx';
 import { notify } from '../../../lib/notify.js';
 import { groupChanges } from '../../../lib/changeset.js';
 import { sectionMeta } from '../nav.jsx';
@@ -12,6 +12,7 @@ import { Skel, SkelTable } from '../../ui/Skeleton.jsx';
 import { ChangeRow, fieldLabel } from '../changes/ChangeRow.jsx';
 import { changeCount } from '../changes/count.js';
 import { AREA_TITLES } from '../changes/labels.js';
+import { can } from '../../../lib/permissions.js';
 
 const PAGE = 20;
 
@@ -107,7 +108,7 @@ export default function ReleasesSection() {
         actions={<Btn kind={pending ? 'primary' : undefined} onClick={() => setReviewing(true)}>{t('Review changes')}</Btn>}>
         <KV items={[
           [t('Members are on'), changes.version ? t('Version {v}', { v: changes.version }) : t('loading')],
-          [t('Published'), changes.publishedAt ? [changes.publishedBy, new Date(changes.publishedAt).toLocaleString()].filter(Boolean).join(' · ') : t('never')],
+          [t('Published'), changes.publishedAt ? [changes.publishedBy, fmtDateTime(changes.publishedAt)].filter(Boolean).join(' · ') : t('never')],
           [t('Waiting in the draft'), pending ? changeCount(pending) : t('nothing')]
         ]} />
       </Card>
@@ -133,12 +134,12 @@ export default function ReleasesSection() {
                       <b>{r.note || kindLine(r)}</b>
                       <span>{[r.note ? kindLine(r) : '', r.author, live ? t('live now') : ''].filter(Boolean).join(' · ')}</span>
                     </span>
-                    <span className="rl-when" data-tip={new Date(r.createdAt).toLocaleString()}>{fmtAgo(r.createdAt)}</span>
+                    <span className="rl-when" data-tip={fmtDateTime(r.createdAt)}>{fmtAgo(r.createdAt)}</span>
                   </button>
                   {expanded && (
                     <div className="rl-body">
                       <Detail version={r.version} />
-                      {!live && user?.canPublish && (
+                      {!live && can(user, 'admin.publish') && (
                         <div>
                           <Btn size="sm" onClick={() => restore(r)}>{t('Restore this version')}</Btn>
                         </div>

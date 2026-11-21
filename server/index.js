@@ -12,6 +12,7 @@ import * as mcp from './lib/mcp.js';
 import { pruneAudit } from './lib/audit.js';
 import { pruneToolStats } from './lib/toolstats.js';
 import { startTaskScheduler } from './lib/taskrunner.js';
+import { startLdapSync } from './lib/identity/ldap.js';
 import { UPLOADS } from './lib/uploads.js';
 import { initWs } from './lib/ws/index.js';
 import registerAuthRoutes from './routes/auth.js';
@@ -29,10 +30,22 @@ import registerMediaRoutes from './routes/media.js';
 import registerMiscRoutes from './routes/misc.js';
 import registerThemeRoutes from './routes/theme.js';
 import registerChangeRoutes from './routes/changes.js';
+import registerEvalRoutes from './routes/evals.js';
+import registerQualityRoutes from './routes/quality.js';
+import registerPeopleRoutes from './routes/people.js';
+import registerIdentityRoutes from './routes/identity.js';
+import registerSsoRoutes from './routes/sso.js';
+import registerScimRoutes from './routes/scim.js';
+import registerGroupRoutes from './routes/groups.js';
+import registerSharingRoutes from './routes/sharing.js';
+import { gateOf } from './lib/authz/effective.js';
+import { announceSetup } from './lib/identity/signup.js';
+import { settleInterrupted } from './lib/regression.js';
 import { localOnlyMiddleware } from './lib/localonly.js';
 import { installEgressGuard } from './lib/egress.js';
-import { sameOriginGuard } from './lib/origin.js';
+import { sameOriginGuard, isHttps } from './lib/origin.js';
 import { uploadHeaders, isPublicUpload } from './lib/uploads.js';
+import { canReadUpload } from './lib/authz/acl.js';
 import { migratePromptBlocks } from './lib/systemprompt.js';
 import { ensureInitialRelease } from './lib/releases.js';
 
@@ -44,11 +57,18 @@ installEgressGuard();
 migratePromptBlocks();
 ensureInitialRelease();
 
+const PERMISSIONS = 'camera=(), geolocation=(), payment=(), usb=(), serial=(), hid=(), bluetooth=(), midi=(), display-capture=(), browsing-topics=(), microphone=(self)';
+
 const app = express();
 app.disable('x-powered-by');
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'same-origin');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+  res.setHeader('Permissions-Policy', PERMISSIONS);
+  if (isHttps(req)) res.setHeader('Strict-Transport-Security', 'max-age=31536000');
   res.setHeader('X-Robots-Tag', 'noindex, nofollow, noarchive, noimageindex');
   // authenticated JSON must never land in a shared or back/forward cache
   if (req.path.startsWith('/api')) res.setHeader('Cache-Control', 'no-store');
@@ -57,13 +77,16 @@ app.use((req, res, next) => {
 // Auth is a cookie, so every state-changing endpoint is forgeable from another origin
 // unless we check. SameSite=Lax already blocks the common case; this closes the rest.
 app.use(sameOriginGuard);
+registerScimRoutes(app);
 app.use(express.json({ limit: '2mb' }));
 app.use((req, _res, next) => { if (req.body === undefined) req.body = {}; next(); });
 app.use(parseCookies);
 // 404 rather than 401 for a signed-out caller: whether a given upload exists is itself
 // something only a member should learn.
 const uploadAuth = (req, res, next) => {
-  if (isPublicUpload(req.path) || sessionFromRequest(req)) return next();
+  if (isPublicUpload(req.path)) return next();
+  const r = sessionFromRequest(req);
+  if (r && !gateOf(r.user, r.session) && canReadUpload(r.user, req.path)) return next();
   res.status(404).json({ error: 'not found' });
 };
 app.use('/uploads', uploadHeaders, uploadAuth, express.static(UPLOADS, { index: false, dotfiles: 'deny' }));
@@ -82,6 +105,13 @@ registerAdminRoutes(app);
 registerMediaRoutes(app);
 registerThemeRoutes(app);
 registerChangeRoutes(app);
+registerEvalRoutes(app);
+registerQualityRoutes(app);
+registerPeopleRoutes(app);
+registerIdentityRoutes(app);
+registerSsoRoutes(app);
+registerGroupRoutes(app);
+registerSharingRoutes(app);
 registerMiscRoutes(app);
 
 // Unknown API routes answer in JSON. Falling through to the SPA handler below served a
@@ -125,9 +155,15 @@ function warmHostEnv() {
   worker.unref();
 }
 
-server.listen(PORT, HOST, () => console.log(`open-quill running on http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`));
+server.listen(PORT, HOST, () => {
+  console.log(`open-quill running on http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`);
+  announceSetup();
+});
 warmHostEnv();
 const pruneOld = () => { pruneAudit(); pruneToolStats(); pruneSessions(); };
 pruneOld();
 setInterval(pruneOld, 24 * 60 * 60 * 1000).unref();
 startTaskScheduler();
+mcp.startHealthChecks();
+startLdapSync();
+settleInterrupted();

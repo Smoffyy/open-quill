@@ -22,6 +22,10 @@ const TRUSTED_ORIGINS = new Set(
     .filter(Boolean)
 );
 
+export function isHttps(req) {
+  return !!req.socket?.encrypted || String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
+}
+
 export function requestHost(req) {
   const forwarded = String(req?.headers?.['x-forwarded-host'] || '').split(',')[0].trim();
   return (forwarded || String(req?.headers?.host || '')).trim().toLowerCase();

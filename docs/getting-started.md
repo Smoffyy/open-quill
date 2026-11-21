@@ -4,9 +4,9 @@ This page picks up once the server is running. To install it, see [Building and 
 
 ## Create your account
 
-On a new install there are no accounts, so the first screen is **Create account**. The first account becomes the owner and has every admin right.
+On a new install there are no accounts, so the first screen is **Create account**. It asks for the setup token the server prints in its console, so only whoever runs the server can claim it. The first account becomes the owner and has every admin right.
 
-If an account has two-factor authentication on, signing in asks for a 6-digit code after the password.
+If an account has two-factor authentication on, signing in asks for a 6-digit code after the password. Your organization may also offer buttons such as **Continue with Okta**, or ask for your directory username. See [Sign-in methods](sign-in.md).
 
 ## Follow the setup guide
 

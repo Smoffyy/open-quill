@@ -226,14 +226,14 @@ export function defaultValueOf(def) {
   return def.values[Math.floor(def.values.length / 2)] ?? def.values[0] ?? '';
 }
 
-export function resolveKwargValues(defs, requested, isAdmin = false, useFirstValue = false) {
+export function resolveKwargValues(defs, requested, advanced = false, useFirstValue = false) {
   const req = requested && typeof requested === 'object' ? requested : {};
   const out = {};
   for (const d of defs) {
     if (d.parentId) continue;
     const range = isRange(d);
     let v = useFirstValue ? (range ? String(clampToRange(d, d.min)) : (d.values[0] ?? defaultValueOf(d))) : defaultValueOf(d);
-    if (!useFirstValue && d.visible && (isAdmin || !d.adminOnly)) {
+    if (!useFirstValue && d.visible && (advanced || !d.adminOnly)) {
       const asked = req[d.id];
       if (asked != null) {
         if (range) { const c = clampToRange(d, asked); if (c != null) v = String(c); }
@@ -314,11 +314,11 @@ export function primaryKwarg(defs) {
   return defs.find(d => !d.parentId && d.visible) || defs.find(d => !d.parentId) || defs[0] || null;
 }
 
-export function applyKwargs(model, requested, isAdmin = false) {
+export function applyKwargs(model, requested, advanced = false) {
   if (!model) return model;
   const defs = kwargDefs(model);
   if (!defs.length) return { ...model, resolved_kwargs: {}, kwarg_values: {}, replay_thinking: '' };
-  const values = resolveKwargValues(defs, requested, isAdmin);
+  const values = resolveKwargValues(defs, requested, advanced);
   const primary = primaryKwarg(defs);
   return {
     ...model,

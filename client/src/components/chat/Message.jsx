@@ -15,7 +15,7 @@ import { useStatusLabel } from '../../lib/status.js';
 import { menuStyleOf, scrollInsideMenu, MENU_EDGE } from '../../lib/anchor.js';
 import { useDismiss } from '../../lib/dismiss.js';
 import { useLongPress } from '../../lib/longpress.js';
-import { t } from '../../i18n.jsx';
+import { t, fmtNumber, fmtDate, fmtDateTime } from '../../i18n.jsx';
 
 function UserBubble({ content }) {
   const [collapsed, setCollapsed] = useState(true);
@@ -47,12 +47,12 @@ function fmtTime(ts) {
   if (isNaN(d.getTime())) return null;
   const days = Math.floor((Date.now() - d.getTime()) / 86400000);
   let short;
-  if (days < 1) short = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  if (days < 1) short = fmtDateTime(d, { hour: 'numeric', minute: '2-digit' });
   else if (days <= 7) short = days === 1 ? t('1 day ago') : t('{n} days ago', { n: days });
-  else short = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  else short = fmtDate(d, { month: 'short', day: 'numeric' });
   return {
     short,
-    full: d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+    full: fmtDateTime(d, { dateStyle: 'medium', timeStyle: 'short' })
   };
 }
 
@@ -206,7 +206,7 @@ function SpeedChip({ speed }) {
   const rate = speed.tps >= 100 ? Math.round(speed.tps) : Math.round(speed.tps * 10) / 10;
   const bits = [];
   if (speed.promptTps > 0) bits.push(`${t('prompt')} ${Math.round(speed.promptTps)} tok/s`);
-  if (speed.out > 0) bits.push(`${Number(speed.out).toLocaleString()} ${t('tokens out')}`);
+  if (speed.out > 0) bits.push(`${fmtNumber(speed.out)} ${t('tokens out')}`);
   return <span className="msg-speed" data-tip={bits.join(' · ')}>{rate} tok/s</span>;
 }
 

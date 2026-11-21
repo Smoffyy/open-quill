@@ -1,14 +1,25 @@
 export const SESSION_EXPIRED = 'oq-session-expired';
+export const ACCOUNT_GATED = 'oq-account-gated';
 
-function noteExpiry(url, status) {
-  if (status !== 401 || url.startsWith('/api/auth/') || typeof window === 'undefined') return;
-  window.dispatchEvent(new CustomEvent(SESSION_EXPIRED));
+function noteExpiry(url, status, body) {
+  if (url.startsWith('/api/auth/') || typeof window === 'undefined') return;
+  if (status === 401) window.dispatchEvent(new CustomEvent(SESSION_EXPIRED));
+  else if (status === 403 && body?.gate) window.dispatchEvent(new CustomEvent(ACCOUNT_GATED));
+}
+
+let translate = (s) => s;
+
+export function setErrorTranslator(fn) {
+  translate = typeof fn === 'function' ? fn : (s) => s;
 }
 
 async function failure(url, res, fallback) {
-  noteExpiry(url, res.status);
   const body = await res.json().catch(() => ({}));
-  return new Error(body.error || fallback || res.statusText);
+  noteExpiry(url, res.status, body);
+  const err = new Error(translate(body.error || fallback || res.statusText));
+  err.status = res.status;
+  err.body = body;
+  return err;
 }
 
 export const TAB_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);

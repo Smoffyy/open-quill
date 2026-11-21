@@ -1,8 +1,8 @@
 # Admin guide
 
-Editors, publishers and the owner open the **Admin Panel** from the profile menu. Press `Ctrl+K` inside the panel to find any section or setting.
+Anyone with an admin permission opens the **Admin Panel** from the profile menu: admins, owners, and people whose custom role includes one. Each section appears only to those with its permission. Press `Ctrl+K` inside the panel to find any section or setting.
 
-Most changes are saved to a shared draft and reach members only when a publisher ships them from **Review changes**. See [Publishing changes](#publishing-changes). Providers, model folders, Storage and a few infrastructure settings apply immediately, because members never see them directly.
+Most changes are saved to a shared draft and reach members only when someone with the **Publish** permission ships them from **Review changes**. See [Publishing changes](#publishing-changes). Providers, model folders, Storage and a few infrastructure settings apply immediately, because members never see them directly. So do everything under **People**, because security changes should never wait for a release.
 
 ## Runtime
 
@@ -96,9 +96,17 @@ The look every member gets once it is published.
 
 The greetings above the composer and the starter prompts below it. Each starter has a label, an icon and the full prompt it sends.
 
-### Members
+## People
 
-Every account, with its role, two-factor status, monthly spend and optional monthly cap. Filter by name, email or role. **Accept new sign-ups** turns open registration on or off. **Remove member** deletes the account and its chats. See [Roles](#roles).
+Who can sign in and what they can do. The full guide is [Identity and access](identity-access.md).
+
+| Section | Controls |
+| --- | --- |
+| **Users** | Every account with its role, status, sign-in source, two-factor status, last activity and spend. Approve pending accounts, change roles, disable, end sessions, reset two-factor, set a monthly cap, **See access** and remove. Also **Registration** (open, approval or closed, with allowed domains) and the **Two-factor authentication** policy |
+| **Groups** | Groups with their members, nesting, everyday permissions and default model, including groups synced from single sign-on, LDAP, SCIM or a proxy |
+| **Roles** | The User baseline and custom roles, with their rank and permissions |
+| **Sign-in** | The public address, single sign-on providers, LDAP and Active Directory, and the trusted proxy status. See [Sign-in methods](sign-in.md) |
+| **Provisioning** | SCIM 2.0 for Okta, Microsoft Entra ID and others: settings, tokens and recent activity. See [SCIM provisioning](provisioning.md) |
 
 ## Policy
 
@@ -114,7 +122,7 @@ Every account, with its role, two-factor status, monthly spend and optional mont
 | --- | --- |
 | **Usage** | Tokens, generations and estimated spend by member and by model over 7, 30 or 90 days, plus **Tool reliability** |
 | **Ratings** | Thumbs members left on replies, with comments |
-| **Event log** | Sensitive admin actions, kept for 120 days. Filter them, and **Export CSV** |
+| **Event log** | Sign-ins, access changes, provisioning and admin actions, kept for 120 days. Filter by category, action, actor and time, and export as CSV or JSON Lines. See [Monitoring and audit](enterprise.md#monitoring-and-audit) |
 | **Storage** | The isolated databases on this server. See [Databases](databases.md) |
 
 ## Playground
@@ -131,16 +139,17 @@ Playground runs are not saved as chats.
 
 | Role | Can |
 | --- | --- |
-| **Member** | Chat. No Admin Panel |
-| **Editor** | Use the Admin Panel and the playground, and stage changes. Can discard only their own changes |
-| **Publisher** | Everything an editor can, plus publish, restore versions and discard anyone's changes |
-| **Owner** | Everything, including making and removing publishers. The first account is the owner |
+| **Pending** | Nothing until an admin approves the account |
+| **User** | Everything in the User baseline, set under **Roles** |
+| Custom roles | The User baseline plus chosen permissions, which may include admin permissions. Without **Publish**, they stage changes and discard only their own |
+| **Admin** | Every permission, including publishing, restoring versions and discarding anyone's changes |
+| **Owner** | Everything, plus sign-in methods, provisioning, the two-factor and registration policies, custom roles, and making admins and owners. The first account is the owner |
 
-You can manage only accounts below your own role, and grant only roles below it. Nobody can change their own role.
+You can manage only accounts below your own role, and grant only roles below it. Nobody can change their own role. See [Identity and access](identity-access.md) for permissions, groups and sharing.
 
 ## Publishing changes
 
-Every edit saves itself to one shared draft. There is no save button. All admins see the draft live, along with who else is in the panel and which model they have open. Members keep using the published version until a publisher ships the draft.
+Every edit saves itself to one shared draft. There is no save button. All admins see the draft live, along with who else is in the panel and which model they have open. Members keep using the published version until someone with the **Publish** permission ships the draft.
 
 **Review changes** in the top bar lists every pending change, with the old and new values, who made it and when. Long text, such as a system prompt, can be compared line by line. Tick what should go out, add an optional note, and press **Publish**. Unticked changes stay in the draft. **Discard** throws the ticked changes away.
 

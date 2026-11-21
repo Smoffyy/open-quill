@@ -13,7 +13,19 @@ export const MIRROR = {
   tasks: { user_id: o => o.user_id ?? null, next_run: o => o.next_run ?? 0, updated_at: o => o.updated_at ?? 0, created_at: o => o.created_at ?? 0 },
   skills: { user_id: o => o.user_id ?? null, name: o => o.name ?? null, updated_at: o => o.updated_at ?? 0, created_at: o => o.created_at ?? 0 },
   releases: { version: o => o.version ?? 0, created_at: o => o.created_at ?? 0 },
-  draft_edits: { updated_at: o => o.updated_at ?? 0 }
+  draft_edits: { updated_at: o => o.updated_at ?? 0 },
+  eval_collections: { updated_at: o => o.updated_at ?? 0 },
+  eval_versions: { collection_id: o => o.collection_id ?? null, version: o => o.version ?? 0, created_at: o => o.created_at ?? 0 },
+  eval_runs: { collection_id: o => o.collection_id ?? null, created_at: o => o.created_at ?? 0 },
+  quality_checks: { ts: o => o.ts ?? 0, criterion_id: o => o.criterion_id ?? null, chat_id: o => o.chat_id ?? null, verdict: o => o.verdict ?? null },
+  roles: { rank: o => o.rank ?? 0 },
+  user_groups: { name_key: o => o.name_key ?? null, source: o => o.source ?? 'local', updated_at: o => o.updated_at ?? 0 },
+  group_members: { group_id: o => o.group_id ?? null, member_type: o => o.member_type ?? null, member_id: o => o.member_id ?? null, source: o => o.source ?? 'manual' },
+  acl: { resource_type: o => o.resource_type ?? null, resource_id: o => o.resource_id ?? null, principal_type: o => o.principal_type ?? null, principal_id: o => o.principal_id ?? null, level: o => o.level ?? null },
+  uploads: { user_id: o => o.user_id ?? null, created_at: o => o.created_at ?? 0 },
+  mfa_factors: { user_id: o => o.user_id ?? null, type: o => o.type ?? null },
+  identities: { provider_id: o => o.provider_id ?? null, subject: o => o.subject ?? null, user_id: o => o.user_id ?? null },
+  scim_tokens: { hash: o => o.hash ?? null }
 };
 
 const bumps = new Map();

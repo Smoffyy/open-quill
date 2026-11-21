@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { api } from '../../lib/api.js';
 import { notify } from '../../lib/notify.js';
 import Composer from '../composer/Composer.jsx';
-import { Box, Search, Plus, ChevDown, Star, Dots, Trash, Pencil, Check, Laptop } from '../ui/icons.jsx';
+import { Box, Search, Plus, ChevDown, Star, Dots, Trash, Pencil, Check, Laptop, Users } from '../ui/icons.jsx';
 import Markdown from '../chat/Markdown.jsx';
 import LibraryPage, { LibraryEmpty } from './LibraryPage.jsx';
 import { t, fmtDate, fmtRelative } from '../../i18n.jsx';
@@ -13,6 +13,7 @@ import { useDismiss } from '../../lib/dismiss.js';
 import { useSkeleton } from '../../lib/skeleton.js';
 import { askConfirm } from '../../lib/confirm.js';
 import ProjectFiles from './ProjectFiles.jsx';
+import ShareDialog from '../dialogs/ShareDialog.jsx';
 
 function updatedLabel(ts) {
   const d = new Date(ts);
@@ -67,7 +68,7 @@ function CreateModal({ onClose, onCreate }) {
   );
 }
 
-function ProjectNotes({ project, onSave }) {
+function ProjectNotes({ project, editable, onSave }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(project.notes || '');
   useEffect(() => { if (!editing) setText(project.notes || ''); }, [project.notes, editing]);
@@ -79,10 +80,12 @@ function ProjectNotes({ project, onSave }) {
     <div className="pj-card pj-notes">
       <div className="pj-card-head">
         <span>{t('Notes')}</span>
-        <button type="button" className="pj-card-add" onClick={() => (editing ? save() : setEditing(true))}
-          data-tip={editing ? t('Done') : t('Edit notes')} aria-label={editing ? t('Done') : t('Edit notes')}>
-          {editing ? <Check style={{ width: 15 }} /> : <Pencil style={{ width: 15 }} />}
-        </button>
+        {editable && (
+          <button type="button" className="pj-card-add" onClick={() => (editing ? save() : setEditing(true))}
+            data-tip={editing ? t('Done') : t('Edit notes')} aria-label={editing ? t('Done') : t('Edit notes')}>
+            {editing ? <Check style={{ width: 15 }} /> : <Pencil style={{ width: 15 }} />}
+          </button>
+        )}
       </div>
       {editing ? (
         <textarea className="pj-instr-edit pj-notes-edit" autoFocus value={text} rows={10} maxLength={20000}
@@ -132,6 +135,7 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onO
   const [menu, setMenu] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState('');
+  const [sharing, setSharing] = useState(false);
   const menuRef = useRef(null);
   const load = useCallback(async () => {
     try { const p = await api.get('/api/projects/' + id); setProject(p); setInstr(p.instructions || ''); setName(p.name); }
@@ -149,6 +153,9 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onO
       </div>
     </div>
   );
+
+  const isOwner = (project.access || 'owner') === 'owner';
+  const canEdit = project.access !== 'view';
 
   async function patch(body) {
     const p = await api.patch('/api/projects/' + id, body);
@@ -182,19 +189,24 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onO
             )}
             <div className="pj-title-ctrls">
               <div className="pj-menu-wrap" ref={menuRef}>
-                <button className="pj-icon-btn" onClick={() => setMenu(m => !m)}><Dots style={{ width: 18 }} /></button>
+                <button className="pj-icon-btn" onClick={() => setMenu(m => !m)} data-tip={t('Project options')} aria-label={t('Project options')} aria-haspopup="menu" aria-expanded={menu}><Dots style={{ width: 18 }} /></button>
                 {menu && (
                   <div className="pj-menu">
-                    <button onClick={() => { setMenu(false); setRenaming(true); }}><Pencil style={{ width: 15 }} /> {t("Rename")}</button>
-                    <button className="danger" onClick={() => { setMenu(false); del(); }}><Trash style={{ width: 15 }} /> {t("Delete project")}</button>
+                    {canEdit && <button onClick={() => { setMenu(false); setRenaming(true); }}><Pencil style={{ width: 15 }} /> {t("Rename")}</button>}
+                    <button onClick={() => { setMenu(false); setSharing(true); }}><Users style={{ width: 15 }} /> {project.canShare ? t('Share') : t('Who has access')}</button>
+                    {isOwner && <button className="danger" onClick={() => { setMenu(false); del(); }}><Trash style={{ width: 15 }} /> {t("Delete project")}</button>}
                   </div>
                 )}
               </div>
-              <button className={'pj-icon-btn' + (project.starred ? ' on' : '')} onClick={() => patch({ starred: !project.starred })}>
-                <Star style={{ width: 18 }} />
-              </button>
+              {isOwner && (
+                <button className={'pj-icon-btn' + (project.starred ? ' on' : '')} onClick={() => patch({ starred: !project.starred })}
+                  data-tip={project.starred ? t('Unstar project') : t('Star project')} aria-label={project.starred ? t('Unstar project') : t('Star project')} aria-pressed={!!project.starred}>
+                  <Star style={{ width: 18 }} />
+                </button>
+              )}
             </div>
           </div>
+          {!isOwner && <div className="shared-tag pj-shared"><Users aria-hidden="true" /> {t('Shared by {name}', { name: project.owner })}</div>}
           {project.description && <div className="pj-desc">{project.description}</div>}
 
           <div className="pj-composer">
@@ -221,23 +233,24 @@ function ProjectDetail({ id, composerProps, onBack, onOpenChat, onStartChat, onO
           <div className="pj-card">
             <div className="pj-card-head">
               <span>{t("Instructions")}</span>
-              <button className="pj-card-add" onClick={() => setEditingInstr(e => !e)}><Plus style={{ width: 16 }} /></button>
+              {canEdit && <button className="pj-card-add" onClick={() => setEditingInstr(e => !e)} data-tip={t('Edit instructions')} aria-label={t('Edit instructions')}><Plus style={{ width: 16 }} /></button>}
             </div>
             {editingInstr ? (
               <textarea className="pj-instr-edit" autoFocus value={instr} rows={5}
                 placeholder={t("Add instructions to tailor the Assistant's responses")}
                 onChange={(e) => setInstr(e.target.value)} onBlur={saveInstr} />
             ) : (
-              <div className="pj-card-sub" onClick={() => setEditingInstr(true)}>
-                {project.instructions ? project.instructions : t("Add instructions to tailor Assistant's responses")}
+              <div className="pj-card-sub" onClick={canEdit ? () => setEditingInstr(true) : undefined}>
+                {project.instructions ? project.instructions : canEdit ? t("Add instructions to tailor Assistant's responses") : t('No instructions yet.')}
               </div>
             )}
           </div>
-          <ProjectNotes project={project} onSave={(notes) => patch({ notes })} />
-          <ProjectFiles projectId={id} />
+          <ProjectNotes project={project} editable={canEdit} onSave={(notes) => patch({ notes })} />
+          <ProjectFiles projectId={id} readOnly={!canEdit} />
           {onOpenInCode && <ProjectCode project={project} onOpenInCode={onOpenInCode} onOpenSession={onOpenSession} />}
         </div>
       </div>
+      {sharing && <ShareDialog type="project" id={id} title={project.name} onClose={() => setSharing(false)} onLeft={onDeleted} />}
     </div>
   );
 }
@@ -307,6 +320,7 @@ export default function ProjectsPanel({ openId, composerProps, onOpenChat, onSta
                     <div className="pj-tile-name">{p.name}</div>
                   </div>
                   {p.description && <div className="pj-tile-desc">{p.description}</div>}
+                  {p.owner && <div className="shared-tag"><Users aria-hidden="true" /> {t('Shared by {name}', { name: p.owner })}</div>}
                   <div className="pj-tile-time">{updatedLabel(p.updated_at)}</div>
                 </button>
               ))}

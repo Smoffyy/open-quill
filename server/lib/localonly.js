@@ -1,8 +1,8 @@
 import { getSetting } from '../db.js';
+import { isHttps } from './origin.js';
 
 function selfOrigins(req) {
-  const secure = req.socket?.encrypted || String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
-  const scheme = secure ? 'wss' : 'ws';
+  const scheme = isHttps(req) ? 'wss' : 'ws';
   const hosts = [
     String(req.headers['x-forwarded-host'] || '').split(',')[0].trim(),
     String(req.headers.host || '').trim()

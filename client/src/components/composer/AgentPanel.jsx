@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Check, Chevron, ListChecks, X } from '../ui/icons.jsx';
+import { Check, Chevron, ListChecks, Shield, X } from '../ui/icons.jsx';
 import { t, tk } from '../../i18n.jsx';
 
 const STATUS = {
@@ -90,6 +90,24 @@ function Question({ question, onAnswer, onSkip }) {
   );
 }
 
+function Approval({ approval, onAnswer }) {
+  const hasArgs = approval.args && approval.args.trim() !== '{}';
+  return (
+    <section className="ap-question ap-approval" role="group" aria-label={t('Approve a tool call')}>
+      <div className="ap-q"><Shield className="ap-approval-ic" aria-hidden="true" />{t('{server} wants to run {tool}', { server: approval.server, tool: approval.tool })}</div>
+      {hasArgs && <pre className="ap-args" aria-label={t('Arguments')}>{approval.args}</pre>}
+      <div className="ap-options">
+        <button type="button" className="ap-send" onClick={() => onAnswer('allow')}>{t('Allow once')}</button>
+        <button type="button" className="ap-opt" onClick={() => onAnswer('allow_chat')}>{t('Always allow in this chat')}</button>
+        <span className="ap-actions">
+          <button type="button" className="ap-skip" onClick={() => onAnswer('deny')}>{t('Deny')}</button>
+        </span>
+      </div>
+      <div className="ap-hint">{t('Or type below to deny it and tell the model why.')}</div>
+    </section>
+  );
+}
+
 export default function AgentPanel({ plan, previousPlan, onDismissPlan, question, onAnswer, onSkip }) {
   const [showPrev, setShowPrev] = useState(false);
   const prevKey = previousPlan?.key || '';
@@ -109,7 +127,9 @@ export default function AgentPanel({ plan, previousPlan, onDismissPlan, question
         <div className="agent-panel">
           {withPrev && <PreviousPlan plan={previousPlan} />}
           {plan && <Plan key={plan.key} plan={plan} onDismiss={onDismissPlan} />}
-          {question && <Question key={question.id} question={question} onAnswer={onAnswer} onSkip={onSkip} />}
+          {question && (question.approval
+            ? <Approval key={question.id} approval={question.approval} onAnswer={onAnswer} />
+            : <Question key={question.id} question={question} onAnswer={onAnswer} onSkip={onSkip} />)}
         </div>
       )}
     </div>

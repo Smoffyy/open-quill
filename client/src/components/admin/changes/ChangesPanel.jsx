@@ -10,6 +10,7 @@ import { sectionMeta } from '../nav.jsx';
 import { AREA_TITLES } from './labels.js';
 import { ChangeRow, fieldLabel } from './ChangeRow.jsx';
 import { changeCount } from './count.js';
+import { can } from '../../../lib/permissions.js';
 
 function groupTitle(g) {
   if (g.key === 'models:order') return t('Catalog');
@@ -18,8 +19,8 @@ function groupTitle(g) {
   return g.label || t('Untitled');
 }
 
-export default function ChangesPanel({ changes, user, scope, layer, onPublished, onClose }) {
-  const publisher = !!user?.canPublish;
+export default function ChangesPanel({ changes, user, scope, layer, onPublished, onClose, onTest }) {
+  const publisher = can(user, 'admin.publish');
   const [who, setWho] = useState(publisher ? 'all' : 'mine');
   const [skip, setSkip] = useState(() => new Set());
   const [note, setNote] = useState('');
@@ -148,6 +149,12 @@ export default function ChangesPanel({ changes, user, scope, layer, onPublished,
               })}
             </section>
           ))}
+          {onTest && changes.changes.some(c => c.key.startsWith('model:')) && (
+            <p className="ch-quiet ch-test">
+              {t('Model changes are waiting. Run a test collection with the draft as the candidate to see what they change before members get them.')}
+              {' '}<Btn size="sm" onClick={onTest}>{t('Test these changes first')}</Btn>
+            </p>
+          )}
           {changes.version > 0 && (
             <p className="ch-quiet">
               {t('Members are on version {v}', { v: changes.version })}

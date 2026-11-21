@@ -1,8 +1,11 @@
 import { db, uid, now, tx } from '../../db.js';
 import { authMiddleware } from '../../auth.js';
+import { requirePermission } from '../../lib/authz/middleware.js';
 import { stripToolSyntax } from '../../lib/history.js';
 import { ensureChain, childrenOf, activePath, leafUnder, sortedMsgs } from '../../lib/tree.js';
 import { copyArtifacts } from '../../lib/artifacts.js';
+import { copyUpload } from '../../lib/uploads.js';
+import { access } from '../../lib/authz/acl.js';
 
 const PREVIEW_MAX = 140;
 const CONTENT_MAX = 200000;
@@ -15,8 +18,9 @@ function previewText(content) {
 
 export default function registerMessageRoutes(app) {
   app.get('/api/chats/:id', authMiddleware, (req, res) => {
-    const c = db.chats.byId(req.params.id);
-    if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+    const r = access(req.user, 'chat', req.params.id);
+    if (r.error) return res.status(r.status).json({ error: r.error });
+    const c = r.resource;
     const path = activePath(c.id);
     const modelById = new Map(db.models.all().map(x => [x.id, x]));
     const legacyName = new Map();
@@ -37,7 +41,14 @@ export default function registerMessageRoutes(app) {
         siblings: sibs.map(s => s.id)
       };
     });
-    res.json({ chat: { id: c.id, title: c.title, starred: !!c.starred, mode: c.mode === 'code' ? 'code' : 'chat', summary: c.summary || '', hasSummary: !!c.summary, projectId: c.project_id || null, instructions: c.instructions || '', pinnedFiles: Array.isArray(c.pinned_files) ? c.pinned_files : [], ended: !!c.ended, endedReason: c.ended_reason || '', genParams: c.gen_params || null, systemOverride: c.system_override || '', planDismissed: c.plan_dismissed || null }, messages });
+    if (r.level !== 'owner') {
+      const owner = db.users.byId(c.user_id);
+      return res.json({
+        chat: { id: c.id, title: c.title, starred: false, mode: 'chat', summary: '', hasSummary: false, projectId: null, instructions: '', pinnedFiles: [], ended: !!c.ended, endedReason: c.ended_reason || '', genParams: null, systemOverride: '', planDismissed: null, mcpOff: [], access: r.level, owner: owner ? owner.display_name || (owner.email || '').split('@')[0] : '' },
+        messages: messages.map(m => ({ ...m, pinned: false, feedback: 0, steers: null, branchIndex: 0, branchCount: 1, siblings: [m.id] }))
+      });
+    }
+    res.json({ chat: { id: c.id, title: c.title, starred: !!c.starred, mode: c.mode === 'code' ? 'code' : 'chat', summary: c.summary || '', hasSummary: !!c.summary, projectId: c.project_id || null, instructions: c.instructions || '', pinnedFiles: Array.isArray(c.pinned_files) ? c.pinned_files : [], ended: !!c.ended, endedReason: c.ended_reason || '', genParams: c.gen_params || null, systemOverride: c.system_override || '', planDismissed: c.plan_dismissed || null, mcpOff: Array.isArray(c.mcp_off) ? c.mcp_off : [], access: 'owner' }, messages });
   });
 
   app.get('/api/chats/:id/siblings/:mid', authMiddleware, (req, res) => {
@@ -76,7 +87,7 @@ export default function registerMessageRoutes(app) {
     res.json({ activeLeaf: db.chats.byId(c.id)?.active_leaf || null, path: path.map(m => m.id), nodes });
   });
 
-  app.post('/api/chats/:id/branch', authMiddleware, (req, res) => {
+  app.post('/api/chats/:id/branch', authMiddleware, requirePermission('chats.edit'), (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     ensureChain(c.id);
@@ -86,7 +97,7 @@ export default function registerMessageRoutes(app) {
     res.json({ ok: true });
   });
 
-  app.post('/api/chats/:id/cherrypick', authMiddleware, (req, res) => {
+  app.post('/api/chats/:id/cherrypick', authMiddleware, requirePermission('chats.edit'), (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     if (c.ended) return res.status(403).json({ error: 'This conversation was ended by the assistant and cannot be continued.' });
@@ -106,7 +117,7 @@ export default function registerMessageRoutes(app) {
     res.json({ ok: true, id });
   });
 
-  app.post('/api/chats/:id/fork', authMiddleware, (req, res) => {
+  app.post('/api/chats/:id/fork', authMiddleware, requirePermission('chats.create', 'chats.edit'), (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     if (c.ended) return res.status(403).json({ error: 'This conversation was ended by the assistant and cannot be continued or branched.' });
@@ -138,7 +149,39 @@ export default function registerMessageRoutes(app) {
     res.json({ id: nc.id, title: nc.title, mode: nc.mode });
   });
 
-  app.patch('/api/chats/:id/messages/:mid', authMiddleware, (req, res) => {
+  app.post('/api/chats/:id/copy', authMiddleware, requirePermission('chats.create'), (req, res) => {
+    const r = access(req.user, 'chat', req.params.id);
+    if (r.error) return res.status(r.status).json({ error: r.error });
+    const c = r.resource;
+    if (c.mode === 'code') return res.status(404).json({ error: 'not found' });
+    if (c.ended) return res.status(403).json({ error: 'This conversation was ended by the assistant and cannot be continued or branched.' });
+    ensureChain(c.id);
+    const path = activePath(c.id);
+    if (!path.length) return res.status(400).json({ error: 'empty chat' });
+    const copies = new Map();
+    const copyOf = (url) => {
+      if (!copies.has(url)) copies.set(url, copyUpload(url, req.user.id));
+      return copies.get(url);
+    };
+    const rows = path.map(m => ({ ...m, attachments: (m.attachments || []).map(a => ({ ...a, url: copyOf(a.url) })).filter(a => a.url) }));
+    const t = now();
+    const nc = db.chats.insert({ id: uid(), user_id: req.user.id, project_id: null, folder_id: null, title: (c.title ? c.title + ' (copy)' : 'Copied chat').slice(0, 120), starred: 0, sandbox: 0, mode: 'chat', summary: '', summary_upto: 0, created_at: t, updated_at: t });
+    let prev = null, ts = t, leaf = null;
+    tx(() => {
+      for (const m of rows) {
+        const nid = uid();
+        const copy = { ...m, id: nid, chat_id: nc.id, parent_id: prev, pinned: false, feedback: 0, created_at: ts++ };
+        delete copy.active_leaf;
+        db.messages.insert(copy);
+        prev = nid; leaf = nid;
+      }
+    });
+    db.chats.update(nc.id, { active_leaf: leaf });
+    copyArtifacts(c.id, nc.id);
+    res.json({ id: nc.id, title: nc.title, mode: 'chat', updated_at: t });
+  });
+
+  app.patch('/api/chats/:id/messages/:mid', authMiddleware, requirePermission('chats.edit'), (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     const m = db.messages.byId(req.params.mid);
@@ -156,7 +199,7 @@ export default function registerMessageRoutes(app) {
     res.json({ ok: true, pinned: !!(saved || m).pinned, content: (saved || m).content });
   });
 
-  app.delete('/api/chats/:id/messages/:mid', authMiddleware, (req, res) => {
+  app.delete('/api/chats/:id/messages/:mid', authMiddleware, requirePermission('chats.edit'), (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     ensureChain(c.id);

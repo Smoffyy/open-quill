@@ -1,28 +1,31 @@
 import { db, uid, now, getSetting, setSetting } from '../db.js';
-import { hash, check, sign, publicUser, authMiddleware, sessionFromRequest, createSession, revokeSession, revokeOtherSessions, sessionMaxAgeSeconds } from '../auth.js';
+import { hash, check, sign, publicUser, authMiddleware, authAccount, sessionFromRequest, createSession, revokeSession, revokeOtherSessions, sessionMaxAgeSeconds, sessionTtlDays } from '../auth.js';
+import { requirePermission } from '../lib/authz/middleware.js';
+import { can, isActive, isManaged, roleOf } from '../lib/authz/effective.js';
+import { isLastOwner } from '../lib/authz/rules.js';
+import { PENDING, USER, OWNER } from '../lib/authz/roles.js';
+import { signupPolicy, domainAllowed, setupTokenMatches } from '../lib/identity/signup.js';
 import { oneShot, stripThink } from '../llm/index.js';
-import { randomSecret, verifyTotp, otpauthUri, makeRecoveryCodes, hashRecovery } from '../lib/totp.js';
-import { logAudit, clientIp } from '../lib/audit.js';
+import { randomSecret } from '../lib/totp.js';
+import { hasTotp, startEnrollment, confirmEnrollment, regenerateCodes, removeFactors, verifySecondFactor, issueChallenge, readChallenge, spendChallenge, CHALLENGE_SECONDS } from '../lib/identity/mfa.js';
+import { mfaRequired } from '../lib/authz/effective.js';
+import { broadcastToUser } from '../lib/ws/broadcast.js';
+import { logAudit, actingAs, clientIp } from '../lib/audit.js';
+import { plainSnippet } from '../lib/history.js';
 import { purgeUserChats, purgeUser } from '../lib/purge.js';
 import { resolveModelOrDefault } from '../lib/models.js';
 import { budgetStatus } from '../lib/budget.js';
 import { presetId } from '../lib/presets.js';
 import { memoriesOf, changeMemory, setMemories } from '../lib/memory.js';
-import { killSessionSockets } from '../lib/ws/index.js';
+import { killSessionSockets, closeUserSockets } from '../lib/ws/index.js';
 import { cleanStyles, prefsFit } from '../lib/profile.js';
+import { sessionCookie, challengeCookie as challengeLine, MFA_COOKIE } from '../lib/identity/cookies.js';
+import { enabledProviders, publicBase, providers } from '../lib/identity/providers.js';
+import { ldapEnabled, ldapSignIn } from '../lib/identity/ldap.js';
 
-const isHttps = (req) =>
-  !!req.socket?.encrypted || String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https';
-
-// Secure is set only over TLS: forcing it on a plain-http install would make the browser
-// drop the cookie and lock everyone out of a normal localhost deployment.
-const setCookie = (req, res, token) =>
-  res.setHeader('Set-Cookie', [
-    `token=${token}`, 'HttpOnly', 'Path=/',
-    `Max-Age=${token ? sessionMaxAgeSeconds() : 0}`,
-    'SameSite=Lax',
-    ...(isHttps(req) ? ['Secure'] : [])
-  ].join('; '));
+const REAUTH_WINDOW_MS = 10 * 60 * 1000;
+const setCookie = (req, res, token) => sessionCookie(req, res, token, sessionMaxAgeSeconds());
+const challengeCookie = (req, res, value) => challengeLine(req, res, value, CHALLENGE_SECONDS);
 
 const FAIL_WINDOW_MS = 10 * 60 * 1000;
 const FAIL_MAX = 8;
@@ -60,6 +63,24 @@ function noteLoginFail(key) {
 const limitKeys = (req, email) => [`ip:${clientIp(req)}`, ...(email ? [`user:${email}`] : [])];
 const registerKeys = (req, email) => [`ip:${clientIp(req)}`, ...(email ? [`reg:${email}`] : [])];
 const anyLimited = (keys) => keys.some(loginLimited);
+const TOO_MANY = 'Too many attempts. Try again in a few minutes.';
+
+async function reauth(req, res, password, wrong = 'Password is incorrect.') {
+  const key = `acct:${req.user.id}`;
+  if (loginLimited(key)) { res.status(429).json({ error: TOO_MANY }); return false; }
+  if (req.user.password_hash) {
+    if (await check(String(password || ''), req.user.password_hash)) return true;
+  } else if (hasTotp(req.user.id)) {
+    if (verifySecondFactor(req.user.id, { code: String(req.body?.code || '').trim() })) return true;
+    wrong = 'That code is not valid. Check your authenticator and try again.';
+  } else {
+    if (now() - (req.session?.auth_at || 0) < REAUTH_WINDOW_MS) return true;
+    wrong = 'Sign in again, then repeat this within ten minutes.';
+  }
+  noteLoginFail(key);
+  res.status(401).json({ error: wrong });
+  return false;
+}
 
 let decoyHash = null;
 async function passwordMatches(pw, stored) {
@@ -77,11 +98,13 @@ export default function registerAuthRoutes(app) {
   app.get('/api/auth/context', (req, res) => {
     res.json({
       firstRun: db.users.count() === 0,
-      allowSignups: getSetting('allow_signups', '1') === '1',
+      signup: signupPolicy(),
       appName: getSetting('app_name', 'open-quill'),
       appIcon: getSetting('app_icon', ''),
       appFont: getSetting('app_font', 'literata'),
       uiPreset: presetId(getSetting('ui_preset', '')),
+      providers: publicBase() ? enabledProviders().map(p => ({ id: p.id, type: p.type, label: p.label })) : [],
+      ldap: ldapEnabled()
     });
   });
 
@@ -89,32 +112,70 @@ export default function registerAuthRoutes(app) {
     const email = String(req.body?.email || '').trim().toLowerCase().slice(0, 320);
     const pw = String(req.body?.password || '');
     const keys = limitKeys(req, email);
-    if (anyLimited(keys)) return res.status(429).json({ error: 'Too many attempts. Try again in a few minutes.' });
+    if (anyLimited(keys)) return res.status(429).json({ error: TOO_MANY });
     if (!email || !pw) return res.status(400).json({ error: 'Enter your email and password.' });
-    const u = db.users.byEmail(email);
-    if (!(await passwordMatches(pw, u?.password_hash))) {
+    let u = db.users.byEmail(email);
+    let method = 'password';
+    if (ldapEnabled() && !u?.password_hash) {
+      await passwordMatches(pw, null);
+      const r = await ldapSignIn(email, pw);
+      if (r.error === 'unavailable') return res.status(503).json({ error: 'Sign-in is temporarily unavailable. Try again later.' });
+      if (r.error === 'credentials') {
+        keys.forEach(noteLoginFail);
+        logAudit(req, 'auth.login_fail', { meta: { email, method: 'ldap' } });
+        return res.status(401).json({ error: 'Incorrect email or password.' });
+      }
+      if (r.error) {
+        logAudit(req, 'auth.ldap_refused', { meta: { reason: r.error } });
+        return res.status(403).json({ error: 'This directory account cannot sign in here. Ask an administrator for access.' });
+      }
+      u = r.user;
+      method = 'ldap';
+      if (r.created) logAudit(actingAs(req, u), 'user.provision', { type: 'user', id: u.id, meta: { email: u.email, provider: 'ldap', role: u.role } });
+    } else if (!(await passwordMatches(pw, u?.password_hash))) {
       keys.forEach(noteLoginFail);
+      logAudit(u ? actingAs(req, u) : req, 'auth.login_fail', { type: u ? 'user' : null, id: u?.id || null, meta: { email, method: 'password' } });
       return res.status(401).json({ error: 'Incorrect email or password.' });
     }
-    if (u.totp_enabled && u.totp_secret) {
-      const code = String(req.body?.code || '').trim();
-      const recovery = String(req.body?.recovery || '').trim();
-      if (!code && !recovery) return res.status(401).json({ error: 'two-factor required', twoFactor: true });
-      let ok = false;
-      if (code) ok = verifyTotp(u.totp_secret, code);
-      if (!ok && recovery) {
-        const h = hashRecovery(recovery);
-        const left = (u.recovery_codes || []).filter(c => c !== h);
-        if (left.length !== (u.recovery_codes || []).length) { ok = true; db.users.update(u.id, { recovery_codes: left }); }
-      }
-      // The counter is cleared only once the whole login succeeds, so a stolen password
-      // still cannot be used to grind second-factor codes without limit.
-      if (!ok) { keys.forEach(noteLoginFail); return res.status(401).json({ error: 'Invalid two-factor code.', twoFactor: true }); }
+    if (!isActive(u)) return res.status(403).json({ error: 'This account is disabled. Contact your administrator.' });
+    // The counter is cleared only once the whole login succeeds, so a stolen password
+    // still cannot be used to grind second-factor codes without limit.
+    if (hasTotp(u.id)) {
+      challengeCookie(req, res, issueChallenge(u, method));
+      return res.json({ mfa: { methods: ['totp', 'recovery'] } });
     }
     keys.forEach(k => loginFails.delete(k));
-    const sid = createSession(u, req);
+    const sid = createSession(u, req, method);
     setCookie(req, res, sign(u, sid));
-    logAudit(req, 'auth.login', { type: 'user', id: u.id });
+    logAudit(actingAs(req, u), 'auth.login', { type: 'user', id: u.id, meta: { method } });
+    res.json({ user: publicUser(u) });
+  });
+
+  app.post('/api/auth/mfa', (req, res) => {
+    const found = readChallenge(req.cookies?.[MFA_COOKIE]);
+    if (!found) {
+      challengeCookie(req, res, '');
+      return res.status(401).json({ error: 'Your sign-in expired. Enter your email and password again.', restart: true });
+    }
+    const { user: u, challenge } = found;
+    const keys = [...limitKeys(req, u.email), `acct:${u.id}`];
+    if (anyLimited(keys)) return res.status(429).json({ error: TOO_MANY });
+    if (!isActive(u)) {
+      challengeCookie(req, res, '');
+      return res.status(403).json({ error: 'This account is disabled. Contact your administrator.' });
+    }
+    const via = verifySecondFactor(u.id, { code: String(req.body?.code || '').trim(), recovery: String(req.body?.recovery || '').trim() });
+    if (!via) {
+      keys.forEach(noteLoginFail);
+      logAudit(actingAs(req, u), 'auth.mfa_fail', { type: 'user', id: u.id });
+      return res.status(401).json({ error: 'That code is not valid. Check your authenticator and try again.' });
+    }
+    spendChallenge(challenge);
+    keys.forEach(k => loginFails.delete(k));
+    const sid = createSession(u, req, challenge.method, via);
+    setCookie(req, res, sign(u, sid));
+    challengeCookie(req, res, '');
+    logAudit(actingAs(req, u), 'auth.login', { type: 'user', id: u.id, meta: { mfa: via } });
     res.json({ user: publicUser(u) });
   });
 
@@ -122,12 +183,18 @@ export default function registerAuthRoutes(app) {
     const email = String(req.body?.email || '').trim().toLowerCase().slice(0, 320);
     const pw = String(req.body?.password || '');
     const keys = registerKeys(req, email);
-    if (anyLimited(keys)) return res.status(429).json({ error: 'Too many attempts. Try again in a few minutes.' });
+    if (anyLimited(keys)) return res.status(429).json({ error: TOO_MANY });
     if (!/.+@.+\..+/.test(email)) return res.status(400).json({ error: 'Enter a valid email address.' });
     if (pw.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
     if (pw.length > 1024) return res.status(400).json({ error: 'That password is too long.' });
     const refused = () => {
-      if (db.users.count() !== 0 && getSetting('allow_signups', '1') !== '1') return res.status(403).json({ error: 'New accounts are turned off on this server.' });
+      if (db.users.count() === 0) {
+        if (setupTokenMatches(req.body?.setupToken)) return null;
+        keys.forEach(noteLoginFail);
+        return res.status(403).json({ error: 'Enter the setup token shown in the server console.', setup: true });
+      }
+      if (signupPolicy() === 'closed') return res.status(403).json({ error: 'New accounts are turned off on this server.' });
+      if (!domainAllowed(email)) return res.status(403).json({ error: 'Sign-up is limited to approved email domains.' });
       if (db.users.byEmail(email)) { keys.forEach(noteLoginFail); return res.status(409).json({ error: 'An account with that email already exists.' }); }
       return null;
     };
@@ -135,9 +202,10 @@ export default function registerAuthRoutes(app) {
     const passwordHash = await hash(pw);
     if (refused()) return;
     const owner = db.users.count() === 0;
-    const u = db.users.insert({ id: uid(), email, password_hash: passwordHash, display_name: '', is_admin: owner ? 1 : 0, is_owner: owner ? 1 : 0, prefs: {}, created_at: now() });
+    const role = owner ? OWNER : signupPolicy() === 'approval' ? PENDING : USER;
+    const u = db.users.insert({ id: uid(), email, password_hash: passwordHash, display_name: '', role, status: 'active', source: 'local', prefs: {}, created_at: now() });
     if (owner) setSetting('setup_complete', '0');
-    logAudit(req, 'user.register', { type: 'user', id: u.id, meta: { email, owner } });
+    logAudit(actingAs(req, u), 'user.register', { type: 'user', id: u.id, meta: { email, role } });
     const sid = createSession(u, req);
     setCookie(req, res, sign(u, sid));
     res.json({ user: publicUser(u) });
@@ -145,13 +213,39 @@ export default function registerAuthRoutes(app) {
 
   app.post('/api/auth/logout', (req, res) => {
     const r = sessionFromRequest(req);
-    if (r?.sessionId) revokeSession(r.sessionId);
+    if (r?.sessionId) {
+      revokeSession(r.sessionId);
+      logAudit(actingAs(req, r.user), 'auth.logout', { type: 'user', id: r.user.id });
+    }
     setCookie(req, res, '');
     res.json({ ok: true });
   });
 
-  app.get('/api/me', authMiddleware, (req, res) => res.json({ user: publicUser(req.user) }));
-  app.patch('/api/me', authMiddleware, (req, res) => {
+  app.get('/api/me', authAccount, (req, res) => res.json({ user: publicUser(req.user, req.session) }));
+
+  app.get('/api/me/identities', authAccount, (req, res) => {
+    const known = new Map(providers().map(p => [p.id, p]));
+    const linked = db.identities.where('user_id', req.user.id).map(i => ({
+      id: i.id, providerId: i.provider_id, label: known.get(i.provider_id)?.label || '', type: i.provider_id === 'ldap' ? 'ldap' : known.get(i.provider_id)?.type || '',
+      email: i.email || '', linkedAt: i.linked_at || 0, lastUsedAt: i.last_login_at || 0
+    }));
+    const have = new Set(linked.map(i => i.providerId));
+    const linkable = publicBase() ? enabledProviders().filter(p => !have.has(p.id)).map(p => ({ id: p.id, type: p.type, label: p.label })) : [];
+    res.json({ identities: linked, linkable, hasPassword: !!req.user.password_hash });
+  });
+
+  app.delete('/api/me/identities/:id', authAccount, async (req, res) => {
+    const ident = db.identities.byId(req.params.id);
+    if (!ident || ident.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
+    if (!req.user.password_hash && db.identities.where('user_id', req.user.id).length <= 1) {
+      return res.status(400).json({ error: 'This is the only way to sign in to this account, so it cannot be removed.' });
+    }
+    if (!(await reauth(req, res, req.body?.password))) return;
+    db.identities.removeById(ident.id);
+    logAudit(req, 'account.identity_unlink', { type: 'user', id: req.user.id, meta: { provider: ident.provider_id } });
+    res.json({ ok: true });
+  });
+  app.patch('/api/me', authAccount, (req, res) => {
     const b = req.body || {};
     const patch = {};
     // prefs is a free-form client bag, so it is bounded rather than schema-checked: the
@@ -178,10 +272,10 @@ export default function registerAuthRoutes(app) {
     res.json({ styles: list });
   });
 
-  app.post('/api/styles/generate', authMiddleware, async (req, res) => {
+  app.post('/api/styles/generate', authMiddleware, requirePermission('chats.create'), async (req, res) => {
     const sample = String(req.body?.sample || '').slice(0, 12000);
     if (!sample.trim()) return res.status(400).json({ error: 'A writing sample is required.' });
-    const model = resolveModelOrDefault(String(req.body?.modelId || ''), !!req.user.is_admin);
+    const model = resolveModelOrDefault(String(req.body?.modelId || ''), req.user);
     if (!model) return res.status(400).json({ error: 'No model available to generate the style.' });
     try {
       const raw = await oneShot(model, [{ role: 'system', content: DEFAULT_STYLE_GEN_PROMPT }, { role: 'user', content: sample }]);
@@ -192,25 +286,25 @@ export default function registerAuthRoutes(app) {
   });
 
   const bodyText = (req) => (typeof req.body?.text === 'string' ? req.body.text : '');
-  app.get('/api/me/memories', authMiddleware, (req, res) => {
+  app.get('/api/me/memories', authMiddleware, requirePermission('tools.memory'), (req, res) => {
     res.json({ memories: memoriesOf(req.user.id) });
   });
-  app.post('/api/me/memories', authMiddleware, (req, res) => {
+  app.post('/api/me/memories', authMiddleware, requirePermission('tools.memory'), (req, res) => {
     const r = changeMemory(req.user.id, { action: 'add', text: bodyText(req), source: 'user' });
     if (!r.ok) return res.status(400).json({ error: r.error });
     res.json({ memory: r.item, memories: memoriesOf(req.user.id) });
   });
-  app.put('/api/me/memories/:id', authMiddleware, (req, res) => {
+  app.put('/api/me/memories/:id', authMiddleware, requirePermission('tools.memory'), (req, res) => {
     const r = changeMemory(req.user.id, { action: 'update', id: req.params.id, text: bodyText(req), source: 'user' });
     if (!r.ok) return res.status(/^No memory/.test(r.error) ? 404 : 400).json({ error: r.error });
     res.json({ memory: r.item, memories: memoriesOf(req.user.id) });
   });
-  app.delete('/api/me/memories/:id', authMiddleware, (req, res) => {
+  app.delete('/api/me/memories/:id', authMiddleware, requirePermission('tools.memory'), (req, res) => {
     const r = changeMemory(req.user.id, { action: 'delete', id: req.params.id });
     if (!r.ok) return res.status(404).json({ error: r.error });
     res.json({ memories: memoriesOf(req.user.id) });
   });
-  app.delete('/api/me/memories', authMiddleware, (req, res) => {
+  app.delete('/api/me/memories', authMiddleware, requirePermission('tools.memory'), (req, res) => {
     setMemories(req.user.id, []);
     res.json({ memories: [] });
   });
@@ -228,7 +322,7 @@ export default function registerAuthRoutes(app) {
       db.feedback.insert({
         id: uid(), ts: Date.now(), user_id: req.user.id, kind: 'rating',
         message_id: m.id, chat_id: chat.id, model_id: m.model_id || null,
-        rating, comment, snippet: String(m.content || '').slice(0, 400)
+        rating, comment, snippet: plainSnippet(m.content)
       });
     }
     res.json({ ok: true, rating });
@@ -265,34 +359,35 @@ export default function registerAuthRoutes(app) {
     });
   });
 
-  app.get('/api/me/sessions', authMiddleware, (req, res) => {
+  app.get('/api/me/sessions', authAccount, (req, res) => {
     const list = db.sessions.byUser(req.user.id).map(s => ({
       id: s.id, current: s.id === req.sessionId, ip: s.ip || '', userAgent: s.user_agent || '',
       lastSeen: s.last_seen || 0, createdAt: s.created_at || 0
     }));
-    res.json({ sessions: list });
+    res.json({ sessions: list, idleDays: sessionTtlDays() });
   });
-  app.delete('/api/me/sessions/:id', authMiddleware, (req, res) => {
+  app.delete('/api/me/sessions/:id', authAccount, (req, res) => {
     const s = db.sessions.byId(req.params.id);
     if (!s || s.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     revokeSession(s.id);
     killSessionSockets(s.id);
     res.json({ ok: true });
   });
-  app.delete('/api/me/sessions', authMiddleware, (req, res) => {
+  app.delete('/api/me/sessions', authAccount, (req, res) => {
     const others = db.sessions.byUser(req.user.id).filter(s => s.id !== req.sessionId);
     revokeOtherSessions(req.user.id, req.sessionId);
     for (const s of others) killSessionSockets(s.id);
+    if (others.length) logAudit(req, 'account.sessions_revoke', { type: 'user', id: req.user.id, meta: { count: others.length } });
     res.json({ ok: true, revoked: others.length });
   });
 
   app.get('/api/me/budget', authMiddleware, (req, res) => res.json(budgetStatus(req.user)));
 
-  app.post('/api/me/password', authMiddleware, async (req, res) => {
+  app.post('/api/me/password', authAccount, async (req, res) => {
     const current = String(req.body?.current || '');
     const next = String(req.body?.next || '');
     if (next.length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters.' });
-    if (!(await check(current, req.user.password_hash))) return res.status(401).json({ error: 'Current password is incorrect.' });
+    if (!(await reauth(req, res, current, 'Current password is incorrect.'))) return;
     db.users.update(req.user.id, { password_hash: await hash(next) });
     const others = db.sessions.byUser(req.user.id).filter(s => s.id !== req.sessionId);
     revokeOtherSessions(req.user.id, req.sessionId);
@@ -301,59 +396,54 @@ export default function registerAuthRoutes(app) {
     res.json({ ok: true });
   });
 
-  app.post('/api/me/2fa/setup', authMiddleware, (req, res) => {
-    if (req.user.totp_enabled) return res.status(400).json({ error: 'Two-factor is already enabled.' });
-    const secret = randomSecret();
-    db.users.update(req.user.id, { totp_pending: secret });
-    const appName = getSetting('app_name', 'open-quill') || 'open-quill';
-    res.json({ secret, otpauth: otpauthUri(secret, req.user.email, appName) });
+  app.post('/api/me/2fa/setup', authAccount, async (req, res) => {
+    if (hasTotp(req.user.id)) return res.status(400).json({ error: 'Two-factor is already enabled.' });
+    res.json(await startEnrollment(req.user));
   });
-  app.post('/api/me/2fa/enable', authMiddleware, (req, res) => {
-    const u = db.users.byId(req.user.id);
-    if (u.totp_enabled) return res.status(400).json({ error: 'Two-factor is already enabled.' });
-    if (!u.totp_pending) return res.status(400).json({ error: 'Start setup first.' });
-    if (!verifyTotp(u.totp_pending, String(req.body?.code || '').trim())) return res.status(401).json({ error: 'That code is not valid. Check your authenticator and try again.' });
-    const codes = makeRecoveryCodes();
-    db.users.update(u.id, { totp_secret: u.totp_pending, totp_enabled: 1, totp_pending: null, recovery_codes: codes.map(hashRecovery) });
-    logAudit(req, 'account.2fa_enable', { type: 'user', id: u.id });
-    res.json({ ok: true, recoveryCodes: codes });
+  app.post('/api/me/2fa/enable', authAccount, (req, res) => {
+    const key = `acct:${req.user.id}`;
+    if (hasTotp(req.user.id)) return res.status(400).json({ error: 'Two-factor is already enabled.' });
+    if (loginLimited(key)) return res.status(429).json({ error: TOO_MANY });
+    const r = confirmEnrollment(req.user.id, String(req.body?.code || '').trim());
+    if (r.error) {
+      if (r.status === 401) noteLoginFail(key);
+      return res.status(r.status).json({ error: r.error });
+    }
+    db.sessions.update(req.sessionId, { mfa: 'totp', mfa_at: now() });
+    logAudit(req, 'account.2fa_enable', { type: 'user', id: req.user.id });
+    broadcastToUser(req.user.id, { type: 'account' });
+    res.json({ ok: true, recoveryCodes: r.recoveryCodes, user: publicUser(db.users.byId(req.user.id)) });
   });
-  app.post('/api/me/2fa/disable', authMiddleware, async (req, res) => {
-    const u = db.users.byId(req.user.id);
-    if (!u.totp_enabled) return res.json({ ok: true });
-    if (!(await check(String(req.body?.password || ''), u.password_hash))) return res.status(401).json({ error: 'Password is incorrect.' });
-    db.users.update(u.id, { totp_secret: null, totp_enabled: 0, totp_pending: null, recovery_codes: [] });
-    logAudit(req, 'account.2fa_disable', { type: 'user', id: u.id });
+  app.post('/api/me/2fa/disable', authAccount, async (req, res) => {
+    if (!hasTotp(req.user.id)) return res.json({ ok: true });
+    if (mfaRequired(req.user)) return res.status(403).json({ error: 'Your organization requires two-factor authentication.' });
+    if (!(await reauth(req, res, req.body?.password))) return;
+    removeFactors(req.user.id);
+    logAudit(req, 'account.2fa_disable', { type: 'user', id: req.user.id });
     res.json({ ok: true });
   });
-  app.post('/api/me/2fa/recovery', authMiddleware, async (req, res) => {
-    const u = db.users.byId(req.user.id);
-    if (!u.totp_enabled) return res.status(400).json({ error: 'Two-factor is not enabled.' });
-    if (!(await check(String(req.body?.password || ''), u.password_hash))) return res.status(401).json({ error: 'Password is incorrect.' });
-    const codes = makeRecoveryCodes();
-    db.users.update(u.id, { recovery_codes: codes.map(hashRecovery) });
-    logAudit(req, 'account.2fa_recovery', { type: 'user', id: u.id });
+  app.post('/api/me/2fa/recovery', authAccount, async (req, res) => {
+    if (!hasTotp(req.user.id)) return res.status(400).json({ error: 'Two-factor is not enabled.' });
+    if (!(await reauth(req, res, req.body?.password))) return;
+    const codes = regenerateCodes(req.user.id);
+    logAudit(req, 'account.2fa_recovery', { type: 'user', id: req.user.id });
     res.json({ ok: true, recoveryCodes: codes });
   });
 
-  app.delete('/api/me/chats', authMiddleware, (req, res) => {
+  app.delete('/api/me/chats', authMiddleware, requirePermission('chats.delete'), (req, res) => {
     res.json({ ok: true, deleted: purgeUserChats(req.user.id) });
   });
 
-  app.delete('/api/me', authMiddleware, (req, res) => {
+  app.delete('/api/me', authAccount, async (req, res) => {
     const u = req.user;
-    if (u.is_owner) return res.status(403).json({ error: 'The owner account cannot be deleted.' });
+    if (roleOf(u) !== PENDING && !can(u, 'account.delete')) return res.status(403).json({ error: 'Your organization does not allow deleting your own account.' });
+    if (isManaged(u)) return res.status(403).json({ error: 'Your organization manages this account, so it can’t be deleted here.' });
+    if (isLastOwner(u)) return res.status(403).json({ error: 'Make someone else an owner before deleting this account.' });
+    if (!(await reauth(req, res, req.body?.password))) return;
+    closeUserSockets(u.id);
     purgeUser(u.id);
     logAudit(req, 'account.delete', { type: 'user', id: u.id, meta: { email: u.email } });
     setCookie(req, res, '');
     res.json({ ok: true });
-  });
-
-  app.get('/api/users/search', authMiddleware, (req, res) => {
-    const q = String(req.query.q || '').trim().toLowerCase().slice(0, 120);
-    if (q.length < 2) return res.json([]);
-    const out = db.users.search(q, req.user.id, 10)
-      .map(u => ({ id: u.id, email: u.email, displayName: u.display_name || (u.email || '').split('@')[0] }));
-    res.json(out);
   });
 }

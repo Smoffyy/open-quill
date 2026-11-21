@@ -1,5 +1,6 @@
 import { uid } from '../db.js';
-import { authMiddleware, adminOnly } from '../auth.js';
+import { authMiddleware } from '../auth.js';
+import { requirePermission } from '../lib/authz/middleware.js';
 import { logAudit } from '../lib/audit.js';
 import { draftGet, draftSet } from '../lib/draft.js';
 import { staged } from '../lib/releases.js';
@@ -37,9 +38,9 @@ export default function registerThemeRoutes(app) {
   app.get('/api/theme', authMiddleware, (req, res) => res.json(themeForClient(false)));
 
   // What an admin renders while designing: their own staged copy.
-  app.get('/api/admin/theme', authMiddleware, adminOnly, (req, res) => res.json(themeForClient(true)));
+  app.get('/api/admin/theme', authMiddleware, requirePermission('admin.panel'), (req, res) => res.json(themeForClient(true)));
 
-  app.get('/api/admin/themes', authMiddleware, adminOnly, (req, res) => {
+  app.get('/api/admin/themes', authMiddleware, requirePermission('admin.interface'), (req, res) => {
     const store = readStore(true);
     const live = readStore(false);
     res.json({
@@ -61,7 +62,7 @@ export default function registerThemeRoutes(app) {
     });
   });
 
-  app.post('/api/admin/themes', authMiddleware, adminOnly, (req, res) => {
+  app.post('/api/admin/themes', authMiddleware, requirePermission('admin.interface'), (req, res) => {
     const b = req.body || {};
     const store = readStore(true);
     if (store.themes.length >= 40) return res.status(400).json({ error: 'Theme limit reached.' });
@@ -84,7 +85,7 @@ export default function registerThemeRoutes(app) {
     res.json({ id: theme.id });
   });
 
-  app.patch('/api/admin/themes/:id', authMiddleware, adminOnly, (req, res) => {
+  app.patch('/api/admin/themes/:id', authMiddleware, requirePermission('admin.interface'), (req, res) => {
     const b = req.body || {};
     const store = readStore(true);
     const theme = find(store, req.params.id);
@@ -112,7 +113,7 @@ export default function registerThemeRoutes(app) {
     res.json({ ok: true, updatedAt: theme.updatedAt });
   });
 
-  app.post('/api/admin/themes/:id/activate', authMiddleware, adminOnly, (req, res) => {
+  app.post('/api/admin/themes/:id/activate', authMiddleware, requirePermission('admin.interface'), (req, res) => {
     const store = readStore(true);
     const theme = find(store, req.params.id);
     if (!theme) return res.status(404).json({ error: 'not found' });
@@ -124,7 +125,7 @@ export default function registerThemeRoutes(app) {
     res.json({ ok: true });
   });
 
-  app.delete('/api/admin/themes/:id', authMiddleware, adminOnly, (req, res) => {
+  app.delete('/api/admin/themes/:id', authMiddleware, requirePermission('admin.interface'), (req, res) => {
     const store = readStore(true);
     const theme = find(store, req.params.id);
     if (!theme) return res.status(404).json({ error: 'not found' });
@@ -143,7 +144,7 @@ export default function registerThemeRoutes(app) {
 
   // A snapshot is taken before every publish and every reset, which is what the
   // history list rolls back to.
-  app.post('/api/admin/themes/:id/snapshot', authMiddleware, adminOnly, (req, res) => {
+  app.post('/api/admin/themes/:id/snapshot', authMiddleware, requirePermission('admin.interface'), (req, res) => {
     const store = readStore(true);
     const theme = find(store, req.params.id);
     if (!theme) return res.status(404).json({ error: 'not found' });
@@ -152,7 +153,7 @@ export default function registerThemeRoutes(app) {
     res.json({ ok: true });
   });
 
-  app.post('/api/admin/themes/:id/restore', authMiddleware, adminOnly, (req, res) => {
+  app.post('/api/admin/themes/:id/restore', authMiddleware, requirePermission('admin.interface'), (req, res) => {
     const store = readStore(true);
     const theme = find(store, req.params.id);
     if (!theme) return res.status(404).json({ error: 'not found' });
@@ -170,7 +171,7 @@ export default function registerThemeRoutes(app) {
 
   // "Revert to what members are running" and "start over from the preset" are
   // the same operation with a different source document.
-  app.post('/api/admin/themes/:id/reset', authMiddleware, adminOnly, (req, res) => {
+  app.post('/api/admin/themes/:id/reset', authMiddleware, requirePermission('admin.interface'), (req, res) => {
     const store = readStore(true);
     const theme = find(store, req.params.id);
     if (!theme) return res.status(404).json({ error: 'not found' });
@@ -189,13 +190,13 @@ export default function registerThemeRoutes(app) {
     res.json({ ok: true, doc: theme.doc });
   });
 
-  app.get('/api/admin/themes/:id/export', authMiddleware, adminOnly, (req, res) => {
+  app.get('/api/admin/themes/:id/export', authMiddleware, requirePermission('admin.interface'), (req, res) => {
     const theme = find(readStore(true), req.params.id);
     if (!theme) return res.status(404).json({ error: 'not found' });
     res.json({ kind: 'open-quill-theme', v: THEME_SCHEMA, name: theme.name, basePreset: theme.basePreset, doc: theme.doc });
   });
 
-  app.post('/api/admin/themes/import', authMiddleware, adminOnly, (req, res) => {
+  app.post('/api/admin/themes/import', authMiddleware, requirePermission('admin.interface'), (req, res) => {
     const b = req.body || {};
     if (b.kind && b.kind !== 'open-quill-theme') return res.status(400).json({ error: 'That file is not a theme export.' });
     const store = readStore(true);

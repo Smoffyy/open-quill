@@ -8,6 +8,7 @@ import { isRouter, resolveRouted } from './router.js';
 import { isDue, nextRun } from './tasks.js';
 import { webSearchAvailable } from './websearch.js';
 import { runCompletion } from './ws/turn.js';
+import { can } from './authz/effective.js';
 import * as live from './ws/live.js';
 
 const POLL_MS = 30000;
@@ -15,21 +16,22 @@ const POLL_MS = 30000;
 export function fireTask(task) {
   const user = db.users.byId(task.user_id);
   if (!user) return { error: 'The task owner no longer exists.' };
+  if (!can(user, 'tasks.schedule') || !can(user, 'chats.create')) return { error: 'The task owner is not allowed to run scheduled tasks.' };
   if (task.last_chat_id && live.activeTurn(task.last_chat_id)) return { error: 'This task is still running from last time.' };
 
-  let baseModel = resolveModelOrDefault(task.model_id, !!user.is_admin);
+  let baseModel = resolveModelOrDefault(task.model_id, user);
   if (!baseModel) return { error: 'No model is available to run this task.' };
   if (isRouter(baseModel)) {
     const probe = [{ role: 'user', content: task.prompt || '' }];
-    const r = resolveRouted(baseModel, probe, [], (id) => resolveModel(id, !!user.is_admin));
+    const r = resolveRouted(baseModel, probe, [], (id) => resolveModel(id, user));
     if (!r.model) return { error: (r.routed && r.routed.error) || 'This router could not pick a model.' };
     baseModel = r.model;
   }
-  if (baseModel.unavailable && !user.is_admin) return { error: baseModel.unavailable_reason || 'This model is currently unavailable.' };
+  if (baseModel.unavailable && !can(user, 'models.unavailable')) return { error: baseModel.unavailable_reason || 'This model is currently unavailable.' };
   const bs = budgetStatus(user);
   if (bs.enforce && bs.state === 'over') return { error: 'The monthly usage budget has been reached.' };
 
-  const model = applyKwargs(baseModel, {}, !!user.is_admin);
+  const model = applyKwargs(baseModel, {}, can(user, 'chats.advanced'));
   const webSearchOn = !!task.web_search && webSearchAvailable() && model.web_search_allowed !== 0;
   const at = now();
   const previous = task.reuse_chat && task.last_chat_id ? db.chats.byId(task.last_chat_id) : null;

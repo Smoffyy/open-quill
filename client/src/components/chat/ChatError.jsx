@@ -19,7 +19,7 @@ export default function ChatError({ message, onDismiss }) {
     <div className="chat-error" role="alert">
       <div className="chat-error-main">
         <span className="chat-error-title">{t('Something went wrong')}</span>
-        <span className="chat-error-text">{message}</span>
+        <span className="chat-error-text">{t(message)}</span>
       </div>
       <div className="chat-error-actions">
         <button className="chat-error-copy" data-tip={copied ? t('Copied') : t('Copy')} aria-label={copied ? t('Copied') : t('Copy')} onClick={copy}>

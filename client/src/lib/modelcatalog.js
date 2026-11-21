@@ -206,11 +206,11 @@ export function publishedOrder(models, liveOrder) {
 export const TAB_FIELDS = {
   __proto__: null,
   general: ['display_name', 'internal_name', 'provider_id', 'description', 'kind', 'enabled', 'is_default',
-    'unavailable', 'unavailable_reason', 'sunset_at', 'sunset_action', 'cost_in', 'cost_out'],
+    'unavailable', 'unavailable_reason', 'sunset_at', 'sunset_action', 'access_groups', 'cost_in', 'cost_out'],
   prompts: ['system_prompt', 'call_prompt'],
   tools: ['has_vision', 'code_allowed', 'sandbox_allowed', 'sandbox_auto', 'web_search_allowed', 'web_search_auto', 'skills_allowed',
     'mcp_allowed', 'chat_search_allowed', 'end_chat_allowed', 'memory_allowed', 'calculator_allowed', 'artifacts_allowed', 'todo_allowed', 'ask_user_allowed', 'consult_allowed',
-    'consult_models', 'consult_images', 'agent_steps', 'hide_tool_calls'],
+    'consult_models', 'consult_images', 'mcp_servers_off', 'agent_steps', 'hide_tool_calls'],
   reasoning: ['reasoning_collapsible', 'hide_thinking', 'think_open', 'think_close', 'has_reasoning', 'reasoning_token', 'non_reasoning_token'],
   context: ['num_ctx', 'recent_window', 'long_convo_reminder', 'parallel_requests'],
   sampling: ['stop', 'temperature', 'top_p', 'top_k', 'min_p', 'max_tokens', 'seed', 'repetition_penalty', 'presence_penalty',

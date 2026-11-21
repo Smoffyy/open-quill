@@ -11,7 +11,7 @@ import { promptSegments } from '../../../../lib/promptview.js';
 const VARIABLES = [
   [tk('Member'), [
     ['currentUser', tk('The member’s display name.')],
-    ['userRole', tk('The member’s role: member, editor, publisher or owner.')],
+    ['userRole', tk('The member’s role: user, admin, owner, or the name of a custom role.')],
     ['userLanguage', tk('The language the member uses the app in, such as Japanese.')],
     ['device', tk('phone or desktop, from the screen the message was sent on.')],
     ['userInstructions', tk('The member’s own instructions from Settings.')],
@@ -92,7 +92,7 @@ const VARIABLES = [
 const EXAMPLES = {
   __proto__: null,
   currentUser: 'Sam',
-  userRole: 'member',
+  userRole: 'user',
   userLanguage: 'Japanese',
   device: 'desktop',
   userInstructions: 'Keep answers short.',

@@ -16,7 +16,6 @@ export const SETTING_SECTIONS = {
   safety_enabled: 'guardrails', safety_model_mode: 'guardrails', safety_model_id: 'guardrails', safety_prompt: 'guardrails',
   safety_verbose: 'guardrails', safety_reason_enabled: 'guardrails',
   chat_search_enabled: 'history',
-  allow_signups: 'members',
   local_only: 'network', egress_local_only: 'network', egress_allow_websearch: 'network', egress_allowlist: 'network',
   greetings: 'launcher', quick_prompts: 'launcher',
   app_name: 'interface', disclaimer: 'interface', support_contact: 'interface', model_docs_enabled: 'interface',
@@ -28,7 +27,7 @@ const INTERFACE_SECTIONS = new Set(['interface', 'launcher']);
 const BOOL_SETTINGS = new Set([
   'web_search_enabled', 'model_queue', 'membank_enabled', 'membank_hide_tools', 'budget_enforce', 'voice_mic_enabled',
   'voice_call_enabled', 'safety_enabled', 'safety_verbose', 'safety_reason_enabled', 'chat_search_enabled', 'auto_title_enabled',
-  'allow_signups', 'local_only', 'egress_local_only', 'egress_allow_websearch', 'model_docs_enabled'
+  'local_only', 'egress_local_only', 'egress_allow_websearch', 'model_docs_enabled'
 ]);
 
 const LIST_SETTINGS = new Set(['greetings', 'quick_prompts', 'web_search_domains', 'egress_allowlist']);

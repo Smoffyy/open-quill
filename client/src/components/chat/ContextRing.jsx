@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Tip from '../ui/Tip.jsx';
 import { api } from '../../lib/api.js';
-import { t } from '../../i18n.jsx';
+import { t, fmtNumber } from '../../i18n.jsx';
 
 export default function ContextRing({ chatId, modelId, revision, streaming, live, className = '' }) {
   const [data, setData] = useState(null);
@@ -69,8 +69,8 @@ export default function ContextRing({ chatId, modelId, revision, streaming, live
   if (busy) label = t('Refreshing context…');
   else if (shift && canRefresh) label = t('Shift+Click to refresh context');
   else if (pending) label = t('Send a message to load context');
-  else if (capTokens > 0 && used > 0) label = t('Context: {used} of {limit} tokens ({pct}%)', { used: Number(used).toLocaleString(), limit: Number(limit).toLocaleString(), pct });
-  else if (used > 0) label = t('Context: {used} tokens', { used: Number(used).toLocaleString() });
+  else if (capTokens > 0 && used > 0) label = t('Context: {used} of {limit} tokens ({pct}%)', { used: fmtNumber(used), limit: fmtNumber(limit), pct });
+  else if (used > 0) label = t('Context: {used} tokens', { used: fmtNumber(used) });
   if (summarized > 0 && !busy && !(shift && canRefresh)) label += ' · ' + t('{n} earlier messages summarized', { n: summarized });
   let cls = 'cx-ring';
   if (className) cls += ' ' + className;

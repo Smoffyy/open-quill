@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../../../lib/api.js';
 import { useAdmin } from '../../store.jsx';
-import { Card, Rows, Fields, Btn, Note, KV } from '../../ui.jsx';
+import { Card, Rows, Fields, Btn, Note, KV, ToggleRow } from '../../ui.jsx';
 import { useEditor, When, TextField, NumberField, Flag, Choice, LongText } from '../bind.jsx';
 import { t } from '../../../../i18n.jsx';
 import { presetPatch, presetApplied, reasoningSummary } from '../../../../lib/modelcatalog.js';
@@ -86,6 +86,32 @@ function Preset() {
   );
 }
 
+function AccessGroups() {
+  const { models, edit } = useEditor();
+  const [groups, setGroups] = useState(null);
+  useEffect(() => {
+    api.get('/api/admin/groups').then(d => setGroups(d.groups || [])).catch(() => setGroups([]));
+  }, []);
+  if (!groups) return null;
+  const lists = models.map(m => (Array.isArray(m.access_groups) ? m.access_groups : []));
+  const has = (id) => lists.every(l => l.includes(id));
+  const toggle = (id) => {
+    const on = has(id);
+    const next = [...new Set(lists.flat())].filter(g => g !== id || !on);
+    edit({ access_groups: on ? next : [...next, id] });
+  };
+  return (
+    <Card title={t('Who can use it')}
+      sub={groups.length ? t('Leave every group off and everyone can use it. Turn some on and only their members can, plus whoever manages models.') : t('Make groups under Groups to limit a model to some people.')}>
+      {groups.length > 0 && (
+        <Rows>
+          {groups.map(g => <ToggleRow key={g.id} label={g.name} on={has(g.id)} onToggle={() => toggle(g.id)} />)}
+        </Rows>
+      )}
+    </Card>
+  );
+}
+
 export default function General() {
   const { catalog } = useAdmin();
   const { providers, providerTypes } = catalog;
@@ -139,6 +165,8 @@ export default function General() {
           </When>
         </Fields>
       </Card>
+
+      <AccessGroups />
 
       {answers && (
         <Card title={t('Price')} sub={t('Per million tokens. Drives the usage report and every spend cap.')}>

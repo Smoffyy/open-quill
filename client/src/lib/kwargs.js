@@ -133,7 +133,7 @@ export function falseValueOf(def) {
   return values.find(v => /^false$/i.test(v)) ?? values[0] ?? '';
 }
 
-export function resolveKwargValues(defs, requested, isAdmin = false) {
+export function resolveKwargValues(defs, requested, advanced = false) {
   const list = Array.isArray(defs) ? defs : [];
   const req = requested && typeof requested === 'object' ? requested : {};
   const out = {};
@@ -142,7 +142,7 @@ export function resolveKwargValues(defs, requested, isAdmin = false) {
     const values = kwargValuesArr(d);
     const range = isRange(d);
     let v = defaultValueOf(d);
-    if (d.visible !== false && (isAdmin || !d.adminOnly)) {
+    if (d.visible !== false && (advanced || !d.adminOnly)) {
       const asked = req[d.id];
       if (asked != null) {
         if (range) { const c = clampToRange(d, asked); if (c != null) v = String(c); }

@@ -1,5 +1,6 @@
 import { db, getSetting } from '../db.js';
-import { roleOf } from './roles.js';
+import { roleOf } from './authz/effective.js';
+import { roleName } from './authz/roles.js';
 import { memberContext, languageName } from './memberctx.js';
 import { docsVars } from './modeldocs.js';
 import { summarizeConversation, summaryMessages, oneShotAnswer, replayField } from '../llm/index.js';
@@ -290,7 +291,7 @@ export function promptVars(userId, { model = null, client = null } = {}) {
     currentTime: fmt({ timeStyle: 'short' }),
     timeZone,
     userLanguage: languageName(ctx.language),
-    userRole: u ? roleOf(u) : '',
+    userRole: u ? roleName(roleOf(u)) : '',
     device: ctx.device,
     modelName: model ? (model.display_name || model.internal_name || '') : '',
     ...docsVars(model),

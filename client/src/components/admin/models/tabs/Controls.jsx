@@ -664,7 +664,7 @@ function TryIt({ defs, name }) {
           </div>
           <div className="mc-try-menu">
             {shown.length ? shown.map(d => (
-              <KwargControl key={d.id} def={d} value={values[d.id]} isAdmin={asAdmin}
+              <KwargControl key={d.id} def={d} value={values[d.id]} advanced={asAdmin}
                 onSet={(id, v) => setPicked(p => ({ ...p, [id]: v }))}
                 gated={!!(d.showIf && d.showIf.id && shownIds.has(d.showIf.id))} />
             )) : <p className="mc-try-none">{t('Members get no controls for this model.')}</p>}

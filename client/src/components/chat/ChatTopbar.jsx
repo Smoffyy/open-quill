@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { t } from '../../i18n.jsx';
 import { ChatMenu, menuAtButton } from '../sidebar/ChatMenu.jsx';
-import { ChevDown, Menu } from '../ui/icons.jsx';
+import { ChevDown, Menu, Users } from '../ui/icons.jsx';
 
 export default function ChatTopbar({
-  lead, actions, chat, chatId, project, booting = false, projects, busy = false,
-  allTags, onOpenMenu, onOpenProject, onRename, onStopChat, onToggleStar, onToggleArchive, onSetTags, onMoveToProject, onDelete
+  lead, actions, chat, chatId, project, booting = false, projects, busy = false, shared = null,
+  allTags, onOpenMenu, onOpenProject, onRename, onStopChat, onToggleStar, onToggleArchive, onSetTags, onMoveToProject, onShare, onDelete
 }) {
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState('');
@@ -42,6 +42,11 @@ export default function ChatTopbar({
               else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
             }} />
         </span>
+      ) : shared ? (
+        <div className="chat-name-wrap">
+          <span className="ct-title ct-shared">{shared.title || t('New chat')}</span>
+          <span className="shared-tag"><Users aria-hidden="true" /> {t('Shared by {name}', { name: shared.owner })}</span>
+        </div>
       ) : (
         <div className="chat-name-wrap">
           {project && (
@@ -62,7 +67,7 @@ export default function ChatTopbar({
             <ChatMenu
               chat={{ id: chatId, title: chat?.title || t('New chat'), starred: !!chat?.starred, archived: !!chat?.archived, tags: chat?.tags || [], projectId: chat?.projectId || null }}
               at={menu} projects={projects} busy={busy} anchorRef={caretRef} allTags={allTags}
-              onStopChat={onStopChat} onToggleStar={onToggleStar} onToggleArchive={onToggleArchive} onSetTags={onSetTags} onMoveToProject={onMoveToProject} onDelete={onDelete}
+              onStopChat={onStopChat} onToggleStar={onToggleStar} onToggleArchive={onToggleArchive} onSetTags={onSetTags} onMoveToProject={onMoveToProject} onShare={onShare} onDelete={onDelete}
               onClose={() => setMenu(null)} />
           )}
         </div>

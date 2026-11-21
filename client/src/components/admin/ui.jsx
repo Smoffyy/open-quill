@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useId } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, Copy, X, Trash } from '../ui/icons.jsx';
 import { Switch, SegSlide, SelectRow } from '../ui/controls.jsx';
-import { t } from '../../i18n.jsx';
+import { t, fmtNumber, fmtDate, fmtUnit, fmtCurrency } from '../../i18n.jsx';
 import { logoFor, useLogos } from '../../lib/logos.js';
 import { SkelLines, SkelRows, SkelTable, SkelStats } from '../ui/Skeleton.jsx';
 import { useFocusTrap } from '../../lib/focus.js';
@@ -407,12 +407,11 @@ export function useAutoFocus() {
 }
 
 export function fmtInt(n) {
-  return Number(n || 0).toLocaleString();
+  return fmtNumber(Number(n || 0));
 }
 
 export function fmtMoney(v) {
-  const n = Number(v) || 0;
-  return '$' + n.toFixed(n && n < 0.01 ? 4 : 2);
+  return fmtCurrency(v);
 }
 
 export function fmtAgo(ts) {
@@ -420,10 +419,10 @@ export function fmtAgo(ts) {
   const d = new Date(ts);
   const diff = Date.now() - (typeof ts === 'number' ? ts : d.getTime());
   if (diff < 60000) return t('just now');
-  if (diff < 3600000) return Math.floor(diff / 60000) + 'm';
-  if (diff < 86400000) return Math.floor(diff / 3600000) + 'h';
-  if (diff < 2592000000) return Math.floor(diff / 86400000) + 'd';
-  return d.toLocaleDateString();
+  if (diff < 3600000) return fmtUnit(Math.floor(diff / 60000), 'minute');
+  if (diff < 86400000) return fmtUnit(Math.floor(diff / 3600000), 'hour');
+  if (diff < 2592000000) return fmtUnit(Math.floor(diff / 86400000), 'day');
+  return fmtDate(d);
 }
 
 export function fmtBytes(n) {

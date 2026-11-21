@@ -27,9 +27,9 @@ function useDigits(open, count, pick) {
   }, [open, count, pick]);
 }
 
-function ModelRow({ m, checked, kbd, nested, isAdmin, onPick }) {
+function ModelRow({ m, checked, kbd, nested, canUseUnavailable, onPick }) {
   const noCode = m.codeAllowed === false;
-  const down = m.unavailable && !isAdmin;
+  const down = m.unavailable && !canUseUnavailable;
   return (
     <button type="button" role="menuitemradio" aria-checked={checked} disabled={noCode || down}
       className={'cx-mi cx-model' + (nested ? ' nested' : '') + (m.unavailable || noCode ? ' unavail' : '')} onClick={onPick}
@@ -50,7 +50,7 @@ function ModelRow({ m, checked, kbd, nested, isAdmin, onPick }) {
 
 export default function CodeComposer({
   value, onChange, onSend, onStop, streaming, stopping, ended, empty, placeholder, autoFocus, focusKey, panel,
-  models, modelsReady = true, currentId, onSelect, kwargValues, onSetKwarg, reasoningEffort, extended, onToggleExtended, isAdmin,
+  models, modelsReady = true, currentId, onSelect, kwargValues, onSetKwarg, reasoningEffort, extended, onToggleExtended, advanced, canUseUnavailable, showRouters,
   plan, onPlan, chatId, revision, liveTokens, voiceMic, sttEngine, draftId, attachCombo = ''
 }) {
   const taRef = useRef(null);
@@ -81,10 +81,10 @@ export default function CodeComposer({
   }, []);
 
   const current = models.find(m => m.id === currentId);
-  const list = models.filter(m => m.kind !== 'router' || isAdmin);
+  const list = models.filter(m => m.kind !== 'router' || showRouters);
   const kwDefs = Array.isArray(current?.kwargs) ? current.kwargs : [];
   const selected = { ...(reasoningEffort ? { effort: reasoningEffort } : {}), ...(kwargValues || {}) };
-  const kwActive = resolveKwargValues(kwDefs, selected, isAdmin);
+  const kwActive = resolveKwargValues(kwDefs, selected, advanced);
   const chips = pickerChips(kwDefs, kwActive);
   const shownKwargs = menu === 'model' ? kwDefs.filter(d => kwargVisible(kwDefs, kwActive, d)) : [];
   const shownIds = new Set(shownKwargs.map(d => d.id));
@@ -203,13 +203,13 @@ export default function CodeComposer({
             {modelsReady && main.length === 0 && groups.length === 0 && <div className="cx-mempty">{t('No models available')}</div>}
             {main.map((m, i) => (
               <ModelRow key={m.id} m={m} checked={m.id === currentId} kbd={m.id === currentId || i > 8 || m.codeAllowed === false ? null : String(i + 1)}
-                isAdmin={isAdmin} onPick={() => choose(m)} />
+                canUseUnavailable={canUseUnavailable} onPick={() => choose(m)} />
             ))}
             {groups.map(g => (
               <React.Fragment key={g.label}>
                 <MenuItem sub onClick={() => setOpenGroup(o => (o === g.label ? null : g.label))}>{g.label}</MenuItem>
                 {openGroup === g.label && g.items.map(m => (
-                  <ModelRow key={m.id} m={m} nested checked={m.id === currentId} isAdmin={isAdmin} onPick={() => choose(m)} />
+                  <ModelRow key={m.id} m={m} nested checked={m.id === currentId} canUseUnavailable={canUseUnavailable} onPick={() => choose(m)} />
                 ))}
               </React.Fragment>
             ))}
@@ -218,7 +218,7 @@ export default function CodeComposer({
                 <MenuSep />
                 <div className="cx-kwargs">
                   {shownKwargs.map(d => (
-                    <KwargControl key={d.id} def={d} value={kwActive[d.id]} isAdmin={isAdmin} onSet={onSetKwarg}
+                    <KwargControl key={d.id} def={d} value={kwActive[d.id]} advanced={advanced} onSet={onSetKwarg}
                       gated={!!(d.showIf && d.showIf.id && shownIds.has(d.showIf.id))} />
                   ))}
                 </div>

@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../lib/api.js';
-import { t } from '../../i18n.jsx';
+import { t, fmtNumber } from '../../i18n.jsx';
 import { SegSlide } from '../ui/controls.jsx';
 import { Skel, SkelStats } from '../ui/Skeleton.jsx';
 
-const fmtN = (n) => Number(n || 0).toLocaleString();
+const fmtN = (n) => fmtNumber(Number(n || 0));
 const fmtUsd = (n) => {
   const v = Number(n || 0);
   if (!v) return '$0.00';

@@ -188,4 +188,13 @@
 .recovery-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
 .recovery-grid code { font-family: monospace; font-size: 14px; letter-spacing: 1px; padding: 4px 8px; background: var(--surface-hover); border-radius: 6px; text-align: center; }
 .totp-secret { display: block; font-family: monospace; font-size: 16px; letter-spacing: 2px; padding: 10px 12px; background: var(--surface-hover); border-radius: 8px; word-break: break-all; }
-.totp-uri { display: block; font-family: monospace; font-size: 11px; padding: 8px 10px; background: var(--surface-hover); border-radius: 8px; word-break: break-all; opacity: 0.8; }
+.totp-setup { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-bottom: 12px; }
+.totp-setup .field { flex: 1; min-width: 200px; }
+.totp-qr { display: block; width: 168px; height: 168px; flex-shrink: 0; border-radius: 10px; }
+.mfa-box .totp-setup { flex-direction: column; align-items: stretch; }
+.mfa-box .totp-qr { align-self: center; }
+.mfa-box .muted-note { text-align: center; margin-bottom: 12px; }
+.mfa-box .code-input { max-width: none; text-align: center; letter-spacing: 4px; }
+.mfa-box .edit-actions { display: block; }
+.mfa-box .edit-actions .btn.primary { padding: 12px; font-size: 15px; }
+.review-notice { margin: 4px 0 14px; padding: 9px 12px; border: 1px solid var(--border-soft); border-radius: 10px; background: var(--surface); color: var(--text-muted); }

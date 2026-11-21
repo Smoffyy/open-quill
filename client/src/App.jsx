@@ -1,14 +1,17 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, lazy, Suspense } from 'react';
-import { api, SESSION_EXPIRED, TAB_ID } from './lib/api.js';
+import { api, SESSION_EXPIRED, ACCOUNT_GATED, TAB_ID } from './lib/api.js';
+import { can } from './lib/permissions.js';
+import { claimStorage, clearPrivateStorage } from './lib/privacy.js';
 import { newerVersion, syncDelay, draftReloads, DRAFT_SETTLE_MS } from './lib/configsync.js';
-import { setWsSender, publishPresence } from './lib/wsbus.js';
-import { t, tk, getLang } from './i18n.jsx';
+import { setWsSender, publishPresence, publishFrame, onFrame } from './lib/wsbus.js';
+import { t, tk, getLang, fmtNumber } from './i18n.jsx';
 import { withClient } from './lib/clientctx.js';
 import { applyPrefs, prefersDark, appFontId, takeSettingsToReopen } from './lib/prefs.js';
 import { layoutOf } from './lib/layout.js';
 import { LayoutContext } from './lib/uselayout.js';
 import { kwargValuesArr, defaultValueOf, isRange, kwargAccepts } from './lib/kwargs.js';
 import Login from './components/pages/Login.jsx';
+import Pending, { MfaRequired } from './components/pages/Pending.jsx';
 import Sidebar from './components/sidebar/Sidebar.jsx';
 import AppBackground from './components/chat/AppBackground.jsx';
 import Composer from './components/composer/Composer.jsx';
@@ -19,6 +22,9 @@ import CompactingBar from './components/chat/CompactingBar.jsx';
 import EngineStrip from './components/chat/EngineStrip.jsx';
 import ThreadSkeleton from './components/chat/ThreadSkeleton.jsx';
 import SummaryModal from './components/dialogs/SummaryModal.jsx';
+import ShareDialog from './components/dialogs/ShareDialog.jsx';
+import SharedBar from './components/chat/SharedBar.jsx';
+import { ssoMessage } from './lib/ssomessages.js';
 import CommandPalette from './components/dialogs/CommandPalette.jsx';
 import { computeActiveBg } from './lib/appbg.js';
 import { nextTheme } from './lib/palettes.js';
@@ -106,8 +112,19 @@ const DEFAULT_CFG = { appName: 'open-quill', disclaimer: tk('Assistants can make
 
 export default function App() {
   const [user, setUser] = useState(undefined);
+  const ready = !!user && !user.gate;
   const userRef = useRef(undefined);
   useEffect(() => { userRef.current = user; }, [user]);
+  useEffect(() => {
+    if (!user) return;
+    const q = new URLSearchParams(location.search);
+    const linked = q.get('sso') === 'linked';
+    const code = q.get('sso_error');
+    if (!linked && !code) return;
+    history.replaceState({}, '', location.pathname);
+    if (linked) notify(t('Sign-in method linked'), { kind: 'success' });
+    else notify(ssoMessage(code), { kind: 'error' });
+  }, [user?.id]);
   const [models, setModels] = useState([]);
   const [modelsReady, setModelsReady] = useState(false);
   const [currentId, setCurrentId] = useState(null);
@@ -156,6 +173,7 @@ export default function App() {
   const sbMoveToProject = useCallback((...a) => sidebarFns.current.moveChatToProject(...a), []);
   const sbToggleArchive = useCallback((...a) => sidebarFns.current.toggleArchive(...a), []);
   const sbSetTags = useCallback((...a) => sidebarFns.current.setChatTags(...a), []);
+  const sbShareChat = useCallback((...a) => sidebarFns.current.shareChat(...a), []);
   const navTo = useCallback((to) => {
     setMobileDrawer(false);
     const library = LIBRARY_PAGES.includes(to);
@@ -267,12 +285,18 @@ export default function App() {
   const [skills, setSkills] = useState([]);
   const loadSkills = useCallback(() => api.get('/api/skills').then(r => setSkills(r.skills || [])).catch(() => {}), []);
   const toggleSkill = useCallback(async (sk) => {
-    if (!sk.editable) { notify(t('Workspace skills are managed in the admin panel.')); return; }
+    if (sk.scope === 'workspace') { notify(t('Workspace skills are managed in the admin panel.')); return; }
     try { await api.patch('/api/skills/' + sk.id, { enabled: !sk.enabled }); loadSkills(); }
     catch { notify(t('Could not update the skill.')); }
   }, [loadSkills]);
-  const onSettingsClosed = useCallback(() => { setSettings(null); loadSkills(); }, [loadSkills]);
-  useEffect(() => { loadSkills(); }, [loadSkills]);
+  const [connectors, setConnectors] = useState([]);
+  const [chatMcpOff, setChatMcpOff] = useState([]);
+  const loadConnectors = useCallback(() => api.get('/api/mcp')
+    .then(r => setConnectors((r.servers || []).filter(s => s.enabled !== false).map(s => ({ id: s.id, name: s.name, status: s.status || 'new', tools: (s.tools || []).length, scope: s.scope }))))
+    .catch(() => {}), []);
+  const onSettingsClosed = useCallback(() => { setSettings(null); loadSkills(); loadConnectors(); loadModels(); }, [loadSkills, loadConnectors]);
+  useEffect(() => { if (ready) { loadSkills(); loadConnectors(); } }, [ready, loadSkills, loadConnectors]);
+  useEffect(() => onFrame('mcp_status', (f) => setConnectors(list => list.map(c => (c.id === f.id ? { ...c, status: f.status, tools: f.toolCount } : c)))), []);
   const [showAdmin, setShowAdmin] = useState(false);
   const [showPlayground, setShowPlayground] = useState(false);
   const [showCredits, setShowCredits] = useState(false);
@@ -332,10 +356,10 @@ export default function App() {
   useEffect(() => {
     if (!codeMode || !currentId) return;
     if (models.find(m => m.id === currentId)?.codeAllowed !== false) return;
-    const fit = models.filter(m => m.codeAllowed !== false && (m.kind !== 'router' || user?.isAdmin));
+    const fit = models.filter(m => m.codeAllowed !== false && (m.kind !== 'router' || can(user, 'admin.panel')));
     const next = fit.find(m => m.isDefault) || fit[0];
     if (next) setCurrentId(next.id);
-  }, [codeMode, models, currentId, user?.isAdmin]);
+  }, [codeMode, models, currentId, user]);
   const [webSearch, setWebSearch] = useState(false);
   const [files, setFiles] = useState([]);
   const [pendingFiles, setPendingFiles] = useState({});
@@ -348,6 +372,10 @@ export default function App() {
   const [chatPins, setChatPins] = useState([]);
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
+  const [shareTarget, setShareTarget] = useState(null);
+  const [chatShared, setChatShared] = useState(null);
+  const [copying, setCopying] = useState(false);
+  const [sharedTick, setSharedTick] = useState(0);
   const [callOpen, setCallOpen] = useState(false);
   const [callRender, setCallRender] = useState(false);
   useEffect(() => {
@@ -582,20 +610,29 @@ export default function App() {
     return () => window.removeEventListener(SESSION_EXPIRED, expired);
   }, []);
   useEffect(() => {
-    api.get('/api/me').then(({ user }) => setUser(user)).catch(() => {
+    const loadContext = (signedIn) => api.get('/api/auth/context').then(c => {
+      setAuthCtx(c);
+      document.documentElement.setAttribute('data-font', appFontId(c.appFont));
+      if (!signedIn) applyPrefs(null, presetId(c.uiPreset));
+      setCustomFavicon(c.appIcon);
+    }).catch(() => {});
+    api.get('/api/me').then(({ user }) => {
+      claimStorage(user.id);
+      setUser(user);
+      if (user.gate) loadContext(true);
+    }).catch(() => {
       setUser(null);
-      api.get('/api/auth/context').then(c => {
-        setAuthCtx(c);
-        const preset = presetId(c.uiPreset);
-        document.documentElement.setAttribute('data-font', appFontId(c.appFont));
-        applyPrefs(null, preset);
-        setCustomFavicon(c.appIcon);
-      }).catch(() => {});
+      loadContext(false);
     });
   }, []);
   useEffect(() => {
+    const refresh = () => api.get('/api/me').then(({ user }) => setUser(user)).catch(() => {});
+    window.addEventListener(ACCOUNT_GATED, refresh);
+    return () => window.removeEventListener(ACCOUNT_GATED, refresh);
+  }, []);
+  useEffect(() => {
     if (!user) return;
-    const preset = presetId(cfg?.uiPreset);
+    const preset = presetId(cfg?.uiPreset || authCtx?.uiPreset);
     applyPrefs(user?.prefs, preset);
     const t = user?.prefs?.theme || 'dark';
     if (t === 'system' && window.matchMedia) {
@@ -604,13 +641,13 @@ export default function App() {
       mq.addEventListener?.('change', h);
       return () => mq.removeEventListener?.('change', h);
     }
-  }, [user, cfg?.uiPreset]);
+  }, [user, cfg?.uiPreset, authCtx?.uiPreset]);
   useEffect(() => {
-    if (!user) return;
+    if (!ready) return;
     loadModels(); loadChats(); loadAppConfig(); loadBudget(); connect(); openFromUrl(); loadProjects();
     const tab = takeSettingsToReopen();
     if (tab) openSettings(tab);
-  }, [!!user]);
+  }, [ready]);
   async function loadBudget() { try { setBudget(await api.get('/api/me/budget')); } catch {} }
   async function loadProjects() { try { setProjects(await api.get('/api/projects')); } catch {} finally { setProjectsReady(true); } }
 
@@ -677,7 +714,7 @@ export default function App() {
   }, [currentId, activeId, models, incognito, cfg.webSearchAvailable, user?.prefs?.webSearchDefault]);
   function openFromUrl() {
     bootView.current = 'home';
-    const r = parseRoute(location.pathname, { isAdmin: !!user?.isAdmin });
+    const r = parseRoute(location.pathname, { admin: can(user, 'admin.panel'), playground: can(user, 'admin.models') });
     if (r.replace) history.replaceState({}, '', r.replace);
     const onProjects = r.view === 'project' || r.view === 'projects';
     const library = LIBRARY_PAGES.includes(r.view);
@@ -733,7 +770,7 @@ export default function App() {
       loadModels();
       loadAppConfig();
       try { window.dispatchEvent(new CustomEvent('oq-config')); } catch {}
-    }, syncDelay(!!userRef.current?.isAdmin));
+    }, syncDelay(can(userRef.current, 'admin.panel')));
   }
 
   function adminDraft(frame) {
@@ -769,11 +806,11 @@ export default function App() {
       : libPage === 'sessions' ? t('Sessions')
       : incognito ? t('Incognito chat')
       : codeMode ? (activeId ? ((chats.find(c => c.id === activeId)?.title) || t('Untitled session')) : t('New session'))
-      : activeId ? ((chats.find(c => c.id === activeId)?.title) || t('Untitled chat'))
+      : activeId ? ((chats.find(c => c.id === activeId)?.title) || chatShared?.title || t('Untitled chat'))
       : t('New chat')
     );
     document.title = titleWithUnread(codeMode ? `${head} - ${appName} ${t('Code')}` : `${head} - ${appName}`, unreadChats.length);
-  }, [activeId, chats, cfg.appName, incognito, notFound, showAdmin, showPlayground, docsTarget, showProjects, projectOpenId, projects, libPage, codeMode, unreadChats.length]);
+  }, [activeId, chats, cfg.appName, incognito, notFound, showAdmin, showPlayground, docsTarget, showProjects, projectOpenId, projects, libPage, codeMode, unreadChats.length, chatShared]);
   function exportAllChats() { window.open('/api/chats/export-all', '_blank'); }
   async function importChatsFile(file) {
     const job = notify(t('Importing chats'), { icon: 'upload', progress: true });
@@ -831,7 +868,7 @@ export default function App() {
     text: { modelError: t('The model returned an error.') },
     actions: {
       notifyContextTrimmed: (limit) => notify(
-        t('Context limit reached ({limit} tokens), trimming older messages so the chat can continue', { limit: limit.toLocaleString() }),
+        t('Context limit reached ({limit} tokens), trimming older messages so the chat can continue', { limit: fmtNumber(limit) }),
         { kind: 'warn', duration: 6000 }),
       finalize: () => finalize(),
       finalizeBackground: (key) => finalizeBackground(key),
@@ -842,11 +879,15 @@ export default function App() {
       syncConfig: (version, greeting) => syncConfig(version, greeting),
       adminDraft: (frame) => adminDraft(frame),
       presence: (list) => publishPresence(list),
+      mcpStatus: (frame) => publishFrame('mcp_status', frame),
+      evalJob: (job) => publishFrame('eval_job', job),
       loadBudget: () => loadBudget(),
+      refreshAccount: () => setTimeout(() => { api.get('/api/me').then(({ user }) => { setUser(user); loadModels(); }).catch(() => {}); }, Math.round(Math.random() * 1500)),
       setAsk: (chatId, q) => setAsk(chatId, q),
       contextChanged: () => setCtxTick(n => n + 1),
       taskStarted: (m) => notify(t('Running scheduled task "{title}"', { title: m.title || t('New chat') }), { icon: 'clock' }),
-      turnFinished: (chatId, failed) => turnFinished(chatId, failed)
+      turnFinished: (chatId, failed) => turnFinished(chatId, failed),
+      shared: (frame) => sharedChanged(frame)
     }
   };
 
@@ -1067,8 +1108,49 @@ export default function App() {
     api.post('/api/chats/' + key + '/plan/dismiss', { messageId: ref.msg, n: ref.n }).catch(() => {});
   }
 
+  function toggleConnector(id) {
+    const next = chatMcpOff.includes(id) ? chatMcpOff.filter(x => x !== id) : [...chatMcpOff, id];
+    setChatMcpOff(next);
+    const key = activeKey();
+    if (!key || key === 'incognito') return;
+    const cached = chatCache.current.get(key);
+    if (cached?.chat) cacheChat(key, { chat: { ...cached.chat, mcpOff: next } });
+    api.patch('/api/chats/' + key, { mcpOff: next }).catch(() => warn());
+  }
+
+  function shareChat(c) {
+    setShareTarget({ type: 'chat', id: c.id, title: c.title });
+  }
+  async function copySharedChat() {
+    if (!activeId || copying) return;
+    setCopying(true);
+    try {
+      const r = await api.post('/api/chats/' + activeId + '/copy');
+      await loadChats();
+      openChat(r.id);
+      notify(t('Copied into your chats'), { kind: 'success' });
+    } catch (e) {
+      notify(e.message, { kind: 'error' });
+    } finally {
+      setCopying(false);
+    }
+  }
+  function sharedChanged(frame) {
+    loadProjects();
+    loadSkills();
+    setSharedTick(n => n + 1);
+    if (frame.resource !== 'chat' || frame.id !== activeIdRef.current || !chatShared) return;
+    chatCache.current.delete(frame.id);
+    api.get('/api/chats/' + frame.id).catch(() => {
+      notify(t('This chat is no longer shared with you.'), { kind: 'warn' });
+      newChat();
+    });
+  }
+
   function resetChatView() {
+    setChatShared(null);
     setPlanDismissed(null);
+    setChatMcpOff([]);
     setFiles([]); setPendingFiles({}); setHasSummary(false);
     clearLive(); setArtifactFocus(null); setArtPanel(false);
     turnMeta.reset();
@@ -1088,10 +1170,12 @@ export default function App() {
     setHasSummary(!!chat.hasSummary);
     setChatEnded(!!chat.ended);
     setChatEndedReason(chat.endedReason || '');
+    setChatShared(chat.access && chat.access !== 'owner' ? { owner: chat.owner || '', title: chat.title || '' } : null);
     setChatGenParams(chat.genParams || null);
     setChatSysOverride(chat.systemOverride || '');
     setChatPins(Array.isArray(chat.pinnedFiles) ? chat.pinnedFiles : []);
     setPlanDismissed(chat.planDismissed || null);
+    setChatMcpOff(Array.isArray(chat.mcpOff) ? chat.mcpOff : []);
   }
   function resolveLastModel(lastA) {
     if (modelsRef.current.find(mm => mm.id === lastA.model_id)) {
@@ -1359,6 +1443,9 @@ export default function App() {
       if ((chatGenParams && Object.keys(chatGenParams).length) || (chatSysOverride && chatSysOverride.trim())) {
         try { await api.patch('/api/chats/' + chatId, { genParams: chatGenParams || {}, systemOverride: chatSysOverride || '' }); } catch {}
       }
+      if (chatMcpOff.length) {
+        try { await api.patch('/api/chats/' + chatId, { mcpOff: chatMcpOff }); } catch {}
+      }
     }
     if (compareRef.current && !compareRef.current.chatId) compareRef.current.chatId = chatId;
     clearDraft(activeId);
@@ -1516,6 +1603,7 @@ export default function App() {
   async function logout() {
     try { await api.post('/api/auth/logout'); }
     catch { warn(t('Could not sign out.')); return; }
+    clearPrivateStorage();
     location.href = '/';
   }
   function updatePref(key, value) {
@@ -1527,6 +1615,8 @@ export default function App() {
 
   if (user === undefined) return <div style={{ height: '100%', background: 'var(--bg)' }} />;
   if (!user) return <Login cfg={authCtx} onLogin={(u) => setUser(u)} />;
+  if (user.gate === 'mfa') return <MfaRequired user={user} cfg={authCtx} onUser={setUser} />;
+  if (user.gate) return <Pending user={user} cfg={authCtx} onUser={setUser} />;
 
   const model = modelById.get(currentId);
   const activeChat = activeId ? chats.find(c => c.id === activeId) : null;
@@ -1557,10 +1647,10 @@ export default function App() {
     conversationEnded: chatEnded, endedReason: chatEndedReason,
     removedModel: activeId ? chatRemovedModel : null,
     skills, onToggleSkill: toggleSkill, onManageSkills: (mode) => openSettings('skills', { browse: mode === 'browse' }),
-    onManageConnectors: () => openSettings('mcp'), attachCombo: comboLabel(resolveKeybinds(user?.prefs).attachFiles),
+    onManageConnectors: () => openSettings('mcp'), connectors: incognito ? [] : connectors, connectorsOff: chatMcpOff, onToggleConnector: toggleConnector, attachCombo: comboLabel(resolveKeybinds(user?.prefs).attachFiles),
     models, modelsReady, currentId, onSelect: pickModel, extended, onToggleExtended: () => setExtended(e => !e),
     reasoningEffort, onSetEffort: setReasoningEffort, kwargValues, onSetKwarg: setKwarg,
-    visionSupported: !!model?.hasVision, canUseUnavailable: !!user?.isAdmin, budget,
+    visionSupported: !!model?.hasVision, canUseUnavailable: can(user, 'models.unavailable'), advanced: can(user, 'chats.advanced'), budget,
     modelHasBg, bgInChat, onToggleBgInChat: () => updatePref('modelBgInChat', !bgInChat),
     webSearch: webSearchOn, webSearchAvailable, onToggleWebSearch: () => { if (webSearchAvailable) setWebSearch(s => !s); },
     project: currentProject, onClearProject: clearChatProject, onOpenProject: openProjects,
@@ -1661,9 +1751,9 @@ export default function App() {
     { id: 'settings', label: t('Open settings'), shortcut: comboLabel(kb.openSettings), keywords: 'preferences account theme', action: () => openSettings('general') },
     { id: 'promptledger', label: t('What gets sent'), shortcut: comboLabel(kb.promptLedger), keywords: 'prompt inspect context debug tokens', action: () => { if (activeId) setLedgerPrompt(true); } },
     { id: 'keybinds', label: t('Customize shortcuts'), keywords: 'keybinds hotkeys keys remap', action: () => openSettings('keybinds') },
-    ...(user?.isAdmin ? [{ id: 'admin', label: t('Open admin panel'), keywords: 'models users connection providers', action: () => { history.pushState({}, '', '/admin'); setShowAdmin(true); } }] : []),
-    ...(user?.isAdmin ? [{ id: 'build', label: t('Enter build mode'), keywords: 'theme builder design layout customise interface', action: () => { try { localStorage.setItem('oq-build-mode', '1'); } catch {} window.location.reload(); } }] : []),
-    ...(user?.isAdmin ? [{ id: 'playground', label: t('Open playground'), keywords: 'test model tune sampling kwargs prompt', action: () => { history.pushState({}, '', '/playground'); setShowPlayground(true); } }] : []),
+    ...(can(user, 'admin.panel') ? [{ id: 'admin', label: t('Open admin panel'), keywords: 'models users connection providers', action: () => { history.pushState({}, '', '/admin'); setShowAdmin(true); } }] : []),
+    ...(can(user, 'admin.interface') ? [{ id: 'build', label: t('Enter build mode'), keywords: 'theme builder design layout customise interface', action: () => { try { localStorage.setItem('oq-build-mode', '1'); } catch {} window.location.reload(); } }] : []),
+    ...(can(user, 'admin.models') ? [{ id: 'playground', label: t('Open playground'), keywords: 'test model tune sampling kwargs prompt', action: () => { history.pushState({}, '', '/playground'); setShowPlayground(true); } }] : []),
     { id: 'changelog', label: t('View changelog'), keywords: 'updates version', action: () => setShowChangelog(true) },
     { id: 'credits', label: t('View credits'), keywords: 'about', action: () => setShowCredits(true) },
     { id: 'license', label: t('View licensing'), keywords: 'legal', action: () => setShowLicense(true) },
@@ -1677,7 +1767,7 @@ export default function App() {
 
   const modelPicker = (
     <div className="topbar-model tbm-flex">
-      <ModelDropdown models={models} modelsReady={modelsReady} currentId={currentId} onSelect={pickModel} extended={extended} onToggleExtended={() => setExtended(e => !e)} reasoningEffort={reasoningEffort} onSetEffort={setReasoningEffort} kwargValues={kwargValues} onSetKwarg={setKwarg} canUseUnavailable={!!user?.isAdmin} isAdmin={!!user?.isAdmin} up={false} />
+      <ModelDropdown models={models} modelsReady={modelsReady} currentId={currentId} onSelect={pickModel} extended={extended} onToggleExtended={() => setExtended(e => !e)} reasoningEffort={reasoningEffort} onSetEffort={setReasoningEffort} kwargValues={kwargValues} onSetKwarg={setKwarg} advanced={can(user, 'chats.advanced')} up={false} />
       {contextRing}
     </div>
   );
@@ -1694,7 +1784,7 @@ export default function App() {
   );
   const originProject = activeChat?.originProjectId ? projects.find(p => p.id === activeChat.originProjectId) : null;
 
-  sidebarFns.current = { newChat, openChat, deleteChat, toggleStar, toggleArchive, setChatTags, logout, openProjects, moveChatToProject, switchMode, alignMode, newProject: () => { openProjects(null); setProjectCreate(true); } };
+  sidebarFns.current = { newChat, openChat, deleteChat, toggleStar, toggleArchive, setChatTags, logout, openProjects, moveChatToProject, switchMode, alignMode, shareChat, newProject: () => { openProjects(null); setProjectCreate(true); } };
 
   const streamKey = assistantIdRef.current || '_stream';
   const codeLive = !codeMode ? null
@@ -1710,7 +1800,7 @@ export default function App() {
         onSend: send, onStop: stop, streaming: (streaming || queued) && !pendingAsk, stopping, ended: chatEnded,
         autoFocus: !activeId, focusKey: focusTick, draftId: activeId || 'code',
         panel: plans.plan || question ? <AgentPanel plan={plans.plan} previousPlan={plans.previousPlan} onDismissPlan={dismissPlan} question={question} onAnswer={answerQuestion} onSkip={() => answerQuestion(null)} /> : null,
-        models, modelsReady, currentId, onSelect: pickModel, kwargValues, onSetKwarg: setKwarg, reasoningEffort, isAdmin: !!user?.isAdmin,
+        models, modelsReady, currentId, onSelect: pickModel, kwargValues, onSetKwarg: setKwarg, reasoningEffort, advanced: can(user, 'chats.advanced'), canUseUnavailable: can(user, 'models.unavailable'), showRouters: can(user, 'admin.panel'),
         extended, onToggleExtended: () => setExtended(e => !e),
         plan: planMode, onPlan: setPlanMode,
         revision: ctxRevision,
@@ -1738,7 +1828,7 @@ export default function App() {
         onCustomize={onSkillsCb} onModelDocs={onDocsCb} showModelDocs={cfg.modelDocs !== false} onVersion={onVersionCb}
         docs={docsTarget ? {
           tree: docsNavTree, target: docsTarget, onSelect: onDocsNav, onExit: onDocsExit,
-          editing: user?.isAdmin && docsEdit.editing,
+          editing: can(user, 'admin.models') && docsEdit.editing,
           onAddTab: docsAddTab, onAddPage: docsAddPage, onRemoveTab: docsRemoveTab, onRemovePage: docsRemovePage, onRenameTab: docsRenameTab
         } : null}
         onNew={sbNewChat} onOpen={sbOpenChat} onDelete={sbDeleteChat} onToggleStar={sbToggleStar} onToggleArchive={sbToggleArchive} onSetTags={sbSetTags}
@@ -1747,7 +1837,7 @@ export default function App() {
         onSettings={onSettingsCb} onAdmin={onAdminCb} onPlayground={onPlaygroundCb}
         onCredits={onCreditsCb} onChangelog={onChangelogCb} onLicense={onLicenseCb} onPrivacy={onPrivacyCb} onLogout={sbLogout} version={cfg.version}
         onChatsOverview={onChatsOverviewCb}
-        projects={projects} onProjects={sbProjects} onOpenProject={sbOpenProject} onNewProject={sbNewProject} onMoveToProject={sbMoveToProject}
+        projects={projects} onProjects={sbProjects} onOpenProject={sbOpenProject} onNewProject={sbNewProject} onMoveToProject={sbMoveToProject} onShare={can(user, 'chats.share') ? sbShareChat : null}
         busyChats={busyChats} unreadChats={unreadChats} onStopChat={stopChat} />
 
       {collapsed && !docsTarget && (
@@ -1773,7 +1863,7 @@ export default function App() {
           <div className="lib-overlay mdoc-overlay" role="region" aria-label={t('Model docs')}>
             <Suspense fallback={null}>
               <ModelDocs target={docsTarget} appName={cfg.appName || 'open-quill'} edit={docsEdit}
-                isAdmin={!!user?.isAdmin} onNavigate={onDocsNav} onExit={onDocsExit}
+                canEdit={can(user, 'admin.models')} onNavigate={onDocsNav} onExit={onDocsExit}
                 onTry={(id) => { pickModel(id); onDocsExit(); }} />
             </Suspense>
           </div>
@@ -1808,7 +1898,7 @@ export default function App() {
         ) : libPage ? (
           <div className="lib-overlay chats-overview" role="region" aria-label={libPage === 'sessions' ? t('Sessions') : t('Chats')}>
             {pageMenuBtn}
-            <ChatsOverview key={libPage} mode={libPage === 'sessions' ? 'code' : 'chat'} onSearch={() => setShowSearch(true)}
+            <ChatsOverview key={libPage} mode={libPage === 'sessions' ? 'code' : 'chat'} sharedTick={sharedTick} onSearch={() => setShowSearch(true)}
               onOpen={(id) => { setLibPage(null); openChat(id); }} onChatsChanged={() => loadChats()} />
           </div>
         ) : null}
@@ -1831,7 +1921,7 @@ export default function App() {
               </button>
             </>}
             items={[
-              user?.isAdmin && !incognito && { id: 'ctl', icon: <Sliders />, label: t("Chat controls (admin)"), active: ctlOpen, onClick: () => setCtlOpen(o => !o) },
+              can(user, 'chats.advanced') && !incognito && { id: 'ctl', icon: <Sliders />, label: t("Chat controls (admin)"), active: ctlOpen, onClick: () => setCtlOpen(o => !o) },
             ]} />
         )}
         {empty && !incognito && !codeMode && (
@@ -1863,17 +1953,17 @@ export default function App() {
           <>
             <ChatTopbar
               lead={<ModelPickerSlot at="topbar">{modelPicker}</ModelPickerSlot>}
-              chat={activeChat} chatId={activeId} project={activeProject} booting={booting}
+              chat={activeChat} chatId={activeId} project={activeProject} booting={booting} shared={chatShared}
               projects={projects} busy={busyChats.includes(activeId)}
               onOpenMenu={() => setMobileDrawer(true)} onOpenProject={openProjects} onRename={renameChat}
-              onStopChat={stopChat} onToggleStar={toggleStar} onToggleArchive={toggleArchive} onSetTags={setChatTags} allTags={allTags} onMoveToProject={moveChatToProject} onDelete={deleteChat}
+              onStopChat={stopChat} onToggleStar={toggleStar} onToggleArchive={toggleArchive} onSetTags={setChatTags} allTags={allTags} onMoveToProject={moveChatToProject} onDelete={deleteChat} onShare={can(user, 'chats.share') ? shareChat : null}
               actions={
               <TopbarActions
                 items={[
                   activeId && (files.length > 0 || artPanel) && { id: 'artifacts', icon: <Artifact />, label: t('Artifacts'), active: artPanel, onClick: () => setArtPanel(o => !o) },
                   hasSummary && { id: 'summary', icon: <Compact />, label: t("Conversation memory"), onClick: () => setSummaryOpen(true) },
                   messages.length > 0 && { id: 'copyall', icon: <Copy />, label: t('Copy all'), onClick: () => copyConversation() },
-                  user?.isAdmin && activeId && { id: 'ctl', icon: <Sliders />, label: t("Chat controls (admin)"), active: ctlOpen, onClick: () => setCtlOpen(o => !o) },
+                  can(user, 'chats.advanced') && activeId && { id: 'ctl', icon: <Sliders />, label: t("Chat controls (admin)"), active: ctlOpen, onClick: () => setCtlOpen(o => !o) },
                   messages.length > 0 && user?.prefs?.threadFind !== false && { id: 'find', icon: <Search />, label: t('Find in conversation'), active: findOpen, onClick: () => (findOpen ? closeFind() : setFindOpen(true)) },
                   activeId && messages.length > 0 && user?.prefs?.branchMap !== false && { id: 'tree', icon: <Fork />, label: t('Branch map'), active: treeOpen, onClick: () => setTreeOpen(o => !o) },
                   outline.length > 1 && user?.prefs?.threadOutline !== false && { id: 'outline', icon: <TextIcon />, label: t('Contents'), active: outlineOpen, onClick: () => setOutlineOpen(o => !o) },
@@ -1894,14 +1984,14 @@ export default function App() {
                   let lastA = null;
                   for (let i = renderList.length - 1; i >= 0; i--) if (renderList[i].role === 'assistant') { lastA = renderList[i]; break; }
                   return renderList.map(msg => (
-                    <Message key={msg._k || msg.id} msg={msg} latest={msg === lastA} model={resolveMsgModel(msg, model)} chatId={activeId} pins={chatPins} chatEnded={chatEnded}
+                    <Message key={msg._k || msg.id} msg={msg} latest={msg === lastA} model={resolveMsgModel(msg, model)} chatId={chatShared ? null : activeId} pins={chatPins} chatEnded={chatEnded}
                       canContinue={(canContinue || !!msg.truncated) && !streaming && !chatEnded && msg === lastA && !msg._streaming}
                       onContinue={continueReply}
                       steers={msg._streaming ? liveSteers : (msg.steers || null)}
                       status={msg._streaming ? modelStatus : null}
                       statusDelay={statusDelay}
                       streaming={!!msg._streaming} phase={msg._streaming ? ((modelById.get(currentId)?.hideThinking && phase === 'thinking') ? 'generating' : phase) : 'static'} liveCall={msg._streaming ? liveCall : null} liveCalls={msg._streaming ? liveCalls : EMPTY_CALLS}
-                      onTogglePinFile={togglePinFile} onRegenerate={regenerate} onEdit={editMessage} onEditAssistant={editAssistantMessage} onDelete={deleteMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin}
+                      onTogglePinFile={chatShared ? null : togglePinFile} onRegenerate={regenerate} onEdit={editMessage} onEditAssistant={editAssistantMessage} onDelete={deleteMessage} onSelectBranch={selectBranch} onFork={forkChat} onTogglePin={togglePin}
                       showSpeed={showMsgSpeed}
                       showIcon={msg.role === 'assistant' && (layout.replyIcon === 'every' || (lastA && msg.id === lastA.id))}
                       fadeWords={fadeWords} />
@@ -1921,10 +2011,10 @@ export default function App() {
             <div className={'composer-wrap active-composer' + (layout.floatingComposer ? ' floating' : '')}>
               {user?.prefs?.engineStrip === true && <EngineStrip telemetry={telemetry} streaming={streaming} route={routeInfo} />}
               {callDock}
-              <Composer {...composerProps} thread focusKey={focusTick}
+              {chatShared ? <SharedBar owner={chatShared.owner} busy={copying} onCopy={can(user, 'chats.create') ? copySharedChat : null} /> : <Composer {...composerProps} thread focusKey={focusTick}
                 jump={showJump ? <button className="to-bottom" onClick={jumpDown} data-tip={t('Jump to latest')} aria-label={t('Jump to latest')}><Down style={{ width: 17 }} /></button> : null}
                 panel={!incognito && (plans.plan || question) ? <AgentPanel plan={plans.plan} previousPlan={plans.previousPlan} onDismissPlan={dismissPlan} question={question} onAnswer={answerQuestion} onSkip={() => answerQuestion(null)} /> : null}
-                contextRing={contextRing} footer={layout.id === 'card' ? <Disclaimer text={cfg.disclaimer} /> : null} />
+                contextRing={contextRing} footer={layout.id === 'card' ? <Disclaimer text={cfg.disclaimer} /> : null} />}
               {layout.id !== 'card' && <Disclaimer text={cfg.disclaimer} />}
             </div>
           </>
@@ -1936,20 +2026,21 @@ export default function App() {
           busy={streaming || queued} projectId={activeChat?.projectId || null} projects={projects}
           onFilesChanged={setFiles} onClose={() => setArtPanel(false)} />
       )}
-      {ctlOpen && user?.isAdmin && !incognito && (
+      {ctlOpen && can(user, 'chats.advanced') && !incognito && (
         <ChatControls chatId={activeId || null} initialParams={chatGenParams} initialOverride={chatSysOverride} onChange={(p, o) => { setChatGenParams(p && Object.keys(p).length ? p : null); setChatSysOverride(o || ''); }} onClose={() => setCtlOpen(false)} />
       )}
 
+      {shareTarget && <ShareDialog {...shareTarget} onClose={() => setShareTarget(null)} onLeft={() => setSharedTick(n => n + 1)} />}
       {summaryOpen && activeId && (
         <SummaryModal chatId={activeId} onClose={() => setSummaryOpen(false)}
           onChanged={(has) => { setHasSummary(has); }} />
       )}
 
 
-      {settings && <SettingsModal user={user} cfg={cfg} initialTab={settings.tab} browseSkills={!!settings.browse} onClose={onSettingsClosed} onUpdated={setUser} onDeleted={() => { location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile}
+      {settings && <SettingsModal user={user} cfg={cfg} initialTab={settings.tab} browseSkills={!!settings.browse} onClose={onSettingsClosed} onUpdated={setUser} onDeleted={() => { clearPrivateStorage(); location.href = '/'; }} onExportChats={exportAllChats} onImportChats={importChatsFile}
         onChangelog={() => { setSettings(null); setShowChangelog(true); }}
         onTrySkill={(sk) => { newChat(); setInput('/' + sk.name + ' '); setFocusTick(n => n + 1); }} />}
-      {user?.isAdmin && cfg.setupComplete === false && !setupDone && (
+      {can(user, 'admin.panel') && cfg.setupComplete === false && !setupDone && (
         <Suspense fallback={null}><SetupGuide appName={cfg.appName || 'open-quill'} onDone={onSetupDone} /></Suspense>
       )}
       {showSearch && <SearchModal onClose={() => setShowSearch(false)} onOpen={(id) => openChat(id)} />}
@@ -1962,8 +2053,8 @@ export default function App() {
       <Lightbox />
       <FilePreview />
       <Suspense fallback={null}>
-        {showAdmin && <AdminPanel user={user} onClose={() => { setShowAdmin(false); if (shouldResetPath('admin', location.pathname)) history.pushState({}, '', '/'); }} />}
-        {showPlayground && <Playground user={user} onClose={() => { setShowPlayground(false); if (shouldResetPath('playground', location.pathname)) history.pushState({}, '', '/'); }} />}
+        {showAdmin && can(user, 'admin.panel') && <AdminPanel user={user} onClose={() => { setShowAdmin(false); if (shouldResetPath('admin', location.pathname)) history.pushState({}, '', '/'); }} />}
+        {showPlayground && can(user, 'admin.models') && <Playground user={user} onClose={() => { setShowPlayground(false); if (shouldResetPath('playground', location.pathname)) history.pushState({}, '', '/'); }} />}
       </Suspense>
       {showCredits && <DocModal title={t("Credits")} name="credits" serif onClose={() => setShowCredits(false)} />}
       {showLicense && <DocModal title={t("Licensing")} name="license" onClose={() => setShowLicense(false)} />}
@@ -1971,7 +2062,7 @@ export default function App() {
       {showChangelog && <DocModal title={t("Changelog")} name="changelog" onClose={() => setShowChangelog(false)} />}
       {cmdkOpen && <CommandPalette commands={commands} ready={modelsReady && chatsLoaded} onClose={() => setCmdkOpen(false)} />}
     </div>
-    {user?.isAdmin && <Suspense fallback={null}><BuildMode user={user} /></Suspense>}
+    {can(user, 'admin.interface') && <Suspense fallback={null}><BuildMode user={user} /></Suspense>}
     </ThemeProvider>
     </LayoutContext.Provider>
   );

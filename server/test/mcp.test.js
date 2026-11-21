@@ -80,7 +80,7 @@ function startHttp() {
         return send({ jsonrpc: '2.0', id: m.id, result: { protocolVersion: '2025-06-18', capabilities: { tools: {} } } }, sid);
       }
       if (m.method.startsWith('notifications/')) { if (!mute) { res.writeHead(202); res.end(); } return; }
-      if (m.method === 'tools/list') return reply({ result: { tools: [{ name: 'ping', description: 'pong', inputSchema: { type: 'object', properties: {} } }, { name: 'fail', description: 'errors', inputSchema: { type: 'object', properties: {} } }] } });
+      if (m.method === 'tools/list') return reply({ result: { tools: [{ name: 'ping', description: 'pong', inputSchema: { type: 'object', properties: {} } }, { name: 'fail', description: 'errors', inputSchema: { type: 'object', properties: {} }, annotations: { destructiveHint: true, title: 'Fail on purpose', bogus: 'x' } }] } });
       if (m.method === 'tools/call') {
         if (m.params.name === 'fail') return reply({ error: { code: -32000, message: 'the remote tool refused' } });
         return reply({ result: { content: [{ type: 'text', text: 'pong:' + JSON.stringify(m.params.arguments || {}) }] } });
@@ -491,4 +491,118 @@ test('a legacy SSE server is found from its bare address and works', async () =>
     legacy.closeAllConnections?.();
     await new Promise(r => { legacy.close(r); });
   }
+});
+
+test('member servers cannot reach link-local, metadata or this server, and never see response bodies', async () => {
+  const { screenAddress } = await import('../lib/mcpnet.js');
+  assert.match(screenAddress('169.254.169.254', 80), /link-local/);
+  assert.match(screenAddress('::ffff:169.254.169.254', 80), /link-local/);
+  assert.match(screenAddress('fe80::1', 80), /link-local/);
+  assert.match(screenAddress('100.100.100.200', 80), /metadata/);
+  assert.equal(screenAddress('127.0.0.1', 8931), '');
+  assert.equal(screenAddress('192.168.1.20', 3001), '');
+
+  const owner = user('netpolicy@example.com');
+  const meta = mcp.create({ name: 'Metadata', transport: 'http', url: 'http://169.254.169.254/mcp' }, owner).server;
+  assert.match((await mcp.refreshTools(meta.id, owner)).server.error, /link-local/);
+  mcp.remove(meta.id, owner);
+
+  const before = process.env.PORT;
+  process.env.PORT = String(httpPort);
+  try {
+    const self = remote('Self', TOKEN, owner).server;
+    assert.match((await mcp.refreshTools(self.id, owner)).server.error, /this server itself/);
+    mcp.remove(self.id, owner);
+  } finally {
+    if (before === undefined) delete process.env.PORT;
+    else process.env.PORT = before;
+  }
+
+  const member = remote('Member Bad Header', 'Authorization: Bearer wrong', owner).server;
+  const memberError = (await mcp.refreshTools(member.id, owner)).server.error;
+  assert.match(memberError, /401/);
+  assert.doesNotMatch(memberError, /unauthorized/);
+  mcp.remove(member.id, owner);
+  const admin = remote('Admin Bad Header', 'Authorization: Bearer wrong').server;
+  assert.match((await mcp.refreshTools(admin.id)).server.error, /unauthorized/);
+  mcp.remove(admin.id);
+});
+
+test('an admin can limit member servers to listed hosts or turn them off', async () => {
+  const { setMemberPolicy, checkMemberUrl } = await import('../lib/mcpnet.js');
+  const owner = user('hostlist@example.com');
+  const sv = remote('Listed', TOKEN, owner).server;
+  try {
+    assert.equal(await checkMemberUrl(`http://127.0.0.1:${httpPort}/mcp`), '');
+    setMemberPolicy({ hosts: ['mcp.internal'] });
+    assert.match(await checkMemberUrl(`http://127.0.0.1:${httpPort}/mcp`), /approved hosts/);
+    assert.match((await mcp.refreshTools(sv.id, owner)).server.error, /approved hosts/);
+    setMemberPolicy({ hosts: ['127.0.0.1'] });
+    assert.equal((await mcp.refreshTools(sv.id, owner)).server.status, 'connected');
+    assert.ok(mcp.getEnabled(owner).some(s => s.id === sv.id));
+    setMemberPolicy({ allowed: false });
+    assert.ok(!mcp.getEnabled(owner).some(s => s.id === sv.id));
+    assert.match(await checkMemberUrl(`http://127.0.0.1:${httpPort}/mcp`), /turned off/);
+  } finally {
+    setMemberPolicy({ allowed: true, hosts: [] });
+    mcp.remove(sv.id, owner);
+  }
+});
+
+test('an event stream that names a message endpoint on another host is refused', async () => {
+  const streams = new Set();
+  const sse = http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+    res.write('event: endpoint\ndata: http://localhost:9/messages\n\n');
+    streams.add(res);
+  });
+  const port = await new Promise(r => { sse.listen(0, '127.0.0.1', () => r(sse.address().port)); });
+  const sv = mcp.create({ name: 'Elsewhere', transport: 'http', url: `http://127.0.0.1:${port}/sse` }).server;
+  try {
+    assert.match((await mcp.refreshTools(sv.id)).server.error, /another host/);
+  } finally {
+    mcp.remove(sv.id);
+    for (const s of streams) s.destroy();
+    sse.closeAllConnections?.();
+    await new Promise(r => { sse.close(r); });
+  }
+});
+
+test('tool modes, chat scope and a direct trial', async () => {
+  const sv = remote('Modes', TOKEN).server;
+  try {
+    await mcp.refreshTools(sv.id);
+    const ping = `mcp_${sv.slug}_ping`, fail = `mcp_${sv.slug}_fail`;
+    const tools = mcp.publicServer(mcp.byId(sv.id)).tools;
+    assert.deepEqual(tools.find(t => t.name === 'fail').annotations, { title: 'Fail on purpose', destructiveHint: true });
+    assert.equal(tools.find(t => t.name === 'fail').mode, 'ask', 'a tool marked destructive asks first');
+    assert.equal(tools.find(t => t.name === 'ping').mode, 'on');
+
+    mcp.setToolModes(sv.id, { ping: 'off', fail: 'on', ghost: 'ask' });
+    const names = mcp.toolSchemas().map(s => s.function.name);
+    assert.ok(!names.includes(ping), 'an off tool is never offered');
+    assert.ok(names.includes(fail));
+    assert.equal(mcp.isMcpTool(ping), false, 'nor can it be called by name');
+    assert.equal(mcp.toolInfo(fail).mode, 'on');
+    assert.deepEqual(Object.keys(mcp.byId(sv.id).tool_modes).sort(), ['fail', 'ping'], 'unknown tools are ignored');
+    mcp.setToolModes(sv.id, { fail: 'ask' });
+    assert.ok(!('fail' in mcp.byId(sv.id).tool_modes), 'going back to the default stores nothing');
+
+    assert.ok(!mcp.toolSchemas(null, { off: [sv.id] }).some(s => s.function.name === fail), 'a chat can switch a server off');
+
+
+    const tried = await mcp.tryTool(sv.id, 'ping', { text: 'hi' });
+    assert.equal(tried.ok, true, 'a trial runs even when the tool is off for models');
+    assert.equal(tried.content, 'pong:{"text":"hi"}');
+    assert.ok(Number.isFinite(tried.ms));
+    assert.equal((await mcp.tryTool(sv.id, 'ghost', {})).error, 'That tool is not on this server.');
+  } finally {
+    mcp.remove(sv.id);
+  }
+});
+
+test('a failing server comes back on its own and backs off while it stays down', () => {
+  assert.equal(mcp.retryDelay(1), 60000);
+  assert.equal(mcp.retryDelay(2), 120000);
+  assert.equal(mcp.retryDelay(20), 30 * 60000);
 });

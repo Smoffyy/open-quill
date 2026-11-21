@@ -1,5 +1,6 @@
 import { db, uid, now } from '../db.js';
 import { authMiddleware } from '../auth.js';
+import { requirePermission } from '../lib/authz/middleware.js';
 import { normalizeSchedule, nextRun } from '../lib/tasks.js';
 import { fireTask } from '../lib/taskrunner.js';
 
@@ -45,11 +46,11 @@ function own(req, res) {
 }
 
 export default function registerTaskRoutes(app) {
-  app.get('/api/tasks', authMiddleware, (req, res) => {
+  app.get('/api/tasks', authMiddleware, requirePermission('tasks.schedule'), (req, res) => {
     res.json({ tasks: db.tasks.byUser(req.user.id).map(view) });
   });
 
-  app.post('/api/tasks', authMiddleware, (req, res) => {
+  app.post('/api/tasks', authMiddleware, requirePermission('tasks.schedule'), (req, res) => {
     if (db.tasks.byUser(req.user.id).length >= TASK_LIMIT) {
       return res.status(400).json({ error: 'too many tasks' });
     }
@@ -71,7 +72,7 @@ export default function registerTaskRoutes(app) {
     res.json(view(row));
   });
 
-  app.patch('/api/tasks/:id', authMiddleware, (req, res) => {
+  app.patch('/api/tasks/:id', authMiddleware, requirePermission('tasks.schedule'), (req, res) => {
     const t = own(req, res); if (!t) return;
     const patch = { ...editable(req.body || {}), updated_at: now() };
     const schedule = patch.schedule || normalizeSchedule(t.schedule);
@@ -81,13 +82,13 @@ export default function registerTaskRoutes(app) {
     res.json(view(db.tasks.update(t.id, patch)));
   });
 
-  app.delete('/api/tasks/:id', authMiddleware, (req, res) => {
+  app.delete('/api/tasks/:id', authMiddleware, requirePermission('tasks.schedule'), (req, res) => {
     const t = own(req, res); if (!t) return;
     db.tasks.removeById(t.id);
     res.json({ ok: true });
   });
 
-  app.post('/api/tasks/:id/run', authMiddleware, (req, res) => {
+  app.post('/api/tasks/:id/run', authMiddleware, requirePermission('tasks.schedule'), (req, res) => {
     const t = own(req, res); if (!t) return;
     const r = fireTask(t);
     if (r.error) return res.status(400).json({ error: r.error });

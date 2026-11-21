@@ -3,7 +3,7 @@ import { api } from '../../../lib/api.js';
 import { useAdmin } from '../store.jsx';
 import { Card, Rows, Row, ToggleRow, Fields, Field, Input, Seg, Btn, IconBtn, Note, Badge } from '../ui.jsx';
 import { ImagePicker } from '../media.jsx';
-import { t, tk } from '../../../i18n.jsx';
+import { t, tk, fmtDate, fmtDateTime } from '../../../i18n.jsx';
 import { MODEL_WEAVE } from '../../../lib/brand.js';
 import { Palette, Sparkles, Trash } from '../../ui/icons.jsx';
 import { notify } from '../../../lib/notify.js';
@@ -19,7 +19,7 @@ const BUILD_KEY = 'oq-build-mode';
 function fmt(ts) {
   if (!ts) return '';
   const d = new Date(ts);
-  return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return fmtDate(d) + ' ' + fmtDateTime(d, { hour: '2-digit', minute: '2-digit' });
 }
 
 export default function InterfaceSection() {

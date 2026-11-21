@@ -4,7 +4,8 @@ import {
   BLOCKS, blockId, blockText, eligibleBlocks, addBlocks, setBlockBody, syncPrompt, syncModelPrompt, renderPrompt
 } from './promptblocks.js';
 import { artifactsText } from './artifacts.js';
-import { projectFilesText } from './projecttools.js';
+import { projectFilesText, projectFor } from './projecttools.js';
+import { atLeast } from './authz/acl.js';
 import * as referenceFiles from './referencefiles.js';
 import * as workspaceSkills from './workspaceskills.js';
 import * as userskills from './userskills.js';
@@ -19,6 +20,7 @@ import { buildTools } from '../tools/index.js';
 import { hostEnvInfo } from '../sandbox.js';
 import { webSearchAvailable } from './websearch.js';
 import { codeToolState, codePrompt } from './codeprompt.js';
+import { can } from './authz/effective.js';
 
 const MIGRATION_KEY = 'prompt_blocks_version';
 const MIGRATION_VERSION = 2;
@@ -61,30 +63,34 @@ export function toolsFor(flags) {
 
 export function toolState(chat, model, { sandboxOn = false, webSearchOn = false, canAsk = false, plan = false } = {}) {
   const row = chat?.id ? (db.chats.byId(chat.id) || chat) : chat;
-  if (row?.mode === 'code') return codeToolState(row, { webSearchOn, canAsk, plan });
   const userId = chat?.user_id || null;
-  const membankOn = getSetting('membank_enabled', '0') === '1' && referenceFiles.count() > 0;
-  const chatSearchOn = !!model.chat_search_allowed && getSetting('chat_search_enabled', '0') === '1';
+  const user = userId ? db.users.byId(userId) : null;
+  const searchOn = webSearchOn && can(user, 'tools.web_search');
+  if (row?.mode === 'code') return codeToolState(row, { webSearchOn: searchOn, canAsk, plan });
+  const membankOn = can(user, 'tools.reference_files') && getSetting('membank_enabled', '0') === '1' && referenceFiles.count() > 0;
+  const chatSearchOn = can(user, 'tools.chat_search') && !!model.chat_search_allowed && getSetting('chat_search_enabled', '0') === '1';
   const userSkills = userId ? userskills.enabledFor(userId).map(s => ({ name: s.name, description: s.description, content: s.body })) : [];
   const skillsOn = !!model.skills_allowed && (workspaceSkills.getEnabled().length + userSkills.length) > 0;
-  const mcpSchemas = model.mcp_allowed ? mcp.toolSchemas(userId) : [];
+  const mcpScope = mcp.scopeFor(user, [...(Array.isArray(row?.mcp_off) ? row.mcp_off : []), ...(Array.isArray(model.mcp_servers_off) ? model.mcp_servers_off : [])]);
+  const mcpSchemas = model.mcp_allowed ? mcp.toolSchemas(userId, mcpScope) : [];
   const mcpOn = mcpSchemas.length > 0;
   const endChatOn = !!model.end_chat_allowed;
-  const user = userId ? db.users.byId(userId) : null;
-  const memoryAllowed = !!model.memory_allowed && !!userId;
+  const memoryAllowed = !!model.memory_allowed && can(user, 'tools.memory');
   const memoryOn = memoryAllowed && userMemoryOn(user);
   const calculatorOn = !!model.calculator_allowed;
   const todoOn = !!model.todo_allowed && !!chat?.id;
   const askUserOn = !!model.ask_user_allowed && !!chat?.id && canAsk;
-  const consultWith = model.consult_allowed ? consultTargets(model, !!user?.is_admin) : [];
+  const consultWith = model.consult_allowed && can(user, 'tools.consult') ? consultTargets(model, user) : [];
   const consultOn = consultWith.length > 0;
-  const projectOn = !!row?.project_id && !!userId;
+  const project = userId ? projectFor(row) : null;
+  const projectOn = !!project;
+  const projectNotesOn = projectOn && atLeast(project.level, 'edit');
   const artifactsOn = model.artifacts_allowed !== 0 && !!chat?.id;
-  const toolsOn = sandboxOn || webSearchOn || membankOn || chatSearchOn || skillsOn || mcpOn || endChatOn || memoryOn
+  const toolsOn = sandboxOn || searchOn || membankOn || chatSearchOn || skillsOn || mcpOn || endChatOn || memoryOn
     || calculatorOn || todoOn || askUserOn || consultOn || projectOn || artifactsOn;
   return {
-    sandboxOn, webSearchOn, membankOn, chatSearchOn, skillsOn, userSkills, mcpSchemas, mcpOn, mcpUser: userId, recallOn: toolsOn && !!row?.summary,
-    endChatOn, memoryAllowed, memoryOn, calculatorOn, todoOn, askUserOn, consultOn, consultWith, projectOn, artifactsOn, toolsOn
+    sandboxOn, webSearchOn: searchOn, membankOn, chatSearchOn, skillsOn, userSkills, mcpSchemas, mcpOn, mcpUser: userId, mcpScope, mcpAsk: canAsk, recallOn: toolsOn && !!row?.summary,
+    endChatOn, memoryAllowed, memoryOn, calculatorOn, todoOn, askUserOn, consultOn, consultWith, projectOn, projectNotesOn, artifactsOn, toolsOn
   };
 }
 
@@ -105,7 +111,7 @@ export function promptVarMap(chat, model, state, { userId = null, styleText = ''
   const row = chat ? (db.chats.byId(chat.id) || chat) : null;
   const uid = row?.user_id || userId;
   const u = row?.user_id ? db.users.byId(row.user_id) : null;
-  const project = row?.project_id ? db.projects.byId(row.project_id) : null;
+  const project = row ? projectFor(row)?.project : null;
   return {
     ...promptVars(uid, { model, client }),
     chatTitle: row?.title && row.title !== 'New chat' ? row.title : '',
@@ -126,7 +132,7 @@ export function promptVarMap(chat, model, state, { userId = null, styleText = ''
     sandboxWorkspace: () => (row ? sandboxWorkspaceText(projectfiles.workspaceFor(row), String(project?.name || '')) : ''),
     referenceFiles: () => referenceFiles.filesText(),
     skills: () => workspaceSkills.skillsText(state.userSkills),
-    mcpTools: () => mcp.toolsText(state.mcpUser),
+    mcpTools: () => mcp.toolsText(state.mcpUser, state.mcpScope),
     todoList: () => todoText(row ? todosOf(row.id) : []),
     consultModels: () => consultTargetsText(model, state.consultWith || [])
   };
