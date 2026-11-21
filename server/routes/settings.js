@@ -1,5 +1,7 @@
 import { db, uid, getSetting, setSetting } from '../db.js';
-import { authMiddleware, adminOnly } from '../auth.js';
+import { authMiddleware } from '../auth.js';
+import { requirePermission, requireAnyPermission, DENIED } from '../lib/authz/middleware.js';
+import { can } from '../lib/authz/effective.js';
 import { oneShot } from '../llm/index.js';
 import { PROVIDER_TYPES, getProviders, typesForClient, isProviderType, publicProvider } from '../lib/providers.js';
 import { llamaEngine } from '../lib/llamacpp.js';
@@ -11,11 +13,11 @@ import { SETTING_FIELDS, coerceSetting, adminSettings } from '../lib/settingfiel
 import { staged } from '../lib/releases.js';
 
 export default function registerSettingsRoutes(app) {
-  app.post('/api/safety-check', authMiddleware, async (req, res) => {
+  app.post('/api/safety-check', authMiddleware, requirePermission('chats.create'), async (req, res) => {
     if (getSetting('safety_enabled', '0') !== '1') return res.json({ allowed: true });
     const text = String(req.body?.text || '').slice(0, 32000);
     if (!text.trim()) return res.json({ allowed: true });
-    const model = resolveSafetyModel(String(req.body?.modelId || ''), !!req.user.is_admin);
+    const model = resolveSafetyModel(String(req.body?.modelId || ''), req.user);
     if (!model) return res.json({ allowed: true });
     let sys = getSetting('safety_prompt', DEFAULT_SAFETY_PROMPT) || DEFAULT_SAFETY_PROMPT;
     const wantReason = getSetting('safety_reason_enabled', '0') === '1';
@@ -37,10 +39,11 @@ export default function registerSettingsRoutes(app) {
     }
   });
 
-  app.get('/api/admin/settings', authMiddleware, adminOnly, (req, res) => res.json(adminSettings()));
+  app.get('/api/admin/settings', authMiddleware, requirePermission('admin.panel'), (req, res) => res.json(adminSettings()));
 
-  app.patch('/api/admin/settings', authMiddleware, adminOnly, (req, res) => {
+  app.patch('/api/admin/settings', authMiddleware, requireAnyPermission('admin.providers', 'admin.tools', 'admin.policy'), (req, res) => {
     const b = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
+    if (Object.keys(b).some(f => SETTING_FIELDS[f] && !can(req.user, SETTING_FIELDS[f].perm))) return res.status(403).json({ error: DENIED });
     const applied = [];
     const keys = [];
     const before = draftFeatures();
@@ -65,17 +68,17 @@ export default function registerSettingsRoutes(app) {
     res.json({ ok: true });
   });
 
-  app.post('/api/admin/setup-complete', authMiddleware, adminOnly, (req, res) => {
+  app.post('/api/admin/setup-complete', authMiddleware, requirePermission('admin.panel'), (req, res) => {
     const done = req.body?.done === false ? '0' : '1';
     setSetting('setup_complete', done);
     logAudit(req, done === '1' ? 'setup.complete' : 'setup.replay');
     res.json({ ok: true });
   });
 
-  app.get('/api/admin/provider-types', authMiddleware, adminOnly, (req, res) => res.json(typesForClient()));
-  app.get('/api/admin/providers', authMiddleware, adminOnly, (req, res) => res.json({ providers: getProviders().map(publicProvider), types: typesForClient() }));
+  app.get('/api/admin/provider-types', authMiddleware, requirePermission('admin.providers'), (req, res) => res.json(typesForClient()));
+  app.get('/api/admin/providers', authMiddleware, requirePermission('admin.providers'), (req, res) => res.json({ providers: getProviders().map(publicProvider), types: typesForClient() }));
 
-  app.get('/api/admin/providers/:id/engine', authMiddleware, adminOnly, async (req, res) => {
+  app.get('/api/admin/providers/:id/engine', authMiddleware, requirePermission('admin.providers'), async (req, res) => {
     const prov = getProviders().find(p => p.id === req.params.id);
     if (!prov) return res.status(404).json({ error: 'not found' });
     if (prov.type !== 'llamacpp') return res.status(400).json({ error: 'Only llama.cpp servers report engine details.' });
@@ -85,7 +88,7 @@ export default function registerSettingsRoutes(app) {
       res.json(info);
     } catch (e) { res.status(502).json({ error: String(e.message || e).slice(0, 200) }); }
   });
-  app.post('/api/admin/providers', authMiddleware, adminOnly, (req, res) => {
+  app.post('/api/admin/providers', authMiddleware, requirePermission('admin.providers'), (req, res) => {
     const b = req.body || {};
     const type = isProviderType(b.type) ? b.type : 'lmstudio';
     const prov = { id: uid(), name: String(b.name || PROVIDER_TYPES[type].label).trim().slice(0, 120), type, base_url: String(b.base_url || '').trim().slice(0, 500) || PROVIDER_TYPES[type].defaultBaseUrl, api_key: String(b.api_key || '').slice(0, 500) };
@@ -94,7 +97,7 @@ export default function registerSettingsRoutes(app) {
     staged(req, 'providers');
     res.json({ id: prov.id });
   });
-  app.patch('/api/admin/providers/:id', authMiddleware, adminOnly, (req, res) => {
+  app.patch('/api/admin/providers/:id', authMiddleware, requirePermission('admin.providers'), (req, res) => {
     const b = req.body || {};
     const list = getProviders().slice();
     const i = list.findIndex(p => p.id === req.params.id);
@@ -113,7 +116,7 @@ export default function registerSettingsRoutes(app) {
     staged(req, 'providers');
     res.json({ ok: true });
   });
-  app.delete('/api/admin/providers/:id', authMiddleware, adminOnly, (req, res) => {
+  app.delete('/api/admin/providers/:id', authMiddleware, requirePermission('admin.providers'), (req, res) => {
     const list = getProviders();
     if (list.length <= 1) return res.status(400).json({ error: 'At least one provider is required.' });
     const next = list.filter(p => p.id !== req.params.id);

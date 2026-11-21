@@ -43,7 +43,14 @@ import FilesSection from '../src/components/admin/sections/FilesSection.jsx';
 import GuardrailsSection from '../src/components/admin/sections/GuardrailsSection.jsx';
 import LauncherSection from '../src/components/admin/sections/LauncherSection.jsx';
 import McpSection from '../src/components/admin/sections/McpSection.jsx';
-import MembersSection from '../src/components/admin/sections/MembersSection.jsx';
+import UsersSection from '../src/components/admin/sections/UsersSection.jsx';
+import GroupsSection from '../src/components/admin/sections/GroupsSection.jsx';
+import RolesSection from '../src/components/admin/sections/RolesSection.jsx';
+import PermissionPicker from '../src/components/admin/people/PermissionPicker.jsx';
+import Pending, { MfaRequired } from '../src/components/pages/Pending.jsx';
+import TotpEnroll, { RecoveryCodes } from '../src/components/settings/TotpEnroll.jsx';
+import ShareDialog from '../src/components/dialogs/ShareDialog.jsx';
+import SharedBar from '../src/components/chat/SharedBar.jsx';
 import ChatHistorySection from '../src/components/admin/sections/ChatHistorySection.jsx';
 import ModelsSection from '../src/components/admin/sections/ModelsSection.jsx';
 import Catalog from '../src/components/admin/models/Catalog.jsx';
@@ -73,6 +80,8 @@ import AgentPanel from '../src/components/composer/AgentPanel.jsx';
 import SecurityTab from '../src/components/settings/SecurityTab.jsx';
 import SearchSection from '../src/components/admin/sections/SearchSection.jsx';
 import SkillsSection from '../src/components/admin/sections/SkillsSection.jsx';
+import SignInSection from '../src/components/admin/sections/SignInSection.jsx';
+import ProvisioningSection from '../src/components/admin/sections/ProvisioningSection.jsx';
 import StorageSection from '../src/components/admin/sections/StorageSection.jsx';
 import UsageSection from '../src/components/admin/sections/UsageSection.jsx';
 import VoiceSection from '../src/components/admin/sections/VoiceSection.jsx';
@@ -88,8 +97,17 @@ cases.push(['PromptLedger', () => React.createElement(PromptLedger, { chatId: 'c
 cases.push(['ShortcutsModal', () => React.createElement(ShortcutsModal, { prefs: {}, onClose: noop, onCustomize: noop })]);
 cases.push(['KeybindsPanel', () => React.createElement(KeybindsPanel, { prefs: {}, setPref: noop })]);
 cases.push(['BranchTree', () => React.createElement(BranchTree, { chatId: 'c1', onSelect: noop, onJump: noop, onClose: noop, onChanged: noop })]);
-cases.push(['Login:signin', () => React.createElement(Login, { onLogin: noop, cfg: { allowSignups: true, firstRun: false } })]);
-cases.push(['Login:firstrun', () => React.createElement(Login, { onLogin: noop, cfg: { allowSignups: true, firstRun: true } })]);
+cases.push(['Login:signin', () => React.createElement(Login, { onLogin: noop, cfg: { signup: 'open', firstRun: false } })]);
+cases.push(['Login:firstrun', () => React.createElement(Login, { onLogin: noop, cfg: { signup: 'open', firstRun: true } })]);
+cases.push(['Login:approval', () => React.createElement(Login, { onLogin: noop, cfg: { signup: 'approval', firstRun: false } })]);
+cases.push(['Pending', () => React.createElement(Pending, { user: { email: 'p@b.c', gate: 'pending' }, cfg: { appName: 'Quill' }, onUser: noop })]);
+cases.push(['ShareDialog', () => React.createElement(ShareDialog, { type: 'project', id: 'p1', title: 'Roadmap', onClose: noop })]);
+cases.push(['SharedBar', () => React.createElement(SharedBar, { owner: 'Ana', onCopy: noop })]);
+cases.push(['MfaRequired', () => React.createElement(MfaRequired, { user: { email: 'p@b.c', gate: 'mfa' }, cfg: { appName: 'Quill' }, onUser: noop })]);
+cases.push(['TotpEnroll', () => React.createElement(TotpEnroll, { onEnabled: noop, onCancel: noop })]);
+cases.push(['Login:directory', () => React.createElement(Login, { onLogin: noop, cfg: { signup: 'closed', ldap: true, providers: [{ id: 'g', label: 'Google' }] } })]);
+cases.push(['RecoveryCodes', () => React.createElement(RecoveryCodes, { codes: ['abcde-fghij', 'klmno-pqrst'] })]);
+cases.push(['SharedBar:busy', () => React.createElement(SharedBar, { owner: 'Ana', busy: true, onCopy: noop })]);
 const chatArts = [{ path: 'trip-plan.md', ext: 'md', size: 1200, v: 2 }, { path: 'flow.mmd', ext: 'mmd', size: 80, v: 1 }];
 cases.push(['ChatArtifacts:empty', () => React.createElement(ChatArtifacts, { chatId: 'c1', files: [], onFilesChanged: noop, onClose: noop })]);
 cases.push(['ChatArtifacts:list', () => React.createElement(ChatArtifacts, { chatId: 'c1', files: chatArts, projects: [{ id: 'p1', name: 'Trip' }], onFilesChanged: noop, onClose: noop })]);
@@ -138,11 +156,11 @@ const kwargModel = {
 };
 cases.push(['ModelDropdown:kwargs:gateShut', () => React.createElement(ModelDropdown, {
   models: [kwargModel], currentId: 'm3', onSelect: noop, open: true, onClose: noop,
-  isAdmin: true, kwargValues: {}, onSetKwarg: noop
+  advanced: true, kwargValues: {}, onSetKwarg: noop
 })]);
 cases.push(['ModelDropdown:kwargs:gateOpen', () => React.createElement(ModelDropdown, {
   models: [kwargModel], currentId: 'm3', onSelect: noop, open: true, onClose: noop,
-  isAdmin: true, kwargValues: { think: 'true', b: '4096' }, onSetKwarg: noop
+  advanced: true, kwargValues: { think: 'true', b: '4096' }, onSetKwarg: noop
 })]);
 
 const composerProps = {
@@ -234,14 +252,14 @@ const makeDocsEdit = (editing) => ({
   setModelField: noop, setCfgField: noop, dirty: false, saving: false, error: '', start: noop, cancel: noop, save: noop
 });
 const docsProps = { appName: 'open-quill', onTry: noop, onNavigate: noop, onExit: noop, edit: makeDocsEdit(false) };
-const docsEditProps = { ...docsProps, isAdmin: true, edit: makeDocsEdit(true) };
+const docsEditProps = { ...docsProps, canEdit: true, edit: makeDocsEdit(true) };
 cases.push(['ModelDocs:overview', () => React.createElement(ModelDocs, { ...docsProps, target: { kind: 'overview', id: null } })]);
 cases.push(['ModelDocs:model', () => React.createElement(ModelDocs, { ...docsProps, target: { kind: 'model', id: 'm1' } })]);
 cases.push(['ModelDocs:legacy', () => React.createElement(ModelDocs, { ...docsProps, target: { kind: 'model', id: 'm2' } })]);
 cases.push(['ModelDocs:page', () => React.createElement(ModelDocs, { ...docsProps, target: { kind: 'page', id: 'p1' } })]);
 cases.push(['ModelDocs:missing', () => React.createElement(ModelDocs, { ...docsProps, target: { kind: 'model', id: 'gone' } })]);
-cases.push(['ModelDocs:admin', () => React.createElement(ModelDocs, { ...docsProps, isAdmin: true, target: { kind: 'model', id: 'm1' } })]);
-cases.push(['ModelDocs:adminOverview', () => React.createElement(ModelDocs, { ...docsProps, isAdmin: true, target: { kind: 'overview', id: null } })]);
+cases.push(['ModelDocs:admin', () => React.createElement(ModelDocs, { ...docsProps, canEdit: true, target: { kind: 'model', id: 'm1' } })]);
+cases.push(['ModelDocs:adminOverview', () => React.createElement(ModelDocs, { ...docsProps, canEdit: true, target: { kind: 'overview', id: null } })]);
 cases.push(['ModelDocs:editing', () => React.createElement(ModelDocs, { ...docsEditProps, target: { kind: 'model', id: 'm1' } })]);
 cases.push(['DocsNav', () => React.createElement(DocsNav, {
   tree: docsTree(docsModelList, docsCfg), target: { kind: 'overview', id: null },
@@ -258,13 +276,14 @@ cases.push(['DocsNav:editing', () => React.createElement(DocsNav, {
 const ADMIN_SECTIONS = [
   ['Interface', InterfaceSection], ['Events', EventsSection], ['Files', FilesSection],
   ['Guardrails', GuardrailsSection], ['Launcher', LauncherSection], ['Mcp', McpSection],
-  ['Members', MembersSection], ['Chat history', ChatHistorySection], ['Models', ModelsSection],
+  ['Users', UsersSection], ['Groups', GroupsSection], ['Roles', RolesSection], ['Sign-in', SignInSection], ['Provisioning', ProvisioningSection], ['Chat history', ChatHistorySection], ['Models', ModelsSection],
   ['Network', NetworkSection], ['Overview', OverviewSection], ['Providers', ProvidersSection],
   ['Quotas', QuotasSection], ['Ratings', RatingsSection], ['Search', SearchSection],
   ['Skills', SkillsSection], ['Storage', StorageSection], ['Usage', UsageSection],
   ['Voice', VoiceSection], ['Releases', ReleasesSection], ['Evaluations', EvalsSection], ['Quality', QualitySection],
 ];
-const adminUser = { id: 'u1', displayName: 'Admin', email: 'a@b.c', isAdmin: true, isOwner: true, prefs: {} };
+const ALL_PERMISSIONS = ['chats.create', 'chats.edit', 'chats.delete', 'chats.export', 'chats.incognito', 'chats.inspect', 'chats.advanced', 'chats.share', 'models.unavailable', 'code.use', 'projects.create', 'projects.share', 'uploads.create', 'tasks.schedule', 'skills.create', 'skills.share', 'mcp.connect', 'tools.web_search', 'tools.mcp', 'tools.memory', 'tools.chat_search', 'tools.reference_files', 'tools.consult', 'voice.dictation', 'voice.call', 'account.delete', 'admin.panel', 'admin.models', 'admin.providers', 'admin.tools', 'admin.interface', 'admin.policy', 'admin.quality', 'admin.usage', 'admin.audit', 'admin.storage', 'admin.publish', 'admin.users', 'admin.groups'];
+const adminUser = { id: 'u1', displayName: 'Admin', email: 'a@b.c', role: 'owner', owner: true, permissions: ALL_PERMISSIONS, prefs: {} };
 for (const [name, Section] of ADMIN_SECTIONS) {
   cases.push(['AdminSection:' + name, () => React.createElement(
     AdminProvider, { user: adminUser, onClose: noop }, React.createElement(Section)
@@ -283,6 +302,8 @@ const mixedModels = [
 ];
 const legacyModel = { ...plain, id: 'm4', kwargs: [], effort_enabled: 1, effort_levels: ['low', 'high'] };
 const inAdmin = (child) => React.createElement(AdminProvider, { user: adminUser, onClose: noop }, child);
+const REGISTRY = ALL_PERMISSIONS.map(id => ({ id, tier: id.startsWith('admin.') ? 'admin' : 'member', category: id.startsWith('admin.') ? 'admin' : 'chats' }));
+cases.push(['PermissionPicker', () => inAdmin(React.createElement(PermissionPicker, { registry: REGISTRY, value: ['chats.create'], locked: new Set(['chats.edit']), lockedNote: 'locked', onChange: noop }))]);
 const editing = (list, Tab) => inAdmin(React.createElement(EditorProvider, { models: list, edit: noop }, React.createElement(Tab)));
 for (const [name, Tab] of MODEL_TABS) {
   cases.push(['ModelTab:' + name + ':single', () => editing([kwargModel], Tab)]);

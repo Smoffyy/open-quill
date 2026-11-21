@@ -3,6 +3,8 @@ import path from 'path';
 import { WebSocketServer } from 'ws';
 import { db, uid, now, getSetting } from '../../db.js';
 import { sessionFromRequest } from '../../auth.js';
+import { can, isActive, gateOf } from '../authz/effective.js';
+import { ownsUpload } from '../authz/acl.js';
 import { buildMessages, streamCompletion, canPrefill, refusePrefill } from '../../llm/index.js';
 import * as websearch from '../websearch.js';
 import * as sandbox from '../../sandbox.js';
@@ -40,13 +42,13 @@ function textField(v, cap = MAX_CONTENT) {
 
 const UPLOAD_URL = /^\/uploads\/[A-Za-z0-9._-]+$/;
 
-function sanitizeAttachments(list) {
+function sanitizeAttachments(list, user) {
   if (!Array.isArray(list)) return [];
   const out = [];
   for (const a of list) {
     if (!a || typeof a !== 'object') continue;
     const url = textField(a.url, 512);
-    if (!UPLOAD_URL.test(url) || url.includes('..')) continue;
+    if (!UPLOAD_URL.test(url) || url.includes('..') || !ownsUpload(user, url)) continue;
     out.push({ url, name: textField(a.name, 256), type: textField(a.type, 128), size: Number(a.size) || 0 });
     if (out.length >= MAX_ATTACHMENTS) break;
   }
@@ -63,7 +65,9 @@ export function initWs(server) {
     maxPayload: MAX_FRAME_BYTES,
     verifyClient: ({ req }, done) => {
       if (!sameOrigin(req)) return done(false, 403, 'Forbidden');
-      if (!sessionFromRequest(req)) return done(false, 401, 'Unauthorized');
+      const r = sessionFromRequest(req);
+      if (!r) return done(false, 401, 'Unauthorized');
+      if (gateOf(r.user, r.session)) return done(false, 403, 'Forbidden');
       done(true);
     }
   });
@@ -71,17 +75,17 @@ export function initWs(server) {
   wss.on('connection', (ws, req) => {
     const r = sessionFromRequest(req);
     let u = r?.user;
-    if (!u) { ws.close(); return; }
+    if (!u || gateOf(u, r.session)) { ws.close(); return; }
     ws.isAlive = true;
     ws.on('pong', () => { ws.isAlive = true; });
-    clients.set(ws, { userId: u.id, sessionId: r.sessionId || null, isAdmin: !!u.is_admin, aborts: new Map(), steers: new Map(), stops: new Set() });
+    clients.set(ws, { userId: u.id, sessionId: r.sessionId || null, isAdmin: can(u, 'admin.panel'), aborts: new Map(), steers: new Map(), stops: new Set() });
     const safeSend = (s) => { if (ws.readyState === 1) { try { ws.send(s); } catch {} } };
     const userId = u.id;
     const liveSend = (s) => live.sendLive(userId, s);
     const liveState = { aborts: live.aborts, steers: live.steers, stops: live.stops, interactive: true };
     const liveWs = { readyState: 1, send: liveSend };
     safeSend(JSON.stringify({ type: 'hello', configVersion: liveVersion() }));
-    if (u.is_admin) safeSend(JSON.stringify({ type: 'presence', admins: presenceList() }));
+    if (can(u, 'admin.panel')) safeSend(JSON.stringify({ type: 'presence', admins: presenceList() }));
     {
       const pending = live.snapshotsFor(u.id);
       if (pending.length) safeSend(JSON.stringify({ type: 'resume', turns: pending }));
@@ -93,9 +97,14 @@ export function initWs(server) {
       const state = clients.get(ws);
       if (!state) return;
       const fresh = db.users.byId(userId);
-      if (!fresh) { ws.close(); return; }
+      if (!fresh || !isActive(fresh) || gateOf(fresh, r.session)) { ws.close(); return; }
       u = fresh;
-      state.isAdmin = !!u.is_admin;
+      state.isAdmin = can(u, 'admin.panel');
+      const allowed = (...perms) => perms.every(p => can(u, p));
+      const refuse = (chatId) => {
+        safeSend(JSON.stringify({ type: 'error', chatId, error: 'You do not have permission to do that.' }));
+        safeSend(JSON.stringify({ type: 'done', chatId }));
+      };
       const ownsChat = (chatId) => {
         if (typeof chatId !== 'string' || !chatId || chatId === 'incognito') return false;
         const c = db.chats.byId(chatId);
@@ -124,6 +133,7 @@ export function initWs(server) {
         return;
       }
       if (msg.type === 'steer') {
+        if (!allowed('chats.create')) return;
         const text = String(msg.text || '').trim().slice(0, 2000);
         const own = msg.chatId === 'incognito' ? state : (ownsChat(msg.chatId) ? liveState : null);
         const c = text && own ? own.aborts.get(msg.chatId) : null;
@@ -139,11 +149,12 @@ export function initWs(server) {
       const client = cleanClient(msg.client);
       rememberClient(u, client);
       if (msg.type === 'incognito') {
+        if (!allowed('chats.create', 'chats.incognito')) { refuse('incognito'); return; }
         try {
-          const baseModel = resolveModel(msg.modelId, state.isAdmin);
-          const model = applyKwargs(baseModel, requestedKwargs(msg), state.isAdmin);
+          const baseModel = resolveModel(msg.modelId, u);
+          const model = applyKwargs(baseModel, requestedKwargs(msg), can(u, 'chats.advanced'));
           if (!model) { safeSend(JSON.stringify({ type: 'error', error: 'Invalid model.' })); safeSend(JSON.stringify({ type: 'done' })); return; }
-          if (model.unavailable && !state.isAdmin) { safeSend(JSON.stringify({ type: 'error', error: (model.unavailable_reason || 'This model is currently unavailable.') })); safeSend(JSON.stringify({ type: 'done' })); return; }
+          if (model.unavailable && !can(u, 'models.unavailable')) { safeSend(JSON.stringify({ type: 'error', error: (model.unavailable_reason || 'This model is currently unavailable.') })); safeSend(JSON.stringify({ type: 'done' })); return; }
           const ibs = budgetStatus(u);
           if (ibs.enforce && ibs.state === 'over') { safeSend(JSON.stringify({ type: 'error', chatId: 'incognito', error: 'You have reached your monthly usage budget. It resets at the start of next month.' })); safeSend(JSON.stringify({ type: 'done', chatId: 'incognito' })); return; }
           if (state.aborts.has('incognito')) { safeSend(JSON.stringify({ type: 'error', chatId: 'incognito', error: 'A reply is already being generated. Wait for it to finish, or stop it first.' })); safeSend(JSON.stringify({ type: 'done', chatId: 'incognito' })); return; }
@@ -201,7 +212,11 @@ export function initWs(server) {
       if (msg.type !== 'chat' && msg.type !== 'regenerate' && msg.type !== 'edit' && msg.type !== 'continue') return;
       if (typeof msg.chatId !== 'string' || !msg.chatId) return;
       const content = textField(msg.content);
-      const attachments = sanitizeAttachments(msg.attachments);
+      const attachments = sanitizeAttachments(msg.attachments, u);
+      if (!allowed('chats.create') || (msg.type === 'edit' && !allowed('chats.edit')) || (attachments.length && !allowed('uploads.create')) || (msg.call && !allowed('voice.call'))) {
+        refuse(msg.chatId);
+        return;
+      }
       const messageId = typeof msg.messageId === 'string' ? msg.messageId : '';
       if (msg.type === 'chat' && !content.trim() && !attachments.length) {
         safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'Nothing to send.' }));
@@ -211,20 +226,21 @@ export function initWs(server) {
       let ownsTurn = false;
       try {
         const chat = db.chats.byId(msg.chatId);
-        const hubModel = resolveModel(msg.modelId, state.isAdmin);
+        const hubModel = resolveModel(msg.modelId, u);
         if (!chat || chat.user_id !== u.id || !hubModel) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'Invalid chat or model.' })); return; }
+        if (chat.mode === 'code' && !allowed('code.use')) { refuse(msg.chatId); return; }
         let routedInfo = null;
         let baseModel = hubModel;
         if (isRouter(hubModel)) {
           const probe = [{ role: 'user', content: msg.type === 'regenerate' || msg.type === 'continue' ? db.messages.lastUserText(chat.id) : content }];
-          const r = resolveRouted(hubModel, probe, attachments, (id) => resolveModel(id, state.isAdmin));
+          const r = resolveRouted(hubModel, probe, attachments, (id) => resolveModel(id, u));
           if (!r.model) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: r.routed?.error || 'This router could not pick a model.' })); safeSend(JSON.stringify({ type: 'done', chatId: msg.chatId })); return; }
           baseModel = r.model;
           routedInfo = r.routed;
         }
-        const model = applyKwargs(baseModel, requestedKwargs(msg), state.isAdmin);
+        const model = applyKwargs(baseModel, requestedKwargs(msg), can(u, 'chats.advanced'));
         if (!model) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'Invalid chat or model.' })); return; }
-        if (model.unavailable && !state.isAdmin) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: (model.unavailable_reason || 'This model is currently unavailable.') })); return; }
+        if (model.unavailable && !can(u, 'models.unavailable')) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: (model.unavailable_reason || 'This model is currently unavailable.') })); return; }
         if (chat.mode === 'code' && model.code_allowed === 0) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'This model is not available in Code. Pick another model.' })); safeSend(JSON.stringify({ type: 'done', chatId: msg.chatId })); return; }
         if (chat.ended) { safeSend(JSON.stringify({ type: 'error', chatId: msg.chatId, error: 'This conversation was ended by the assistant and can no longer be continued.' })); safeSend(JSON.stringify({ type: 'done', chatId: msg.chatId })); return; }
         const bs = budgetStatus(u);

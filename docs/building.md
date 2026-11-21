@@ -74,6 +74,8 @@ The server reads a `.env` file in the project root. If there is none, it creates
 | `DB_ENCRYPTION_KEY` | empty | One key for every database. Empty means each database uses its own key, stored beside its data |
 | `TRUST_PROXY` | off | Set to `1` only when a reverse proxy sets `X-Forwarded-For`. Otherwise the header can be forged |
 | `TRUSTED_ORIGINS` | empty | Extra origins allowed to make changes, comma separated. Only needed when a proxy rewrites the `Host` header and the browser is old |
+| `PUBLIC_URL` | empty | The `https` address people reach the server at. Single sign-on and SCIM build their addresses from it. See [Sign-in methods](sign-in.md#the-public-address) |
+| `TRUSTED_HEADER_*` | off | Sign-in through an authenticating reverse proxy. See [Trusted reverse proxy](sign-in.md#trusted-reverse-proxy) |
 
 A `.env` in the project root takes precedence over one in `server/`. The server logs which file it is using at startup.
 
@@ -84,6 +86,8 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
 A 64-character hex value is used as a raw key. Any other text is used as a passphrase.
+
+For a company deployment behind HTTPS, with single sign-on and provisioning, follow [Enterprise deployment](enterprise.md).
 
 ## Where your data lives
 

@@ -1,25 +1,29 @@
 import { db, uid, now } from '../../db.js';
 import { authMiddleware } from '../../auth.js';
+import { requirePermission, DENIED } from '../../lib/authz/middleware.js';
+import { can } from '../../lib/authz/effective.js';
 import * as sandbox from '../../sandbox.js';
 import { attachmentUrlsOf, purgeUnreferencedUploads } from '../../lib/uploads.js';
 import { stopTurn } from '../../lib/ws/index.js';
 import { cleanTags } from '../../lib/chattags.js';
 import { removeArtifacts } from '../../lib/artifacts.js';
 import { forgetChats } from '../../lib/quality.js';
+import { levelOf, ownsUpload, forgetResource } from '../../lib/authz/acl.js';
 
 const MAX_PINS = 40;
 
 export default function registerCrudRoutes(app) {
-  app.post('/api/chats', authMiddleware, (req, res) => {
+  app.post('/api/chats', authMiddleware, requirePermission('chats.create'), (req, res) => {
     const t = now();
     let projectId = null;
-    if (req.body?.projectId) { const p = db.projects.byId(req.body.projectId); if (p && p.user_id === req.user.id) projectId = p.id; }
+    if (req.body?.projectId) { const p = db.projects.byId(req.body.projectId); if (levelOf(req.user, 'project', p)) projectId = p.id; }
     const mode = req.body?.mode === 'code' ? 'code' : 'chat';
+    if (mode === 'code' && !can(req.user, 'code.use')) return res.status(403).json({ error: DENIED });
     const c = db.chats.insert({ id: uid(), user_id: req.user.id, project_id: mode === 'code' ? null : projectId, title: 'New chat', starred: 0, sandbox: 0, mode, created_at: t, updated_at: t });
     res.json({ id: c.id, title: c.title, updated_at: c.updated_at, starred: false, projectId: c.project_id, mode });
   });
 
-  app.delete('/api/chats/:id', authMiddleware, (req, res) => {
+  app.delete('/api/chats/:id', authMiddleware, requirePermission('chats.delete'), (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (c && c.user_id === req.user.id) {
       stopTurn(c.id);
@@ -29,12 +33,13 @@ export default function registerCrudRoutes(app) {
       forgetChats([c.id]);
       if (!c.project_id) sandbox.remove(c.id);
       removeArtifacts(c.id);
+      forgetResource('chat', c.id);
       purgeUnreferencedUploads(urls);
     }
     res.json({ ok: true });
   });
 
-  app.patch('/api/chats/:id', authMiddleware, (req, res) => {
+  app.patch('/api/chats/:id', authMiddleware, requirePermission('chats.edit'), (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (c && c.user_id === req.user.id) {
       const patch = {};
@@ -42,7 +47,7 @@ export default function registerCrudRoutes(app) {
       if ('starred' in req.body) patch.starred = req.body.starred ? 1 : 0;
       if ('archived' in req.body) patch.archived = req.body.archived ? 1 : 0;
       if ('tags' in req.body) patch.tags = cleanTags(req.body.tags);
-      if (req.user.is_admin && 'genParams' in req.body) {
+      if (can(req.user, 'chats.advanced') && 'genParams' in req.body) {
         const g = req.body.genParams && typeof req.body.genParams === 'object' ? req.body.genParams : {};
         const out = {};
         for (const k of ['temperature', 'top_p', 'top_k', 'min_p', 'max_tokens', 'frequency_penalty', 'presence_penalty', 'repeat_penalty']) {
@@ -51,13 +56,13 @@ export default function registerCrudRoutes(app) {
         }
         patch.gen_params = Object.keys(out).length ? out : null;
       }
-      if (req.user.is_admin && 'systemOverride' in req.body) patch.system_override = String(req.body.systemOverride || '').slice(0, 24000);
+      if (can(req.user, 'chats.advanced') && 'systemOverride' in req.body) patch.system_override = String(req.body.systemOverride || '').slice(0, 24000);
       if ('instructions' in req.body) patch.instructions = String(req.body.instructions || '').slice(0, 8000);
       if ('mcpOff' in req.body) patch.mcp_off = (Array.isArray(req.body.mcpOff) ? req.body.mcpOff : []).filter(id => typeof id === 'string' && /^[\w-]{1,64}$/.test(id)).slice(0, 100);
       if ('projectId' in req.body && c.mode !== 'code') {
         const pid = req.body.projectId;
         if (pid === null || pid === '') patch.project_id = null;
-        else { const p = db.projects.byId(pid); if (p && p.user_id === req.user.id) patch.project_id = pid; }
+        else { const p = db.projects.byId(pid); if (levelOf(req.user, 'project', p)) patch.project_id = p.id; }
       }
       db.chats.update(c.id, patch);
     }
@@ -69,7 +74,7 @@ export default function registerCrudRoutes(app) {
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     res.json({ pins: Array.isArray(c.pinned_files) ? c.pinned_files : [] });
   });
-  app.post('/api/chats/:id/plan/dismiss', authMiddleware, (req, res) => {
+  app.post('/api/chats/:id/plan/dismiss', authMiddleware, requirePermission('chats.edit'), (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     const msg = typeof req.body?.messageId === 'string' ? req.body.messageId.slice(0, 64) : '';
@@ -79,20 +84,21 @@ export default function registerCrudRoutes(app) {
     res.json({ ok: true, planDismissed: { msg, n } });
   });
 
-  app.post('/api/chats/:id/pins', authMiddleware, (req, res) => {
+  app.post('/api/chats/:id/pins', authMiddleware, requirePermission('chats.edit'), (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     const a = req.body || {};
     const url = String(a.url ?? '').slice(0, 512);
     const name = String(a.name ?? '').slice(0, 256);
     if (!url || !name) return res.status(400).json({ error: 'name and url required' });
+    if (!ownsUpload(req.user, url)) return res.status(404).json({ error: 'not found' });
     const pins = Array.isArray(c.pinned_files) ? c.pinned_files.slice() : [];
     if (pins.length >= MAX_PINS) return res.status(400).json({ error: `A chat can pin at most ${MAX_PINS} files.` });
     if (!pins.some(p => p.url === url)) pins.push({ name, url, type: a.type ? String(a.type).slice(0, 128) : '' });
     db.chats.update(c.id, { pinned_files: pins });
     res.json({ pins });
   });
-  app.delete('/api/chats/:id/pins', authMiddleware, (req, res) => {
+  app.delete('/api/chats/:id/pins', authMiddleware, requirePermission('chats.edit'), (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     const url = (req.body && req.body.url) || '';

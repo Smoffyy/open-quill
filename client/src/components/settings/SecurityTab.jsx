@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../../lib/api.js';
-import { t, fmtDateTime, fmtRelative } from '../../i18n.jsx';
+import { t, tp, fmtDateTime, fmtRelative } from '../../i18n.jsx';
 import { Skel, SkelRows } from '../ui/Skeleton.jsx';
 import { browserName, systemName } from '../../lib/useragent.js';
+import TotpEnroll, { RecoveryCodes } from './TotpEnroll.jsx';
 
-const MIN_PASSWORD = 4;
+const MIN_PASSWORD = 8;
 
 function PasswordForm({ email }) {
   const [pw, setPw] = useState({ current: '', next: '', confirm: '' });
@@ -17,7 +18,7 @@ function PasswordForm({ email }) {
     e.preventDefault();
     if (busy) return;
     if (pw.next !== pw.confirm) { setErr({ text: t('New passwords do not match.'), field: 'confirm' }); return; }
-    if (pw.next.length < MIN_PASSWORD) { setErr({ text: t('New password must be at least 4 characters.'), field: 'next' }); return; }
+    if (pw.next.length < MIN_PASSWORD) { setErr({ text: t('New password must be at least 8 characters.'), field: 'next' }); return; }
     setBusy(true);
     try {
       await api.post('/api/me/password', { current: pw.current, next: pw.next });
@@ -52,10 +53,10 @@ function PasswordForm({ email }) {
 
 function TwoFactor({ user, onUpdated }) {
   const [on, setOn] = useState(!!user.twoFactor);
-  const [setup, setSetup] = useState(null);
-  const [code, setCode] = useState('');
+  const [enrolling, setEnrolling] = useState(false);
   const [password, setPassword] = useState('');
   const [recovery, setRecovery] = useState(null);
+  const [left, setLeft] = useState(user.recoveryLeft || 0);
   const [err, setErr] = useState('');
 
   async function run(fn, fallback) {
@@ -63,63 +64,47 @@ function TwoFactor({ user, onUpdated }) {
     try { await fn(); }
     catch (e) { setErr(e?.message || fallback); }
   }
-  const start = () => run(async () => { setRecovery(null); setSetup(await api.post('/api/me/2fa/setup', {})); }, t('Could not start setup.'));
-  const confirm = (e) => {
-    e.preventDefault();
-    if (code.length !== 6) return;
-    run(async () => {
-      const r = await api.post('/api/me/2fa/enable', { code });
-      setSetup(null); setCode(''); setOn(true); setRecovery(r.recoveryCodes);
-      onUpdated?.({ ...user, twoFactor: true });
-    }, t('Invalid code.'));
-  };
+  function enabled(r) {
+    setEnrolling(false); setOn(true); setRecovery(r.recoveryCodes); setLeft(r.recoveryCodes.length);
+    onUpdated?.(r.user || { ...user, twoFactor: true });
+  }
   const disable = () => run(async () => {
     await api.post('/api/me/2fa/disable', { password });
-    setOn(false); setPassword(''); setRecovery(null);
-    onUpdated?.({ ...user, twoFactor: false });
+    setOn(false); setPassword(''); setRecovery(null); setLeft(0);
+    onUpdated?.({ ...user, twoFactor: false, recoveryLeft: 0 });
   }, t('Could not disable.'));
   const regenerate = () => run(async () => {
     const r = await api.post('/api/me/2fa/recovery', { password });
-    setPassword(''); setRecovery(r.recoveryCodes);
+    setPassword(''); setRecovery(r.recoveryCodes); setLeft(r.recoveryCodes.length);
   }, t('Could not regenerate codes.'));
 
   return (
     <div className="sec-block">
       <div className="me-section-h">{t("Two-factor authentication")} {on && <span className="you-tag">{t("enabled")}</span>}</div>
       <div className="dz-err" role="alert">{err}</div>
-      {recovery && (
-        <div className="recovery-box">
-          <div className="muted-note">{t("Save these recovery codes somewhere safe. Each works once if you lose your authenticator. They will not be shown again.")}</div>
-          <div className="recovery-grid">{recovery.map(c => <code key={c}>{c}</code>)}</div>
-        </div>
-      )}
-      {!on && !setup && (
+      {recovery && <RecoveryCodes codes={recovery} />}
+      {!on && !enrolling && (
         <>
-          <div className="muted-note">{t("Require a code from an authenticator app as a second step at login.")}</div>
-          <button className="btn" onClick={start}>{t("Set up two-factor")}</button>
+          <div className="muted-note">
+            {user.twoFactorRequired ? t('Your organization requires two-factor authentication.') : t("Require a code from an authenticator app as a second step at login.")}
+          </div>
+          <button className="btn" onClick={() => { setRecovery(null); setEnrolling(true); }}>{t("Set up two-factor")}</button>
         </>
       )}
-      {!on && setup && (
-        <form onSubmit={confirm}>
-          <div className="muted-note">{t("In your authenticator app, add an account using this key, then enter the 6-digit code it shows.")}</div>
-          <div className="field"><label className="sub">{t("Secret key")}</label><code className="totp-secret">{setup.secret}</code></div>
-          <div className="field"><label className="sub">{t("Or paste this setup URL")}</label><code className="totp-uri">{setup.otpauth}</code></div>
-          <input className="code-input" placeholder="123456" inputMode="numeric" autoComplete="one-time-code" aria-label={t("Two-factor code")}
-            value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} />
-          <div className="edit-actions">
-            <button type="button" className="btn ghost" onClick={() => { setSetup(null); setCode(''); }}>{t("Cancel")}</button>
-            <button type="submit" className="btn primary" disabled={code.length !== 6}>{t("Verify & enable")}</button>
-          </div>
-        </form>
-      )}
+      {!on && enrolling && <TotpEnroll onEnabled={enabled} onCancel={() => setEnrolling(false)} />}
       {on && (
         <>
-          <div className="muted-note">{t("Enter your password to regenerate recovery codes or turn off two-factor.")}</div>
+          <div className="muted-note">
+            {tp(left, '{n} recovery code left.', '{n} recovery codes left.')}{' '}
+            {user.twoFactorRequired
+              ? t('Your organization requires two-factor authentication, so it cannot be turned off. Enter your password to regenerate recovery codes.')
+              : t("Enter your password to regenerate recovery codes or turn off two-factor.")}
+          </div>
           <input type="password" className="short-input" placeholder={t("Password")} aria-label={t("Password")} autoComplete="current-password"
             value={password} onChange={(e) => setPassword(e.target.value)} />
           <div className="edit-actions">
             <button className="btn ghost" onClick={regenerate} disabled={!password}>{t("Regenerate recovery codes")}</button>
-            <button className="btn ghost" onClick={disable} disabled={!password}>{t("Disable two-factor")}</button>
+            {!user.twoFactorRequired && <button className="btn ghost" onClick={disable} disabled={!password}>{t("Disable two-factor")}</button>}
           </div>
         </>
       )}
@@ -129,10 +114,11 @@ function TwoFactor({ user, onUpdated }) {
 
 function Sessions() {
   const [sessions, setSessions] = useState(null);
+  const [idleDays, setIdleDays] = useState(0);
   const [err, setErr] = useState('');
   const load = useCallback(() => {
     setErr('');
-    api.get('/api/me/sessions').then(d => setSessions(d.sessions || [])).catch(() => setErr(t('Could not load sessions.')));
+    api.get('/api/me/sessions').then(d => { setSessions(d.sessions || []); setIdleDays(d.idleDays || 0); }).catch(() => setErr(t('Could not load sessions.')));
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -148,7 +134,7 @@ function Sessions() {
   return (
     <div className="sec-block">
       <div className="me-section-h">{t("Active sessions")}</div>
-      <div className="sec-note">{t("Devices signed in to your account. Sessions expire after 30 days idle.")}</div>
+      <div className="sec-note">{idleDays ? tp(idleDays, 'Devices signed in to your account. A session ends after {n} day without use.', 'Devices signed in to your account. A session ends after {n} days without use.') : t('Devices signed in to your account.')}</div>
       <div className="dz-err" role="alert">{err}</div>
       {sessions && sessions.some(s => !s.current) && (
         <div className="field row">
@@ -176,6 +162,68 @@ function Sessions() {
   );
 }
 
+function SignInMethods({ user }) {
+  const [data, setData] = useState(null);
+  const [proof, setProof] = useState('');
+  const [err, setErr] = useState('');
+  const load = useCallback(() => {
+    api.get('/api/me/identities').then(setData).catch(() => setData(null));
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  if (!data || (!data.identities.length && !data.linkable.length)) return null;
+  const needs = data.hasPassword ? 'password' : user.twoFactor ? 'code' : '';
+  const removable = data.hasPassword || data.identities.length > 1;
+
+  async function link(p) {
+    setErr('');
+    try {
+      const { url } = await api.post(`/api/auth/sso/${p.id}/start`, { intent: 'link', returnTo: '/' });
+      window.location.href = url;
+    } catch (e) {
+      setErr(e?.message || t('Could not start linking.'));
+    }
+  }
+
+  async function unlink(i) {
+    setErr('');
+    try {
+      await api.del('/api/me/identities/' + i.id, needs ? { [needs]: proof } : {});
+      setProof('');
+      load();
+    } catch (e) {
+      setErr(e?.message || t('Could not remove that sign-in method.'));
+    }
+  }
+
+  return (
+    <div className="sec-block">
+      <div className="me-section-h">{t('Sign-in methods')}</div>
+      <div className="sec-note">{t('Providers you can use instead of a password.')}</div>
+      <div className="dz-err" role="alert">{err}</div>
+      {data.identities.map(i => (
+        <div className="field row" key={i.id}>
+          <div>
+            <label>{i.type === 'ldap' ? t('Directory (LDAP)') : i.label || t('Removed provider')}</label>
+            <div className="muted-note">{[i.email, i.lastUsedAt ? t('Last used {when}', { when: fmtRelative(i.lastUsedAt) }) : ''].filter(Boolean).join(' · ')}</div>
+          </div>
+          {removable && <button className="btn ghost" onClick={() => unlink(i)} disabled={!!needs && !proof}>{t('Remove')}</button>}
+        </div>
+      ))}
+      {removable && data.identities.length > 0 && needs && (
+        <input type={needs === 'password' ? 'password' : 'text'} className="short-input" value={proof} onChange={(e) => setProof(e.target.value)}
+          autoComplete={needs === 'password' ? 'current-password' : 'one-time-code'} inputMode={needs === 'code' ? 'numeric' : undefined}
+          placeholder={needs === 'password' ? t('Password') : t('Two-factor code')} aria-label={needs === 'password' ? t('Password to remove a sign-in method') : t('Two-factor code to remove a sign-in method')} />
+      )}
+      {data.linkable.length > 0 && (
+        <div className="edit-actions">
+          {data.linkable.map(p => <button key={p.id} className="btn" onClick={() => link(p)}>{t('Link {name}', { name: p.label })}</button>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function SecurityTab({ user, onUpdated, reviewNotice = false }) {
   return (
     <>
@@ -185,9 +233,14 @@ export default function SecurityTab({ user, onUpdated, reviewNotice = false }) {
           {t('Replies on this workspace are reviewed automatically for quality. An admin can open one of your conversations only when a reply in it is flagged by a check, rated, or saved as a test case, and every time they do it is recorded. Incognito chats are never reviewed.')}
         </div>
       )}
-      <div className="me-section-h">{t("Password")}</div>
-      <PasswordForm email={user.email} />
+      {user.hasPassword && (
+        <>
+          <div className="me-section-h">{t("Password")}</div>
+          <PasswordForm email={user.email} />
+        </>
+      )}
       <TwoFactor user={user} onUpdated={onUpdated} />
+      <SignInMethods user={user} />
       <Sessions />
     </>
   );

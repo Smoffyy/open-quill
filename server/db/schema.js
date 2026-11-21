@@ -91,7 +91,49 @@ CREATE INDEX IF NOT EXISTS idx_eval_runs ON eval_runs(collection_id, created_at)
 CREATE TABLE IF NOT EXISTS quality_checks (id TEXT PRIMARY KEY, ts INTEGER, criterion_id TEXT, chat_id TEXT, verdict TEXT, data TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_quality_ts ON quality_checks(ts);
 CREATE INDEX IF NOT EXISTS idx_quality_criterion ON quality_checks(criterion_id, ts);
-CREATE INDEX IF NOT EXISTS idx_quality_chat ON quality_checks(chat_id);`
+CREATE INDEX IF NOT EXISTS idx_quality_chat ON quality_checks(chat_id);`,
+
+  `CREATE TABLE IF NOT EXISTS roles (id TEXT PRIMARY KEY, rank INTEGER, data TEXT NOT NULL);
+UPDATE users SET data = json_remove(json_set(data,
+    '$.role', CASE
+      WHEN json_extract(data, '$.is_owner') THEN 'owner'
+      WHEN json_extract(data, '$.is_admin') AND json_extract(data, '$.can_publish') = 0 THEN 'editor'
+      WHEN json_extract(data, '$.is_admin') THEN 'admin'
+      ELSE 'user' END,
+    '$.status', 'active',
+    '$.source', 'local'),
+  '$.is_admin', '$.is_owner', '$.can_publish')
+WHERE json_valid(data) AND json_extract(data, '$.role') IS NULL;
+INSERT OR IGNORE INTO roles (id, rank, data)
+  SELECT 'editor', 50, json_object('id', 'editor', 'name', 'Editor', 'description', 'Uses the admin panel and stages changes, but cannot publish them.', 'rank', 50, 'permissions', json('[]'), 'preset', 'legacy-editor', 'created_at', CAST(strftime('%s', 'now') AS INTEGER) * 1000)
+  WHERE EXISTS (SELECT 1 FROM users WHERE json_extract(data, '$.role') = 'editor');
+INSERT OR IGNORE INTO settings (key, value)
+  SELECT 'auth_signup_policy', CASE WHEN value = '"0"' THEN '"closed"' ELSE '"open"' END FROM settings WHERE key = 'allow_signups';
+DELETE FROM settings WHERE key IN ('allow_signups', 'draft:allow_signups');`,
+
+  `CREATE TABLE IF NOT EXISTS user_groups (id TEXT PRIMARY KEY, name_key TEXT, source TEXT, updated_at INTEGER, data TEXT NOT NULL);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_groups_name ON user_groups(source, name_key);
+CREATE TABLE IF NOT EXISTS group_members (id TEXT PRIMARY KEY, group_id TEXT, member_type TEXT, member_id TEXT, source TEXT, data TEXT NOT NULL, FOREIGN KEY(group_id) REFERENCES user_groups(id) ON DELETE CASCADE);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_group_members_link ON group_members(group_id, member_type, member_id);
+CREATE INDEX IF NOT EXISTS idx_group_members_member ON group_members(member_type, member_id);`,
+
+  `CREATE TABLE IF NOT EXISTS acl (id TEXT PRIMARY KEY, resource_type TEXT, resource_id TEXT, principal_type TEXT, principal_id TEXT, level TEXT, data TEXT NOT NULL);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_acl_entry ON acl(resource_type, resource_id, principal_type, principal_id);
+CREATE INDEX IF NOT EXISTS idx_acl_principal ON acl(principal_type, principal_id);
+CREATE TABLE IF NOT EXISTS uploads (id TEXT PRIMARY KEY, user_id TEXT, created_at INTEGER, data TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_uploads_user ON uploads(user_id);`,
+
+  `CREATE TABLE IF NOT EXISTS mfa_factors (id TEXT PRIMARY KEY, user_id TEXT, type TEXT, data TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_mfa_factors_user ON mfa_factors(user_id, type);`,
+
+  `CREATE TABLE IF NOT EXISTS identities (id TEXT PRIMARY KEY, provider_id TEXT, subject TEXT, user_id TEXT, data TEXT NOT NULL);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_identities_subject ON identities(provider_id, subject);
+CREATE INDEX IF NOT EXISTS idx_identities_user ON identities(user_id);`,
+
+  `CREATE TABLE IF NOT EXISTS scim_tokens (id TEXT PRIMARY KEY, hash TEXT, data TEXT NOT NULL);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_scim_tokens_hash ON scim_tokens(hash);
+CREATE INDEX IF NOT EXISTS idx_users_scim_name ON users(lower(json_extract(data,'$.scim.user_name')));
+CREATE INDEX IF NOT EXISTS idx_users_external_id ON users(json_extract(data,'$.external_id'));`
 ];
 
 export const LATEST_VERSION = MIGRATIONS.length + 1;

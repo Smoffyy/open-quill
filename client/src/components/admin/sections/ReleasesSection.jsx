@@ -12,6 +12,7 @@ import { Skel, SkelTable } from '../../ui/Skeleton.jsx';
 import { ChangeRow, fieldLabel } from '../changes/ChangeRow.jsx';
 import { changeCount } from '../changes/count.js';
 import { AREA_TITLES } from '../changes/labels.js';
+import { can } from '../../../lib/permissions.js';
 
 const PAGE = 20;
 
@@ -138,7 +139,7 @@ export default function ReleasesSection() {
                   {expanded && (
                     <div className="rl-body">
                       <Detail version={r.version} />
-                      {!live && user?.canPublish && (
+                      {!live && can(user, 'admin.publish') && (
                         <div>
                           <Btn size="sm" onClick={() => restore(r)}>{t('Restore this version')}</Btn>
                         </div>

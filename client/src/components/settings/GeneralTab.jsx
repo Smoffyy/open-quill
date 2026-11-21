@@ -1,9 +1,10 @@
-import { useState, useRef, useId } from 'react';
+import { useState, useRef, useId, useEffect } from 'react';
 import { api } from '../../lib/api.js';
 import { Download, Upload } from '../ui/icons.jsx';
 import { t, useI18n } from '../../i18n.jsx';
 import { SetRow, SelectRow } from '../ui/controls.jsx';
 import { reopenSettingsAfterReload } from '../../lib/prefs.js';
+import { can } from '../../lib/permissions.js';
 
 function Confirmable({ label, desc, action, ask, confirm, onConfirm, error, password = false }) {
   const [asking, setAsking] = useState(false);
@@ -38,6 +39,8 @@ export default function GeneralTab({ user, draft, onExportChats, onImportChats, 
   const importRef = useRef(null);
   const [clearMsg, setClearMsg] = useState('');
   const [delErr, setDelErr] = useState('');
+  const [models, setModels] = useState([]);
+  useEffect(() => { api.get('/api/models').then(list => setModels(Array.isArray(list) ? list : [])).catch(() => {}); }, []);
 
   async function clearChats() {
     setClearMsg('');
@@ -69,6 +72,13 @@ export default function GeneralTab({ user, draft, onExportChats, onImportChats, 
         <SelectRow label={t("Language")} value={lang} options={langs.map(l => ({ v: l.code, label: l.name }))}
           onPick={(code) => { if (code !== lang) reopenSettingsAfterReload('general'); setLang(code); }} />
       </SetRow>
+      {models.length > 1 && (
+        <SetRow label={t('Default model for new chats')} desc={t('Overrides the default your organization or groups picked.')}>
+          <SelectRow label={t('Default model for new chats')} value={models.some(m => m.id === draft.prefs.defaultModel) ? draft.prefs.defaultModel : ''}
+            options={[{ v: '', label: t('Use the organization default') }, ...models.map(m => ({ v: m.id, label: m.displayName || m.id }))]}
+            onPick={(v) => draft.setPref('defaultModel', v || undefined)} />
+        </SetRow>
+      )}
       <div className="field">
         <label htmlFor="set-instructions">{t("Instructions for the Assistant")}</label>
         <div className="muted-note" id="set-instructions-note">{t("Added to the system prompt of every chat. Leave empty for none.")}</div>
@@ -95,7 +105,8 @@ export default function GeneralTab({ user, draft, onExportChats, onImportChats, 
       <Confirmable label={t("Reset all settings")} desc={t("Back to defaults for this theme. Chats and account are untouched.")}
         action={t("Reset")} ask={t("Reset every setting to this theme's defaults?")}
         confirm={t("Reset")} onConfirm={() => draft.resetPrefs()} />
-      {!user.isOwner && (
+      {user.managed && <div className="muted-note">{t('Your organization manages this account, so it can’t be deleted here.')}</div>}
+      {!user.managed && (user.role === 'pending' || can(user, 'account.delete')) && (
         <Confirmable label={t("Delete account")} desc={t("Permanently removes your account, all chats, and files. This cannot be undone.")}
           action={t("Delete account")} ask={t("Delete your account and everything in it? This cannot be undone.")}
           confirm={t("Delete")} onConfirm={deleteAccount} error={delErr} password />

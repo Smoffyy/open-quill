@@ -32,16 +32,20 @@ function hotp(secretBuf, counter) {
   return (code % 1e6).toString().padStart(6, '0');
 }
 
-export function verifyTotp(secret, token, window = 1) {
+export function totpStep(secret, token, at = Date.now(), window = 1) {
   const clean = String(token || '').replace(/\s/g, '');
-  if (!/^\d{6}$/.test(clean)) return false;
+  if (!/^\d{6}$/.test(clean)) return null;
   const secretBuf = base32Decode(secret);
-  if (!secretBuf.length) return false;
-  const counter = Math.floor(Date.now() / 1000 / 30);
+  if (!secretBuf.length) return null;
+  const counter = Math.floor(at / 1000 / 30);
   for (let w = -window; w <= window; w++) {
-    if (crypto.timingSafeEqual(Buffer.from(hotp(secretBuf, counter + w)), Buffer.from(clean))) return true;
+    if (crypto.timingSafeEqual(Buffer.from(hotp(secretBuf, counter + w)), Buffer.from(clean))) return counter + w;
   }
-  return false;
+  return null;
+}
+
+export function totpCode(secret, at = Date.now()) {
+  return hotp(base32Decode(secret), Math.floor(at / 1000 / 30));
 }
 
 export function otpauthUri(secret, account, issuer) {

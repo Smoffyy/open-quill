@@ -15,6 +15,8 @@ import { nextFitSize, FIT_PASSES } from '../../lib/fittext.js';
 import { useDismiss } from '../../lib/dismiss.js';
 import { pathForChat, pathForCode, pathForProject } from '../../lib/route.js';
 import { collectTags, hasTag } from '../../lib/chattags.js';
+import { can } from '../../lib/permissions.js';
+import { roleLabel } from '../ui/roleLabel.jsx';
 
 const SIDEBAR_CHAT_LIMIT = 40;
 const SIDEBAR_PROJECT_LIMIT = 5;
@@ -99,8 +101,8 @@ function ProfileMenu({ user, anchorRef, onSettings, onAdmin, onPlayground, onCre
     <div className="popover" ref={ref} role="menu" aria-label={t('Profile menu')}
       style={pos ? { position: 'fixed', left: pos.left, bottom: pos.bottom, width: pos.width, right: 'auto' } : { visibility: 'hidden' }}>
       <div className="pm-account">{user.email}</div>
-      {user.isAdmin && <button onClick={onAdmin}><Shield /> {t('Admin Panel')}</button>}
-      {user.isAdmin && <button onClick={onPlayground}><Flask /> {t('Playground')}</button>}
+      {can(user, 'admin.panel') && <button onClick={onAdmin}><Shield /> {t('Admin Panel')}</button>}
+      {can(user, 'admin.models') && <button onClick={onPlayground}><Flask /> {t('Playground')}</button>}
       <button onClick={onSettings}><Gear /> {t('Settings')}</button>
       <button onClick={onCredits}><Heart /> {t('Credits')}</button>
       <button onClick={onChangelog}><Sparkles /> {t('Changelog')}</button>
@@ -123,7 +125,7 @@ function ModeSwitch({ mode, onMode }) {
   );
 }
 
-function ChatRow({ c, active, showTrash, projects = [], projectsReady = true, allTags, unreadIds, onMoveToProject, onOpen, onDelete, onToggleStar, onToggleArchive, onSetTags, busyIds, onStopChat }) {
+function ChatRow({ c, active, showTrash, projects = [], projectsReady = true, allTags, unreadIds, onMoveToProject, onShare, onOpen, onDelete, onToggleStar, onToggleArchive, onSetTags, busyIds, onStopChat }) {
   const busy = !!(busyIds && busyIds.has(c.id));
   const unread = !busy && !active && !!(unreadIds && unreadIds.has(c.id));
   const [menu, setMenu] = useState(null);
@@ -151,7 +153,7 @@ function ChatRow({ c, active, showTrash, projects = [], projectsReady = true, al
           onClick={(e) => { e.stopPropagation(); const at = menuAtButton(e.currentTarget); setMenu(m => m ? null : at); }}><DotsV /></button>
       )}
       {menu && <ChatMenu chat={c} at={menu} projects={projects} projectsReady={projectsReady} busy={busy} anchorRef={btnRef} allTags={allTags}
-        onStopChat={onStopChat} onToggleStar={onToggleStar} onToggleArchive={onToggleArchive} onSetTags={onSetTags} onMoveToProject={onMoveToProject}
+        onStopChat={onStopChat} onToggleStar={onToggleStar} onToggleArchive={onToggleArchive} onSetTags={onSetTags} onMoveToProject={onMoveToProject} onShare={onShare}
         onDelete={onDelete} onClose={() => setMenu(null)} />}
     </div>
   );
@@ -160,7 +162,7 @@ function ChatRow({ c, active, showTrash, projects = [], projectsReady = true, al
 function Sidebar({
   user, chats, onSearch, chatsLoaded = true, activeId, appName, appIcon, onNew, onOpen, onDelete, onToggleStar,
   collapsed, onToggle, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onPrivacy, onLogout, version, onChatsOverview,
-  projects = [], projectsReady = true, onProjects, onOpenProject, onNewProject, onMoveToProject, mobileOpen = false, onMobileClose,
+  projects = [], projectsReady = true, onProjects, onOpenProject, onNewProject, onMoveToProject, onShare = null, mobileOpen = false, onMobileClose,
   onArtifacts, onScheduled, onCustomize, onModelDocs, showModelDocs = true, onVersion, dest = null,
   docs = null, busyChats = [], onStopChat, mode = 'chat', onMode, onToggleArchive, onSetTags, unreadChats = []
 }) {
@@ -268,7 +270,7 @@ function Sidebar({
     }
     return g;
   })();
-  const rowProps = { onOpen, onDelete, onToggleStar, onToggleArchive, onSetTags, allTags, unreadIds, busyIds, onStopChat, projects, projectsReady, onMoveToProject };
+  const rowProps = { onOpen, onDelete, onToggleStar, onToggleArchive, onSetTags, allTags, unreadIds, busyIds, onStopChat, projects, projectsReady, onMoveToProject, onShare };
   const row = (c) => <ChatRow key={c.id} c={c} active={c.id === activeId} showTrash={showTrash} {...rowProps} />;
 
   return (
@@ -426,7 +428,7 @@ function Sidebar({
           <div className="avatar">{(user.displayName || user.email)[0].toUpperCase()}</div>
           <div className="profile-info">
             <div className="name">{user.displayName}</div>
-            <div className="plan">{user.isAdmin ? t('Admin') : t('Member')}</div>
+            <div className="plan">{roleLabel(user.role, user.roleName)}</div>
           </div>
           <ChevDown className="profile-caret" aria-hidden="true" />
         </button>

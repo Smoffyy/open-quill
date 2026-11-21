@@ -1,4 +1,4 @@
-import { Panel, Upload, Cube, Sliders, Users, Chat, Globe, Mic, FileText, Bulb, Plug, Shield, Eye, Wave, Star, Box, Gear, Clock, Palette, Flask, Gauge } from '../ui/icons.jsx';
+import { Panel, Upload, Cube, Sliders, Users, Chat, Globe, Mic, FileText, Bulb, Plug, Shield, Eye, Wave, Star, Box, Gear, Clock, Palette, Flask, Gauge, Briefcase, Tag, Link, Refresh } from '../ui/icons.jsx';
 import { tk } from '../../i18n.jsx';
 
 /* Each section declares everything the shell needs to render it:
@@ -58,11 +58,29 @@ export const NAV = [
     { id: 'launcher', label: tk('New chat screen'), Icon: Chat, title: tk('New chat screen'),
       blurb: tk('Greetings and one-tap prompts shown before the first message.'),
       find: tk('home greeting welcome quick prompts starters'),
-      index: [tk('Greetings'), tk('Starter prompts')] },
-    { id: 'members', label: tk('Members'), Icon: Users, title: tk('Members'),
-      blurb: tk('Accounts, roles, per-member spend caps, and registration.'),
-      find: tk('users people admins roles accounts signup budget'),
-      index: [tk('Accept new sign-ups'), tk('Role'), tk('Remove member')] }
+      index: [tk('Greetings'), tk('Starter prompts')] }
+  ] },
+  { group: tk('People'), items: [
+    { id: 'users', label: tk('Users'), Icon: Users, title: tk('Users'),
+      blurb: tk('Accounts, approvals, roles, per-user spend caps, and who may sign up.'),
+      find: tk('members people admins owners roles accounts signup registration approval pending disable budget'),
+      index: [tk('Registration'), tk('New accounts'), tk('Allowed email domains'), tk('Approve'), tk('Role'), tk('Disable'), tk('Sign out everywhere'), tk('Remove account'), tk('See access')] },
+    { id: 'groups', label: tk('Groups'), Icon: Briefcase, title: tk('Groups'),
+      blurb: tk('Teams of people, and groups inside groups, that add permissions and a default model for their members.'),
+      find: tk('teams departments nesting inherit permissions members default model'),
+      index: [tk('New group'), tk('People'), tk('Groups inside this one'), tk('Default model for new chats')] },
+    { id: 'roles', label: tk('Roles'), Icon: Tag, title: tk('Roles'),
+      blurb: tk('Baseline trust levels, what every user can do, and custom roles with admin permissions.'),
+      find: tk('rank owner admin user pending custom baseline permissions'),
+      index: [tk('New role'), tk('Rank'), tk('Admin permissions')] },
+    { id: 'signin', label: tk('Sign-in'), Icon: Link, title: tk('Sign-in'),
+      blurb: tk('Single sign-on with Google, Microsoft, GitHub or any OpenID Connect provider, directory sign-in over LDAP, and the server’s public address.'),
+      find: tk('sso oidc oauth google microsoft entra github okta keycloak login provider redirect callback public address ldap active directory openldap sync'),
+      index: [tk('Public address'), tk('Sign-in providers'), tk('Directory (LDAP)')] },
+    { id: 'provisioning', label: tk('Provisioning'), Icon: Refresh, title: tk('Provisioning'),
+      blurb: tk('SCIM 2.0 provisioning, so your identity provider creates, updates and removes accounts and groups.'),
+      find: tk('scim provisioning okta entra azure onelogin jumpcloud token deprovision lifecycle sync'),
+      index: [tk('SCIM provisioning'), tk('Tokens'), tk('Recent activity')] }
   ] },
   { group: tk('Policy'), items: [
     { id: 'guardrails', label: tk('Guardrails'), Icon: Shield, title: tk('Guardrails'),
@@ -98,7 +116,7 @@ export const NAV = [
       find: tk('feedback thumbs quality reviews votes'),
       index: [tk('Ratings')] },
     { id: 'events', label: tk('Event log'), Icon: Clock, title: tk('Event log'),
-      blurb: tk('Sensitive admin actions, retained for 120 days.'),
+      blurb: tk('Sign-ins, access changes, provisioning and admin actions, retained for 120 days.'),
       find: tk('audit history trail security actions'),
       index: [tk('Export CSV'), tk('Actor'), tk('Action')] },
     { id: 'storage', label: tk('Storage'), Icon: Box, title: tk('Storage'),
@@ -126,7 +144,8 @@ const ALIASES = {
   analytics: 'usage',
   feedback: 'ratings',
   audit: 'events',
-  databases: 'storage'
+  databases: 'storage',
+  members: 'users'
 };
 
 export function resolveSection(id) {

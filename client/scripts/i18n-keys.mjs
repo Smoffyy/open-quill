@@ -43,6 +43,7 @@ const EXTRA_KEYS = [
   'This task is still running from last time.', 'No model is available to run this task.',
   'This router could not pick a model.', 'This model is currently unavailable.',
   'The monthly usage budget has been reached.', 'The task could not start.',
+  'The task owner is not allowed to run scheduled tasks.',
 ];
 
 const TABLE_SCANS = [
@@ -51,6 +52,7 @@ const TABLE_SCANS = [
   { file: 'lib/keybinds.js', re: /\b(?:label|group):\s*'((?:[^'\\]|\\.)*)'/g },
   { file: 'lib/playground.js', re: /\b(?:label|hint):\s*'((?:[^'\\]|\\.)*)'/g },
   { file: 'lib/presets.js', re: /\blabel:\s*'((?:[^'\\]|\\.)*)'/g },
+  { file: 'lib/permissionlabels.js', re: /\b(?:label|note):\s*'((?:[^'\\]|\\.)*)'/g },
   { file: 'components/chat/ToolCard.jsx', re: /\bplural\([^,]+,\s*'((?:[^'\\]|\\.)*)'/g },
   { file: 'components/chat/ToolCard.jsx', re: /\bplural\([^,]+,\s*'(?:[^'\\]|\\.)*'\s*,\s*'((?:[^'\\]|\\.)*)'/g },
 ];
@@ -63,7 +65,8 @@ const SERVER_SOURCES = [
   'routes', 'auth.js',
   ...['mcp', 'mcpnet', 'evals', 'quality', 'regression', 'judge', 'userskills', 'skillfile', 'workspaceskills', 'tasks',
     'projectfiles', 'releases', 'changes', 'draft', 'providers', 'theme',
-    'playground', 'playrun', 'budget', 'roles'].map(n => `lib/${n}.js`)
+    'playground', 'playrun', 'budget'].map(n => `lib/${n}.js`),
+  'lib/authz', 'lib/identity'
 ];
 
 const SERVER_RES = [

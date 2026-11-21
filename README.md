@@ -48,15 +48,28 @@ Prefer not to build? Download the [latest release](https://github.com/Smoffyy/op
 
 ### Let other people on your network in
 
-Set `HOST=0.0.0.0` in `.env` and restart. Then turn on **Accept new sign-ups** under **Admin Panel → Members**.
+Set `HOST=0.0.0.0` in `.env` and restart. Then set **Registration** under **Admin Panel → Users** to open or approval.
 
 ## What it does
 
 - Works with local and cloud models, including several at once
 - Gives the assistant a workspace per chat, with files and a shell
 - Projects, memory, scheduled tasks, web search and MCP connectors
-- Team accounts with roles, and releases you can roll back
+- Team accounts with roles, groups and sharing, and releases you can roll back
+- Single sign-on, LDAP and Active Directory, SCIM provisioning and two-factor, for companies
 - Two interface styles, light and dark modes, ten languages
+
+## For organizations
+
+Open Quill can serve a whole company from your own hardware:
+
+- Single sign-on with Microsoft Entra ID, Google Workspace, Okta, GitHub, Keycloak or any OpenID Connect provider
+- LDAP and Active Directory sign-in, and sign-in through an authenticating reverse proxy
+- SCIM 2.0 provisioning, so your identity provider creates, updates and removes accounts and groups
+- Roles, custom roles, nested groups, per-group model access, and sharing of projects, chats and skills
+- A two-factor policy, and an event log of sign-ins, access changes and provisioning with JSON Lines export for your SIEM
+
+Start with [Setting up Open Quill for your organization](docs/organization-setup.md).
 
 ## Docs
 
@@ -65,6 +78,8 @@ Set `HOST=0.0.0.0` in `.env` and restart. Then turn on **Accept new sign-ups** u
 - [**Models & Reasoning**](docs/models.md)
 - [**Admin Guide**](docs/admin-guide.md)
 - [**Privacy & Security**](docs/privacy-security.md)
+- [**Organization Setup**](docs/organization-setup.md)
+- [**Enterprise Deployment**](docs/enterprise.md)
 - [**All documentation**](docs/README.md)
 
 ## Contributing

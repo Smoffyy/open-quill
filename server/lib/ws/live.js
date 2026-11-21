@@ -178,3 +178,7 @@ export function stopTurn(chatId) {
   stops.add(chatId);
   aborts.get(chatId)?.abort();
 }
+
+export function stopUserTurns(userId) {
+  for (const rec of [...turns.values()]) if (rec.userId === userId) stopTurn(rec.chatId);
+}

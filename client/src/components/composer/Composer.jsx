@@ -54,7 +54,7 @@ function ActiveChip({ icon, label, onRemove }) {
 
 export default function Composer({
   value, onChange, onSend, onStop, streaming, stopping = false, models, modelsReady = true,
-  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, budget, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, onOpenProject, projects = [], onSetProject, onNewChat, onShortcuts,
+  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, advanced, budget, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, onOpenProject, projects = [], onSetProject, onNewChat, onShortcuts,
   voiceMic = false, voiceCall = false, sttEngine = 'browser', onStartCall, callActive = false,
   safetyFlagged = false, safetyChecking = false, safetyVerbose = false, safetyReason = '',
   styles = [], styleId = 'normal', onSelectStyle, onSaveStyles,
@@ -339,7 +339,7 @@ export default function Composer({
   }, [unavailable]);
   const hasImage = files.some(f => f.preview);
   const budgetState = budget && budget.cap ? budget.state : 'none';
-  const budgetBlock = budgetState === 'over' && budget?.enforce && !canUseUnavailable;
+  const budgetBlock = budgetState === 'over' && budget?.enforce;
   const showBudgetBanner = budgetState === 'warn' || budgetState === 'over';
   const otherBanner = showBudgetBanner || safetyFlagged || conversationEnded || removedModel || panel;
   const anyBanner = bannerMounted || otherBanner || sunsetInfo;
@@ -404,7 +404,7 @@ export default function Composer({
         <div className="unavail-row">
           <span className="unavail-msg">
             {budgetState === 'over'
-              ? <><strong>{t("Monthly budget reached.")}</strong> {t('{spent} of {cap} used.', { spent: fmtUsd(budget.spent), cap: fmtUsd(budget.cap) })}{budget.enforce && !canUseUnavailable ? ' ' + t('New messages are paused until next month.') : ''}</>
+              ? <><strong>{t("Monthly budget reached.")}</strong> {t('{spent} of {cap} used.', { spent: fmtUsd(budget.spent), cap: fmtUsd(budget.cap) })}{budget.enforce ? ' ' + t('New messages are paused until next month.') : ''}</>
               : <><strong>{t("Approaching your monthly budget.")}</strong> {t('{spent} of {cap} used.', { spent: fmtUsd(budget.spent), cap: fmtUsd(budget.cap) })}</>}
           </span>
         </div>
@@ -668,7 +668,7 @@ export default function Composer({
           <ModelPickerSlot at="composer">
             <div className="model-slot">
               <ModelDropdown models={models} modelsReady={modelsReady} currentId={currentId} onSelect={onSelect}
-                extended={extended} onToggleExtended={onToggleExtended} up={modelUp} isAdmin={canUseUnavailable}
+                extended={extended} onToggleExtended={onToggleExtended} up={modelUp} advanced={advanced}
                 reasoningEffort={reasoningEffort} onSetEffort={onSetEffort}
                 kwargValues={kwargValues} onSetKwarg={onSetKwarg}
                 modelHasBg={modelHasBg} bgInChat={bgInChat} onToggleBgInChat={onToggleBgInChat} />

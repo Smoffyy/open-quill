@@ -1,6 +1,7 @@
 import { recordUsage } from './budget.js';
 import { oneShotFull, stripThink } from '../llm/index.js';
 import { resolveModel } from './models.js';
+import { can } from './authz/effective.js';
 import { readImageDataUri, imageKind } from './uploads.js';
 import { activePath } from './tree.js';
 import { promptVars } from './convo.js';
@@ -20,11 +21,12 @@ export function sanitizeConsultModels(raw) {
   return out;
 }
 
-export function consultTargets(model, isAdmin) {
+export function consultTargets(model, viewer) {
+  const unavailableOk = typeof viewer === 'boolean' ? viewer : can(viewer, 'models.unavailable');
   const ids = Array.isArray(model?.consult_models) ? model.consult_models : [];
   return ids
-    .map(id => resolveModel(id, isAdmin))
-    .filter(t => t && t.id !== model.id && t.enabled && t.kind !== 'router' && (isAdmin || !t.unavailable));
+    .map(id => resolveModel(id, viewer))
+    .filter(t => t && t.id !== model.id && t.kind !== 'router' && (unavailableOk || !t.unavailable));
 }
 
 export function consultTargetsText(model, targets) {

@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Trash, Star, Chevron, Box, Stop, Download, ArchiveIcon, Tag, Check } from '../ui/icons.jsx';
+import { Trash, Star, Chevron, Box, Stop, Download, ArchiveIcon, Tag, Check, Users } from '../ui/icons.jsx';
 import { t } from '../../i18n.jsx';
 import { Skel, SkelMenu } from '../ui/Skeleton.jsx';
 import { SubItem } from '../ui/Submenu.jsx';
@@ -8,7 +8,7 @@ import { useDismiss } from '../../lib/dismiss.js';
 import { useSubmenus } from '../../lib/submenu.js';
 import { MAX_TAGS, MAX_TAG_LENGTH, hasTag, toggleTag } from '../../lib/chattags.js';
 
-export function ChatMenu({ chat, at, projects = [], projectsReady = true, busy = false, anchorRef, allTags = [], onStopChat, onToggleStar, onToggleArchive, onSetTags, onMoveToProject, onDelete, onClose }) {
+export function ChatMenu({ chat, at, projects = [], projectsReady = true, busy = false, anchorRef, allTags = [], onStopChat, onToggleStar, onToggleArchive, onSetTags, onMoveToProject, onShare, onDelete, onClose }) {
   const [pos, setPos] = useState({ ...at, ready: false });
   const sub = useSubmenus();
   const menuRef = useRef(null);
@@ -58,6 +58,11 @@ export function ChatMenu({ chat, at, projects = [], projectsReady = true, busy =
       <button onClick={stop(() => onToggleStar(chat.id))}>
         <Star style={{ width: 20 }} /> {chat.starred ? t('Unstar chat') : t('Star chat')}
       </button>
+      {onShare && chat.mode !== 'code' && (
+        <button onClick={stop(() => onShare(chat))}>
+          <Users style={{ width: 20 }} /> {t('Share')}
+        </button>
+      )}
       {onMoveToProject && chat.mode !== 'code' && (
         <SubItem id="project" sub={sub} wrapClass="cm-sub" flyoutClass="chat-menu cm-flyout"
           trigger={({ onClick }) => (

@@ -16,6 +16,8 @@ export function clientIp(req) {
   return String(req?.socket?.remoteAddress || '').trim().slice(0, 64);
 }
 
+export const actingAs = (req, user) => ({ user, headers: req.headers, socket: req.socket });
+
 export function logAudit(req, action, target = {}) {
   try {
     db.audit.insert({

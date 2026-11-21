@@ -73,10 +73,14 @@ function isPrivateV6(ip) {
 
 let rawFetch = null;
 
-export function unguardedFetch(input, init) {
+export function directFetch(reason, input, init) {
   const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input?.url || '';
-  try { if (url) recordEgress(new URL(url).hostname, true, 'web search'); } catch {}
+  try { if (url) recordEgress(new URL(url).hostname, true, reason); } catch {}
   return (rawFetch || globalThis.fetch)(input, init);
+}
+
+export function unguardedFetch(input, init) {
+  return directFetch('web search', input, init);
 }
 
 export function webSearchEgressAllowed() {

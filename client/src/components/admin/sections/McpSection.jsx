@@ -10,7 +10,7 @@ import { statusOf } from '../../settings/McpCard.jsx';
 import McpTools from '../../settings/McpTools.jsx';
 import { onFrame } from '../../../lib/wsbus.js';
 
-const BLANK = { name: '', transport: 'stdio', command: '', args: '', env: '', url: '', headers: '', timeout_s: 0, enabled: true };
+const BLANK = { name: '', transport: 'stdio', command: '', args: '', env: '', url: '', headers: '', timeout_s: 0, enabled: true, access_groups: [] };
 const TONE = { __proto__: null, connected: 'good', error: 'bad', new: undefined };
 
 const savedNote = (names, touched) => (names?.length && !touched ? t('Saved: {names}. Values stay on the server.', { names: names.join(', ') }) : '');
@@ -26,6 +26,8 @@ export default function McpSection() {
   const [policy, setPolicy] = useState(null);
   const [hostsText, setHostsText] = useState('');
   const [policyNote, setPolicyNote] = useState('');
+  const [groups, setGroups] = useState([]);
+  useEffect(() => { api.get('/api/admin/groups').then(d => setGroups(d.groups || [])).catch(() => {}); }, []);
   const imported = useMemo(() => parseMcpConfig(paste), [paste]);
 
   useEffect(() => {
@@ -307,6 +309,19 @@ export default function McpSection() {
             <ToggleRow label={t('Expose these tools to models')} on={draft.enabled}
               onToggle={() => setDraft(d => ({ ...d, enabled: !d.enabled }))} />
           </Rows>
+          {groups.length > 0 && (
+            <Card title={t('Who can use it')} sub={t('Leave every group off and everyone can use it. Turn some on and only their members can, plus whoever manages tools.')}>
+              <Rows>
+                {groups.map(g => {
+                  const on = (draft.access_groups || []).includes(g.id);
+                  return (
+                    <ToggleRow key={g.id} label={g.name} on={on}
+                      onToggle={() => setDraft(d => ({ ...d, access_groups: on ? (d.access_groups || []).filter(x => x !== g.id) : [...(d.access_groups || []), g.id] }))} />
+                  );
+                })}
+              </Rows>
+            </Card>
+          )}
           {error && <Note tone="bad">{error}</Note>}
         </Dialog>
       )}

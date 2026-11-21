@@ -545,3 +545,118 @@ export async function mockResponses({ key = 'sk-test', respond, models = [], rej
   const port = await listen(server);
   return { url: `http://127.0.0.1:${port}/v1`, requests, issued, close: () => new Promise(r => { server.closeAllConnections?.(); server.close(r); }) };
 }
+
+function readForm(req) {
+  return new Promise((resolve) => {
+    const chunks = [];
+    req.on('data', c => chunks.push(c));
+    req.on('end', () => resolve(new URLSearchParams(Buffer.concat(chunks).toString('utf8'))));
+  });
+}
+
+export async function mockOidc({ clientId = 'oq-client', clientSecret = 'oq-secret', autoClaims = null } = {}) {
+  const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const jwk = { ...publicKey.export({ format: 'jwk' }), kid: 'mock-1', alg: 'RS256', use: 'sig' };
+  const codes = new Map();
+  const issued = new Map();
+  const tokens = [];
+  let base = '';
+  const encode = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+  const signed = (claims) => {
+    const data = encode({ alg: 'RS256', typ: 'JWT', kid: jwk.kid }) + '.' + encode(claims);
+    return data + '.' + crypto.sign('sha256', Buffer.from(data), privateKey).toString('base64url');
+  };
+  const server = http.createServer(async (req, res) => {
+    const url = new URL(req.url, base);
+    const json = (status, body) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
+    if (url.pathname === '/.well-known/openid-configuration') {
+      return json(200, {
+        issuer: base, authorization_endpoint: base + '/authorize', token_endpoint: base + '/token', jwks_uri: base + '/jwks',
+        userinfo_endpoint: base + '/userinfo', response_types_supported: ['code'], subject_types_supported: ['public'],
+        id_token_signing_alg_values_supported: ['RS256'], code_challenge_methods_supported: ['S256'],
+        token_endpoint_auth_methods_supported: ['client_secret_post', 'client_secret_basic']
+      });
+    }
+    if (url.pathname === '/jwks') return json(200, { keys: [jwk] });
+    if (url.pathname === '/authorize' && autoClaims) {
+      res.writeHead(302, { Location: grant(url, autoClaims).href });
+      return res.end();
+    }
+    if (url.pathname === '/token' && req.method === 'POST') {
+      const form = await readForm(req);
+      tokens.push(form);
+      const rec = codes.get(form.get('code'));
+      codes.delete(form.get('code'));
+      const challenge = crypto.createHash('sha256').update(form.get('code_verifier') || '').digest('base64url');
+      if (!rec || form.get('client_id') !== clientId || form.get('client_secret') !== clientSecret
+        || form.get('redirect_uri') !== rec.redirectUri || challenge !== rec.challenge) return json(400, { error: 'invalid_grant' });
+      const t = Math.floor(Date.now() / 1000);
+      const id_token = signed({ iss: base, aud: clientId, iat: t, exp: t + 300, nonce: rec.nonce, ...rec.claims });
+      const access = 'at-' + crypto.randomUUID();
+      issued.set(access, rec.claims);
+      return json(200, { access_token: access, token_type: 'Bearer', expires_in: 300, id_token });
+    }
+    if (url.pathname === '/userinfo') {
+      const claims = issued.get(String(req.headers.authorization || '').replace(/^Bearer /, ''));
+      return claims ? json(200, { ...claims, ...(claims.userinfo || {}) }) : json(401, { error: 'invalid_token' });
+    }
+    json(404, { error: 'not_found' });
+  });
+  function grant(u, claims) {
+    if (u.origin !== base || u.searchParams.get('client_id') !== clientId) throw new Error('authorization request for another client');
+    const code = crypto.randomUUID();
+    codes.set(code, { redirectUri: u.searchParams.get('redirect_uri'), challenge: u.searchParams.get('code_challenge'), nonce: u.searchParams.get('nonce'), claims });
+    const back = new URL(u.searchParams.get('redirect_uri'));
+    back.searchParams.set('code', code);
+    back.searchParams.set('state', u.searchParams.get('state'));
+    return back;
+  }
+  const port = await listen(server);
+  base = `http://127.0.0.1:${port}`;
+  return {
+    url: base, clientId, clientSecret, tokens,
+    authorize: (authUrl, claims) => grant(new URL(authUrl), claims),
+    close: () => new Promise(r => { server.closeAllConnections?.(); server.close(r); })
+  };
+}
+
+export async function mockLdap({ base = 'dc=example,dc=com', serviceDn = 'cn=svc,dc=example,dc=com', servicePassword = 'svc-pass' } = {}) {
+  const ldap = (await import('ldapjs')).default;
+  const people = new Map();
+  const server = ldap.createServer();
+  const norm = (dn) => String(dn).toLowerCase().replace(/\s+/g, '');
+  server.bind(base, (req, res, next) => {
+    const dn = norm(req.dn.toString());
+    const password = String(req.credentials || '');
+    const person = [...people.values()].find(p => norm(p.dn) === dn);
+    const ok = (dn === norm(serviceDn) && password === servicePassword) || (person && password && password === person.password);
+    if (!ok) return next(new ldap.InvalidCredentialsError());
+    res.end();
+    return next();
+  });
+  server.search(base, (req, res, next) => {
+    for (const p of people.values()) {
+      if (!norm(p.dn).endsWith(norm(req.dn.toString()))) continue;
+      if (!req.filter.matches(p.attributes)) continue;
+      const wanted = req.attributes.length ? req.attributes : Object.keys(p.attributes);
+      const picked = {};
+      for (const name of wanted) {
+        const key = Object.keys(p.attributes).find(k => k.toLowerCase() === name.toLowerCase());
+        if (key) picked[name] = p.attributes[key];
+      }
+      res.send(new ldap.SearchEntry({ messageId: res.messageId, objectName: p.dn, attributes: ldap.Attribute.fromObject(picked) }));
+    }
+    res.end();
+    return next();
+  });
+  const port = await new Promise((resolve) => { server.listen(0, '127.0.0.1', () => resolve(server.address().port)); });
+  return {
+    url: `ldap://127.0.0.1:${port}`, base, serviceDn, servicePassword,
+    add(uid, { password, mail, cn, uuid, memberOf = [] }) {
+      const dn = `uid=${uid},ou=people,${base}`;
+      people.set(uid, { dn, password, attributes: { objectclass: ['inetOrgPerson'], uid, mail, cn, entryuuid: uuid, memberof: memberOf } });
+    },
+    remove(uid) { people.delete(uid); },
+    close: () => new Promise(r => { server.close(r); })
+  };
+}

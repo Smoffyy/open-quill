@@ -1,5 +1,6 @@
 import { db, uid, now, getSetting } from '../db.js';
 import { cacheRates } from './pricing.js';
+import { can } from './authz/effective.js';
 
 export function monthStartMs() {
   const d = new Date();
@@ -22,7 +23,7 @@ export function budgetConfig() {
 export function budgetFor(user) {
   if (user.budget != null && Number(user.budget) >= 0) return Number(user.budget);
   const cfg = budgetConfig();
-  return user.is_admin ? cfg.admin : cfg.user;
+  return can(user, 'admin.panel') ? cfg.admin : cfg.user;
 }
 
 export function budgetStatus(user) {

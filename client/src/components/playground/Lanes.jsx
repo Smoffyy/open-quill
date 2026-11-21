@@ -72,7 +72,7 @@ function LaneOptions({ lane, row, onChange }) {
     <div className="pg-opts">
       <div className="cp-menu-empty">{t('Run options')}</div>
       {shown.map(d => (
-        <KwargControl key={d.id} def={d} value={values[d.id]} isAdmin
+        <KwargControl key={d.id} def={d} value={values[d.id]} advanced
           onSet={(id, v) => onChange({ kwargValues: { ...lane.kwargValues, [id]: v } })} />
       ))}
       <div className="pg-opt-row">

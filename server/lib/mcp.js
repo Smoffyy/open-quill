@@ -6,6 +6,8 @@ import { RAW_ARGS } from '../tools/args.js';
 import { lineNames } from './secrets.js';
 import { memberRequest, isBlockedError, memberPolicy } from './mcpnet.js';
 import { broadcastAdmins, broadcastToUser } from './ws/broadcast.js';
+import { can, groupIdsOf } from './authz/effective.js';
+import { cleanGroupIds } from './authz/access.js';
 
 const PROTOCOL_VERSION = '2025-06-18';
 const CALL_TIMEOUT = 30000;
@@ -41,10 +43,15 @@ function save(arr, userId = null) {
   if (userId) db.users.update(userId, { mcp_servers: arr });
   else setSetting('mcp_servers', arr);
 }
-export function getEnabled(userId = null, { off = [] } = {}) {
-  const workspace = list().filter(s => s.enabled);
-  const own = userId && memberPolicy().allowed ? list(userId).filter(s => s.enabled) : [];
-  return [...workspace, ...own].filter(s => !off.includes(s.id));
+export function getEnabled(userId = null, { off = [], workspace = true, personal = true, groups = null, everyServer = false } = {}) {
+  const visible = (s) => groups === null || everyServer || !s.access_groups?.length || s.access_groups.some(g => groups.has(g));
+  const shared = workspace ? list().filter(s => s.enabled && visible(s)) : [];
+  const own = personal && userId && memberPolicy().allowed ? list(userId).filter(s => s.enabled) : [];
+  return [...shared, ...own].filter(s => !off.includes(s.id));
+}
+
+export function scopeFor(user, off = []) {
+  return { off, workspace: can(user, 'tools.mcp'), personal: can(user, 'mcp.connect'), groups: groupIdsOf(user), everyServer: can(user, 'admin.tools') };
 }
 
 export const TOOL_MODES = ['on', 'ask', 'off'];
@@ -193,7 +200,8 @@ function validate(b, existingId, userId = null) {
     url: String(b.url || '').trim().slice(0, 500),
     headers: String(b.headers || '').slice(0, 2000),
     timeout_s: Math.min(300, Math.max(0, parseInt(b.timeout_s, 10) || 0)),
-    enabled: b.enabled !== false
+    enabled: b.enabled !== false,
+    access_groups: userId ? [] : cleanGroupIds(b.access_groups)
   };
   if (transport === 'stdio' && !out.command) return { error: 'A command is required for stdio servers.' };
   if (transport === 'http' && !/^https?:\/\//.test(out.url)) return { error: 'A valid http(s) URL is required for HTTP servers.' };
@@ -945,12 +953,12 @@ async function readResource(server, uri, toolName, userId) {
   }
 }
 
-export function listPrompts(userId = null) {
-  return getEnabled(userId).flatMap(s => (s.prompts || []).map(p => ({ serverId: s.id, server: s.name, ...p })));
+export function listPrompts(userId = null, scope = {}) {
+  return getEnabled(userId, scope).flatMap(s => (s.prompts || []).map(p => ({ serverId: s.id, server: s.name, ...p })));
 }
 
-export async function getPrompt(serverId, name, args, userId = null) {
-  const server = getEnabled(userId).find(s => s.id === serverId);
+export async function getPrompt(serverId, name, args, userId = null, scope = {}) {
+  const server = getEnabled(userId, scope).find(s => s.id === serverId);
   const prompt = server && (server.prompts || []).find(p => p.name === name);
   if (!prompt) return { error: 'Prompt not found.' };
   const values = {};

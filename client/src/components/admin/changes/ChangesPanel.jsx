@@ -10,6 +10,7 @@ import { sectionMeta } from '../nav.jsx';
 import { AREA_TITLES } from './labels.js';
 import { ChangeRow, fieldLabel } from './ChangeRow.jsx';
 import { changeCount } from './count.js';
+import { can } from '../../../lib/permissions.js';
 
 function groupTitle(g) {
   if (g.key === 'models:order') return t('Catalog');
@@ -19,7 +20,7 @@ function groupTitle(g) {
 }
 
 export default function ChangesPanel({ changes, user, scope, layer, onPublished, onClose, onTest }) {
-  const publisher = !!user?.canPublish;
+  const publisher = can(user, 'admin.publish');
   const [who, setWho] = useState(publisher ? 'all' : 'mine');
   const [skip, setSkip] = useState(() => new Set());
   const [note, setNote] = useState('');

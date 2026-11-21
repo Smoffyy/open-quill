@@ -1,11 +1,18 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Card, Fields, Field, Input, Select, Btn, Table, Empty } from '../ui.jsx';
+import { Card, Fields, Field, Input, Select, Seg, Rows, Row, Btn, Acts, Table, Empty } from '../ui.jsx';
 import { api } from '../../../lib/api.js';
 import { Download, Clock } from '../../ui/icons.jsx';
-import { t, fmtDateTime } from '../../../i18n.jsx';
+import { t, tk, fmtDateTime } from '../../../i18n.jsx';
 import { Skel, SkelTable } from '../../ui/Skeleton.jsx';
 
 const PAGE = 60;
+const CATEGORIES = [
+  { value: '', label: tk('All') },
+  { value: 'signin', label: tk('Sign-in') },
+  { value: 'access', label: tk('Access') },
+  { value: 'provisioning', label: tk('Provisioning') },
+  { value: 'administration', label: tk('Administration') }
+];
 
 function meta(m) {
   if (!m) return '';
@@ -15,7 +22,7 @@ function meta(m) {
 
 export default function EventsSection() {
   const [state, setState] = useState({ entries: [], total: 0, offset: 0, hasMore: false, loading: true, actions: [] });
-  const [filter, setFilter] = useState({ action: '', actor: '', days: '' });
+  const [filter, setFilter] = useState({ category: '', action: '', actor: '', days: '' });
   const live = useRef(filter);
   useEffect(() => { live.current = filter; }, [filter]);
 
@@ -24,6 +31,7 @@ export default function EventsSection() {
     setState(s => ({ ...s, loading: true }));
     try {
       const p = new URLSearchParams({ limit: String(PAGE), offset: String(offset) });
+      if (f.category) p.set('category', f.category);
       if (f.action) p.set('action', f.action);
       if (f.actor) p.set('actor', f.actor);
       if (f.days) p.set('days', f.days);
@@ -47,9 +55,15 @@ export default function EventsSection() {
   return (
     <>
       <Card title={t('Filters')}
-        actions={<Btn size="sm" onClick={() => { window.location.href = '/api/admin/audit/export'; }}>
-          <Download /> {t('Export CSV')}
-        </Btn>}>
+        actions={<Acts end>
+          <Btn size="sm" onClick={() => { window.location.href = '/api/admin/audit/export'; }}><Download /> {t('Export CSV')}</Btn>
+          <Btn size="sm" onClick={() => { window.location.href = '/api/admin/audit/export?format=jsonl'; }}><Download /> {t('Export JSON Lines')}</Btn>
+        </Acts>}>
+        <Rows>
+          <Row label={t('Category')}>
+            <Seg value={filter.category} label={t('Category')} onChange={(v) => apply({ category: v })} options={CATEGORIES.map(c => ({ value: c.value, label: t(c.label) }))} />
+          </Row>
+        </Rows>
         <Fields cols={3}>
           <Field label={t('Action')}>
             <Select value={filter.action} onChange={(v) => apply({ action: v })} label={t('Action')}

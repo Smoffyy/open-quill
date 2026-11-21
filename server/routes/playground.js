@@ -1,4 +1,5 @@
-import { authMiddleware, adminOnly } from '../auth.js';
+import { authMiddleware } from '../auth.js';
+import { requirePermission } from '../lib/authz/middleware.js';
 import { modelProvider, samplingParams } from '../llm/index.js';
 import { resolveProvider } from '../lib/providers.js';
 import { recordUsage } from '../lib/budget.js';
@@ -23,7 +24,7 @@ function requestSummary(model, messages, source, routed, tools = []) {
 }
 
 export default function registerPlaygroundRoutes(app) {
-  app.post('/api/admin/playground/stream', authMiddleware, adminOnly, async (req, res) => {
+  app.post('/api/admin/playground/stream', authMiddleware, requirePermission('admin.models'), async (req, res) => {
     const body = req.body || {};
     const source = sourceOf(body.source);
     const history = playgroundHistory(body.messages);
@@ -69,11 +70,11 @@ export default function registerPlaygroundRoutes(app) {
     if (!res.writableEnded) res.end();
   });
 
-  app.get('/api/admin/playground/suites', authMiddleware, adminOnly, (req, res) => {
+  app.get('/api/admin/playground/suites', authMiddleware, requirePermission('admin.models'), (req, res) => {
     res.json({ suites: suitesView() });
   });
 
-  app.put('/api/admin/playground/suites', authMiddleware, adminOnly, (req, res) => {
+  app.put('/api/admin/playground/suites', authMiddleware, requirePermission('admin.models'), (req, res) => {
     res.json({ suites: saveSuites(sanitizeSuites(req.body?.suites), req.user) });
   });
 }

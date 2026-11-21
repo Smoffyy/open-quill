@@ -1,10 +1,11 @@
-import { authMiddleware, adminOnly } from '../auth.js';
+import { authMiddleware } from '../auth.js';
+import { requirePermission } from '../lib/authz/middleware.js';
 import { logAudit } from '../lib/audit.js';
 import { listJobs } from '../lib/evaljobs.js';
 import { qualitySettings, saveQualitySettings, startBackfill, qualityReport, qualityResults, TEMPLATES, KINDS } from '../lib/quality.js';
 
 export default function registerQualityRoutes(app) {
-  const admin = [authMiddleware, adminOnly];
+  const admin = [authMiddleware, requirePermission('admin.quality')];
 
   app.get('/api/admin/quality', ...admin, (req, res) => {
     res.json({

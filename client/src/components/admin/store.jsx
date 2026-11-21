@@ -1,8 +1,9 @@
 import { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
-import { resolveSection, DEFAULT_SECTION } from './nav.jsx';
+import { resolveSection, DEFAULT_SECTION, SECTIONS } from './nav.jsx';
 import { useCatalog } from './state/useCatalog.js';
 import { useWorkspace, promptFeaturesOf } from './state/useWorkspace.js';
-import { useMembers } from './state/useMembers.js';
+import { useUsers } from './state/useUsers.js';
+import { can, canSeeSection } from '../../lib/permissions.js';
 import { createHistory, historyKey } from './state/history.js';
 import { isMacPlatform } from '../../lib/keybinds.js';
 import { isTypingTarget } from '../../lib/keyboard.js';
@@ -49,6 +50,7 @@ export function AdminProvider({ user, onClose, fixedSection, children }) {
   const scrollMem = useRef(new Map());
 
   const setSection = useCallback((id) => setSectionRaw(resolveSection(id)), []);
+  const visible = canSeeSection(user, section) ? section : (SECTIONS.find(s => canSeeSection(user, s.id))?.id || section);
   useEffect(() => { if (!fixedSection) try { localStorage.setItem(TAB_KEY, section); } catch {} }, [section, fixedSection]);
 
   const confirm = useCallback((spec) => setAsk(spec), []);
@@ -61,7 +63,7 @@ export function AdminProvider({ user, onClose, fixedSection, children }) {
   features.current = promptFeaturesOf(workspace.settings);
   const changes = useChanges();
   const catalog = useCatalog({ confirm, features, history: history.current, changes });
-  const members = useMembers({ confirm });
+  const users = useUsers({ confirm, enabled: can(user, 'admin.users') });
   const [reviewing, setReviewing] = useState(false);
 
   const { setSelection, selection, unsaved: catalogUnsaved } = catalog;
@@ -76,8 +78,8 @@ export function AdminProvider({ user, onClose, fixedSection, children }) {
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
   }, [catalogUnsaved, workspaceUnsaved]);
-  const focusModel = section === 'models' && selection.length === 1 ? selection[0] : '';
-  const present = usePresence(user?.id, section, focusModel);
+  const focusModel = visible === 'models' && selection.length === 1 ? selection[0] : '';
+  const present = usePresence(user?.id, visible, focusModel);
 
   const undo = useCallback(() => {
     if (history.current.undo()) notify(t('Change undone'));
@@ -111,10 +113,10 @@ export function AdminProvider({ user, onClose, fixedSection, children }) {
 
   const value = {
     user, onClose,
-    section, setSection, openModel, undo, redo,
+    section: visible, setSection, openModel, undo, redo,
     ask, setAsk, confirm,
     keepScroll, reviewing, setReviewing, present,
-    catalog, workspace, members, changes
+    catalog, workspace, users, changes
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

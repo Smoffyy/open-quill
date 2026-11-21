@@ -5,6 +5,7 @@ import { DATA_ROOT, dataPath } from './lib/dataroot.js';
 import { migrate } from './db/schema.js';
 import { makeCollection, bumpTable } from './db/collection.js';
 import { BRAND_ICON_FIELDS, LEGACY_MARK_SET, MODEL_WEAVE, remapBrandPath, retireLegacyMark } from './lib/brand.js';
+import { auditCategory } from './lib/auditcategory.js';
 
 const DATA_DIR = DATA_ROOT;
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -36,6 +37,8 @@ function keyPragma(key) {
 }
 
 const KEY = loadKey();
+
+export const deriveKey = (label) => Buffer.from(crypto.hkdfSync('sha256', Buffer.from(KEY), Buffer.alloc(0), Buffer.from('open-quill ' + label), 32));
 const sdb = new Database(FILE);
 try { fs.chmodSync(FILE, 0o600); } catch {}
 sdb.pragma(`cipher='sqlcipher'`);
@@ -63,6 +66,8 @@ sdb.function('oq_icontains', { deterministic: true }, (hay, needle) => {
   if (typeof hay !== 'string' || !hay || !needle) return 0;
   return hay.toLowerCase().includes(needle) ? 1 : 0;
 });
+
+sdb.function('oq_audit_category', { deterministic: true }, (action) => auditCategory(action));
 
 export function tx(fn) { return sdb.transaction(fn)(); }
 
@@ -97,6 +102,9 @@ messagesCol.lastUserText = chatId => lastUserStmt.get(chatId)?.content || '';
 
 const mentionStmt = sdb.prepare('SELECT 1 FROM messages WHERE instr(data, ?) > 0 LIMIT 1');
 messagesCol.mentions = text => !!(text && mentionStmt.get(String(text)));
+const mentionedInStmt = sdb.prepare('SELECT 1 FROM messages WHERE chat_id IN (SELECT value FROM json_each(?)) AND instr(data, ?) > 0 LIMIT 1');
+messagesCol.mentionedIn = (chatIds, text) => !!mentionedInStmt.get(JSON.stringify(chatIds), String(text));
+messagesCol.attachmentOwners = () => sdb.prepare("SELECT c.user_id AS user_id, json_extract(m.data,'$.attachments') AS attachments FROM messages m JOIN chats c ON c.id = m.chat_id WHERE json_array_length(json_extract(m.data,'$.attachments')) > 0").all();
 
 const chatsCol = collection('chats');
 const byUserStmt = sdb.prepare('SELECT data FROM chats WHERE user_id=?');
@@ -122,13 +130,6 @@ chatsCol.oldestByUser = userId => byUserOldestStmt.all(userId).map(r => JSON.par
 const usersCol = collection('users');
 const byEmailStmt = sdb.prepare('SELECT data FROM users WHERE email IS ?');
 usersCol.byEmail = email => { const r = byEmailStmt.get(email ?? null); return r ? JSON.parse(r.data) : undefined; };
-const userSearchStmt = sdb.prepare(`
-  SELECT data FROM users
-  WHERE id IS NOT ?
-    AND (oq_icontains(email, ?) OR oq_icontains(json_extract(data,'$.display_name'), ?))
-  ORDER BY created_at LIMIT ?`);
-usersCol.search = (needle, excludeId, limit) =>
-  userSearchStmt.all(excludeId ?? null, needle, needle, limit).map(r => JSON.parse(r.data));
 
 const usageCol = collection('usage');
 const usageByUserStmt = sdb.prepare('SELECT data FROM usage WHERE user_id=?');
@@ -183,6 +184,8 @@ const sessionsByUserStmt = sdb.prepare('SELECT data FROM sessions WHERE user_id=
 sessionsCol.byUser = userId => sessionsByUserStmt.all(userId).map(r => JSON.parse(r.data));
 const touchSessionStmt = sdb.prepare('UPDATE sessions SET last_seen=?, data=json_set(data,\'$.last_seen\',?) WHERE id=?');
 sessionsCol.touch = (id, ts) => { try { touchSessionStmt.run(ts, ts, id); } catch {} };
+const lastSeenStmt = sdb.prepare('SELECT user_id, MAX(last_seen) AS seen FROM sessions GROUP BY user_id');
+sessionsCol.lastSeenByUser = () => new Map(lastSeenStmt.all().map(r => [r.user_id, r.seen || 0]));
 const pruneSessionsStmt = sdb.prepare('DELETE FROM sessions WHERE last_seen < ?');
 sessionsCol.prune = before => { try { const n = pruneSessionsStmt.run(before).changes; if (n) bumpTable('sessions'); return n; } catch { return 0; } };
 
@@ -198,7 +201,8 @@ auditCol.prune = before => { try { return auditPruneStmt.run(before).changes; } 
 const AUDIT_WHERE = `
   WHERE ts >= @since
     AND (@action = '' OR oq_icontains(json_extract(data,'$.action'), @action))
-    AND (@actor  = '' OR oq_icontains(json_extract(data,'$.actor_email'), @actor))`;
+    AND (@actor  = '' OR oq_icontains(json_extract(data,'$.actor_email'), @actor))
+    AND (@category = '' OR oq_audit_category(json_extract(data,'$.action')) = @category)`;
 const auditQueryStmt = sdb.prepare(`SELECT data FROM audit ${AUDIT_WHERE} ORDER BY ts DESC LIMIT @limit OFFSET @offset`);
 const auditCountStmt = sdb.prepare(`SELECT count(*) AS n FROM audit ${AUDIT_WHERE}`);
 const auditActionsStmt = sdb.prepare(`SELECT DISTINCT json_extract(data,'$.action') AS action FROM audit WHERE action IS NOT NULL ORDER BY action`);
@@ -301,6 +305,55 @@ qualityCol.byMessage = mid => qualityByMessageStmt.all(mid).map(r => JSON.parse(
 const feedbackRatedChatStmt = sdb.prepare(`SELECT 1 AS hit FROM feedback WHERE json_extract(data,'$.chat_id') = ? AND ${IS_SAFETY} = 0 LIMIT 1`);
 feedbackCol.ratedChat = chatId => !!feedbackRatedChatStmt.get(chatId);
 
+const groupsCol = collection('user_groups');
+const groupMembersCol = collection('group_members');
+const directGroupsStmt = sdb.prepare("SELECT group_id FROM group_members WHERE member_type='user' AND member_id=?");
+const groupLinksStmt = sdb.prepare("SELECT group_id, member_id FROM group_members WHERE member_type='group'");
+const groupUsersStmt = sdb.prepare("SELECT member_id FROM group_members WHERE group_id=? AND member_type='user'");
+const groupCountsStmt = sdb.prepare('SELECT group_id, member_type, count(*) AS n FROM group_members GROUP BY group_id, member_type');
+const groupLinkStmt = sdb.prepare('SELECT data FROM group_members WHERE group_id=? AND member_type=? AND member_id=?');
+const dropMemberStmt = sdb.prepare('DELETE FROM group_members WHERE member_type=? AND member_id=?');
+groupMembersCol.directGroups = userId => directGroupsStmt.all(userId).map(r => r.group_id);
+groupMembersCol.groupLinks = () => groupLinksStmt.all();
+groupMembersCol.usersOf = groupId => groupUsersStmt.all(groupId).map(r => r.member_id);
+groupMembersCol.counts = () => groupCountsStmt.all();
+groupMembersCol.link = (groupId, type, memberId) => { const r = groupLinkStmt.get(groupId, type, memberId); return r ? JSON.parse(r.data) : null; };
+groupMembersCol.dropMember = (type, memberId) => { if (dropMemberStmt.run(type, memberId).changes) bumpTable('group_members'); };
+
+const aclCol = collection('acl');
+const aclForResourceStmt = sdb.prepare('SELECT data FROM acl WHERE resource_type=? AND resource_id=?');
+const aclEntryStmt = sdb.prepare('SELECT data FROM acl WHERE resource_type=? AND resource_id=? AND principal_type=? AND principal_id=?');
+const aclSharedStmt = sdb.prepare("SELECT resource_id, level FROM acl WHERE resource_type=? AND ((principal_type='user' AND principal_id=?) OR (principal_type='group' AND principal_id IN (SELECT value FROM json_each(?))))");
+const aclDropResourceStmt = sdb.prepare('DELETE FROM acl WHERE resource_type=? AND resource_id=?');
+aclCol.forResource = (type, id) => aclForResourceStmt.all(type, id).map(r => JSON.parse(r.data));
+aclCol.entry = (type, id, principalType, principalId) => { const r = aclEntryStmt.get(type, id, principalType, principalId); return r ? JSON.parse(r.data) : null; };
+aclCol.sharedWith = (type, userId, groupIds) => aclSharedStmt.all(type, userId, JSON.stringify(groupIds));
+aclCol.dropResource = (type, id) => { if (aclDropResourceStmt.run(type, id).changes) bumpTable('acl'); };
+const aclPruneStmts = [
+  "DELETE FROM acl WHERE resource_type='project' AND resource_id NOT IN (SELECT id FROM projects)",
+  "DELETE FROM acl WHERE resource_type='chat' AND resource_id NOT IN (SELECT id FROM chats)",
+  "DELETE FROM acl WHERE resource_type='skill' AND resource_id NOT IN (SELECT id FROM skills)",
+  "DELETE FROM acl WHERE principal_type='user' AND principal_id NOT IN (SELECT id FROM users)",
+  "DELETE FROM acl WHERE principal_type='group' AND principal_id NOT IN (SELECT id FROM user_groups)"
+].map(s => sdb.prepare(s));
+aclCol.prune = () => { if (aclPruneStmts.reduce((n, s) => n + s.run().changes, 0)) bumpTable('acl'); };
+const identitiesCol = collection('identities');
+const identityStmt = sdb.prepare('SELECT data FROM identities WHERE provider_id=? AND subject=?');
+identitiesCol.find = (providerId, subject) => { const r = identityStmt.get(String(providerId), String(subject)); return r ? JSON.parse(r.data) : null; };
+const scimTokensCol = collection('scim_tokens');
+const scimTokenStmt = sdb.prepare('SELECT data FROM scim_tokens WHERE hash = ?');
+scimTokensCol.byHash = hash => { const r = scimTokenStmt.get(String(hash)); return r ? JSON.parse(r.data) : null; };
+const scimNameStmt = sdb.prepare("SELECT data FROM users WHERE lower(json_extract(data,'$.scim.user_name')) = lower(?)");
+usersCol.byScimName = name => scimNameStmt.all(String(name)).map(r => JSON.parse(r.data));
+const externalIdStmt = sdb.prepare("SELECT data FROM users WHERE json_extract(data,'$.external_id') = ?");
+usersCol.byExternalId = id => externalIdStmt.all(String(id)).map(r => JSON.parse(r.data));
+const bySourceStmt = sdb.prepare("SELECT data FROM users WHERE json_extract(data,'$.source') = ? ORDER BY created_at, id");
+usersCol.bySource = source => bySourceStmt.all(String(source)).map(r => JSON.parse(r.data));
+
+const chatsByProjectStmt = sdb.prepare("SELECT data FROM chats WHERE json_extract(data,'$.project_id') = ? OR json_extract(data,'$.origin_project_id') = ?");
+chatsCol.byProject = projectId => chatsByProjectStmt.all(projectId, projectId).map(r => JSON.parse(r.data));
+chatsCol.withPins = () => sdb.prepare("SELECT data FROM chats WHERE json_array_length(json_extract(data,'$.pinned_files')) > 0").all().map(r => JSON.parse(r.data));
+
 const repliesBetweenStmt = sdb.prepare("SELECT data FROM messages WHERE created_at >= ? AND created_at <= ? AND json_extract(data,'$.role') = 'assistant' ORDER BY created_at DESC LIMIT ?");
 messagesCol.repliesBetween = (from, to, limit) => repliesBetweenStmt.all(from, to, limit).map(r => JSON.parse(r.data));
 
@@ -323,7 +376,15 @@ export const db = {
   evalCollections: collection('eval_collections'),
   evalVersions: evalVersionsCol,
   evalRuns: evalRunsCol,
-  qualityChecks: qualityCol
+  qualityChecks: qualityCol,
+  roles: collection('roles'),
+  groups: groupsCol,
+  groupMembers: groupMembersCol,
+  acl: aclCol,
+  uploads: collection('uploads'),
+  mfaFactors: collection('mfa_factors'),
+  identities: identitiesCol,
+  scimTokens: scimTokensCol
 };
 
 const sGet = sdb.prepare('SELECT value FROM settings WHERE key=?');
@@ -419,13 +480,6 @@ if (!getSetting('legacy_mark_v1')) {
   }
   if (LEGACY_MARK_SET.includes(getSetting('app_icon', ''))) setSetting('app_icon', '');
   setSetting('legacy_mark_v1', '1');
-}
-
-if (!getSetting('publish_role_v1')) {
-  for (const u of db.users.all()) {
-    if (u.is_admin && !u.is_owner && u.can_publish === undefined) db.users.update(u.id, { can_publish: 1 });
-  }
-  setSetting('publish_role_v1', '1');
 }
 
 export default db;

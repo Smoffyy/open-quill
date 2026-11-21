@@ -1,7 +1,11 @@
 import * as sandbox from '../sandbox.js';
 import { roleLimit } from './models.js';
+import { can } from './authz/effective.js';
 
-export const sandboxCap = (user) => roleLimit('sandbox_limit_mb', !!user.is_admin, user.is_admin ? 1024 : 256) * 1024 * 1024;
+export const sandboxCap = (user) => {
+  const tier = can(user, 'admin.panel');
+  return roleLimit('sandbox_limit_mb', tier, tier ? 1024 : 256) * 1024 * 1024;
+};
 
 export const attachName = (name) => String(name || 'file').replace(/[\r\n"\\]/g, '_');
 

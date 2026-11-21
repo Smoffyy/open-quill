@@ -30,6 +30,7 @@ const DB_DIR = path.join(SERVER_ROOT, 'data', 'databases', DB_NAME);
 const EMAIL = 'integration@test.local';
 const PASSWORD = 'integration-password';
 const START_TIMEOUT_MS = 30000;
+const SETUP_TOKEN = 'integration-setup-token';
 
 let child = null;
 let readyMs = 0;
@@ -128,7 +129,7 @@ function startServer() {
   return new Promise((resolve, reject) => {
     const proc = spawn(process.execPath, ['index.js'], {
       cwd: SERVER_ROOT,
-      env: { ...process.env, OPEN_QUILL_DB: DB_NAME, PORT: String(PORT), HOST: '127.0.0.1' },
+      env: { ...process.env, OPEN_QUILL_DB: DB_NAME, PORT: String(PORT), HOST: '127.0.0.1', OPEN_QUILL_SETUP_TOKEN: SETUP_TOKEN },
       stdio: ['ignore', 'pipe', 'pipe']
     });
     let log = '';
@@ -175,9 +176,15 @@ before(async () => {
   child = await startServer();
   readyMs = await waitForReady();
 
-  // The first account created on a fresh database becomes owner+admin.
-  const res = await request('POST', '/api/auth/register', {
+  // The first account created on a fresh database becomes the owner, and only with the
+  // setup token the server prints while no owner exists.
+  const blind = await request('POST', '/api/auth/register', {
     origin: ORIGIN, secFetchSite: 'same-origin', body: { email: EMAIL, password: PASSWORD }
+  });
+  assert.equal(blind.status, 403, 'the first account needs the setup token');
+  assert.equal(blind.json.setup, true);
+  const res = await request('POST', '/api/auth/register', {
+    origin: ORIGIN, secFetchSite: 'same-origin', body: { email: EMAIL, password: PASSWORD, setupToken: SETUP_TOKEN }
   });
   assert.equal(res.status, 200, `registration failed: ${res.text}`);
   cookie = String(res.headers['set-cookie']?.[0] || '').split(';')[0];
@@ -216,8 +223,8 @@ test('the app answers and serves its policy header', async () => {
   assert.equal(ctx.headers['content-security-policy'], undefined, 'the policy is for documents, not the JSON API');
   assert.equal(ctx.headers['cache-control'], 'no-store', 'authenticated JSON must not be cached');
   assert.equal(ctx.json.firstRun, false);
-  // deliberately limited to branding plus the two booleans the sign-in screen needs
-  assert.deepEqual(Object.keys(ctx.json).sort(), ['allowSignups', 'appFont', 'appIcon', 'appName', 'firstRun', 'uiPreset']);
+  // deliberately limited to branding plus what the sign-in screen needs
+  assert.deepEqual(Object.keys(ctx.json).sort(), ['appFont', 'appIcon', 'appName', 'firstRun', 'ldap', 'providers', 'signup', 'uiPreset']);
 });
 
 test('a browser on this origin can complete the whole sign-in loop', async () => {
@@ -439,55 +446,63 @@ test('admin settings and branding survive hostile input rather than 500', async 
   await browser('PATCH', '/api/admin/app-config', { body: { appName: 'open-quill' } });
 });
 
+const uploadFile = async (call, name, type, body, route = '/api/upload') => {
+  const boundary = 'oqfile' + Date.now() + Math.random().toString(36).slice(2);
+  const field = route === '/api/upload' ? 'files' : 'file';
+  const raw = Buffer.concat([
+    Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${field}"; filename="${name}"\r\nContent-Type: ${type}\r\n\r\n`, 'utf8'),
+    Buffer.from(body), Buffer.from(`\r\n--${boundary}--\r\n`)
+  ]);
+  const res = await call('POST', route, { raw, headers: { 'Content-Type': 'multipart/form-data; boundary=' + boundary } });
+  assert.equal(res.status, 200, res.text);
+  return route === '/api/upload' ? res.json.files[0].url : res.json.url;
+};
+
 test('uploads are served defensively and misses are honest', async () => {
   const missing = await request('GET', '/uploads/does-not-exist.html', { cookie });
   assert.equal(missing.status, 404, 'a missing upload is not the app HTML with a 200');
   assert.match(missing.headers['content-type'] || '', /json/);
 
-  const uploadsDir = path.join(SERVER_ROOT, 'data', 'databases', DB_NAME, 'uploads');
-  fs.mkdirSync(uploadsDir, { recursive: true });
-  fs.writeFileSync(path.join(uploadsDir, 'probe.html'), '<script>alert(1)</script>');
-  fs.writeFileSync(path.join(uploadsDir, 'probe.png'), 'not really a png');
-
-  const page = await request('GET', '/uploads/probe.html', { cookie });
+  const page = await request('GET', await uploadFile(browser, 'probe.html', 'text/html', '<script>alert(1)</script>'), { cookie });
   assert.equal(page.status, 200);
   assert.equal(page.headers['content-disposition'], 'attachment', 'html downloads, it does not become a live document');
   assert.match(page.headers['content-security-policy'] || '', /default-src 'none'/);
   assert.match(page.headers['content-security-policy'] || '', /sandbox/);
   assert.equal(page.headers['x-content-type-options'], 'nosniff');
 
-  const img = await request('GET', '/uploads/probe.png', { cookie });
+  const img = await request('GET', await uploadFile(browser, 'probe.png', 'image/png', 'not really a png'), { cookie });
   assert.equal(img.status, 200);
   assert.equal(img.headers['content-disposition'], undefined, 'images still render in place');
+
+  fs.writeFileSync(path.join(SERVER_ROOT, 'data', 'databases', DB_NAME, 'uploads', 'dropped.png'), 'put there by hand');
+  assert.equal((await request('GET', '/uploads/dropped.png', { cookie })).status, 404, 'a file the app never took in is not served');
 });
 
 test('uploads need a session, except the icon the sign-in screen shows', async () => {
-  const uploadsDir = path.join(SERVER_ROOT, 'data', 'databases', DB_NAME, 'uploads');
-  fs.mkdirSync(uploadsDir, { recursive: true });
-  fs.writeFileSync(path.join(uploadsDir, 'attachment.png'), 'someone else’s file');
-  fs.writeFileSync(path.join(uploadsDir, 'brand.png'), 'the app icon');
+  const attachment = await uploadFile(browser, 'attachment.png', 'image/png', 'someone else’s file');
+  const brand = await uploadFile(browser, 'brand.png', 'image/png', 'the app icon', '/api/admin/upload');
 
   // Attachments are other people's conversations. Knowing the URL is not authorisation,
   // and 404 rather than 401 so a signed-out caller cannot even confirm the file exists.
-  const anon = await request('GET', '/uploads/attachment.png');
+  const anon = await request('GET', attachment);
   assert.equal(anon.status, 404);
-  assert.equal((await request('GET', '/uploads/attachment.png', { cookie })).status, 200, 'a member still sees it');
+  assert.equal((await request('GET', attachment, { cookie })).status, 200, 'its owner still sees it');
 
   // The sign-in screen shows the app icon to someone who by definition has no session.
-  assert.equal((await request('GET', '/uploads/brand.png')).status, 404, 'not public until it is the icon');
-  const set = await browser('PATCH', '/api/admin/app-config', { body: { appIcon: '/uploads/brand.png' } });
+  assert.equal((await request('GET', brand)).status, 404, 'not public until it is the icon');
+  const set = await browser('PATCH', '/api/admin/app-config', { body: { appIcon: brand } });
   assert.equal(set.status, 200);
   // An admin edit only stages the value, so the icon is not public on the strength
   // of a draft: it has to be published first.
-  assert.equal((await request('GET', '/uploads/brand.png')).status, 404, 'a staged icon is still private');
+  assert.equal((await request('GET', brand)).status, 404, 'a staged icon is still private');
   assert.equal((await browser('POST', '/api/admin/changes/publish', { body: {} })).status, 200);
-  assert.equal((await request('GET', '/uploads/brand.png')).status, 200, 'now the login screen can load it');
-  assert.equal((await request('GET', '/uploads/attachment.png')).status, 404, 'and only that one file');
+  assert.equal((await request('GET', brand)).status, 200, 'now the login screen can load it');
+  assert.equal((await request('GET', attachment)).status, 404, 'and only that one file');
 
   // the exemption follows the setting rather than being latched on first use
   await browser('PATCH', '/api/admin/app-config', { body: { appIcon: '' } });
   await browser('POST', '/api/admin/changes/publish', { body: {} });
-  assert.equal((await request('GET', '/uploads/brand.png')).status, 404, 'unset the icon and it is private again');
+  assert.equal((await request('GET', brand)).status, 404, 'unset the icon and it is private again');
 });
 
 test('a chat upload keeps its UTF-8 name and any format previews as the text the model reads', async () => {
@@ -769,42 +784,227 @@ test('a release can ship part of the draft, refuses a stale review and rolls bac
   assert.equal((await browser('POST', '/api/admin/releases/999999/restore', { body: {} })).status, 404);
 });
 
-test('editors stage, publishers ship, and only the owner makes publishers', async () => {
-  const join = async (email) => {
-    const res = await request('POST', '/api/auth/register', { origin: ORIGIN, secFetchSite: 'same-origin', body: { email, password: PASSWORD } });
-    assert.equal(res.status, 200, res.text);
-    const c = String(res.headers['set-cookie']?.[0] || '').split(';')[0];
-    return { cookie: c, id: (await browser('GET', '/api/me', { cookie: c })).json.user.id };
-  };
-  const as = (who) => (method, url, opts = {}) => browser(method, url, { ...opts, cookie: who.cookie });
-  const ed = await join('editor-role@example.com');
-  const pub = await join('publisher-role@example.com');
-  const other = await join('member-role@example.com');
+const joinAs = async (email) => {
+  const res = await request('POST', '/api/auth/register', { origin: ORIGIN, secFetchSite: 'same-origin', body: { email, password: PASSWORD } });
+  assert.equal(res.status, 200, res.text);
+  const c = String(res.headers['set-cookie']?.[0] || '').split(';')[0];
+  return { cookie: c, id: res.json.user.id, user: res.json.user };
+};
+const as = (who) => (method, url, opts = {}) => browser(method, url, { ...opts, cookie: who.cookie });
 
-  assert.equal((await browser('PATCH', `/api/admin/users/${pub.id}`, { body: { role: 'publisher' } })).status, 200);
-  assert.equal((await browser('PATCH', `/api/admin/users/${ed.id}`, { body: { role: 'editor' } })).status, 200);
-  const me = (await as(ed)('GET', '/api/me')).json.user;
-  assert.equal(me.role, 'editor');
-  assert.equal(me.canPublish, false);
-  assert.equal((await browser('PATCH', `/api/admin/users/${ed.id}`, { body: { role: 'owner' } })).status, 403, 'ownership is never granted');
+test('admins publish and manage the accounts below them, and only owners make admins', async () => {
+  const adm = await joinAs('admin-role@example.com');
+  const peer = await joinAs('admin-peer@example.com');
+  const other = await joinAs('user-role@example.com');
+  const owner = (await browser('GET', '/api/me')).json.user;
+
+  assert.equal(other.user.role, 'user', 'an open sign-up starts as a user');
+  assert.equal((await as(other)('GET', '/api/admin/users')).status, 403, 'a user cannot list accounts');
+  assert.equal((await as(other)('PATCH', '/api/admin/app-config', { body: { disclaimer: 'x' } })).status, 403, 'nor stage admin edits');
+
+  assert.equal((await browser('PATCH', `/api/admin/users/${adm.id}`, { body: { role: 'admin' } })).status, 200);
+  assert.equal((await browser('PATCH', `/api/admin/users/${peer.id}`, { body: { role: 'admin' } })).status, 200);
+  const me = (await as(adm)('GET', '/api/me')).json.user;
+  assert.equal(me.role, 'admin');
+  assert.ok(me.permissions.includes('admin.publish') && me.permissions.includes('admin.users'));
+  assert.ok(!('isAdmin' in me) && !('canPublish' in me), 'the old flags are gone');
+
+  assert.equal((await as(adm)('PATCH', `/api/admin/users/${other.id}`, { body: { role: 'admin' } })).status, 403, 'an admin cannot make admins');
+  assert.equal((await as(adm)('PATCH', `/api/admin/users/${peer.id}`, { body: { role: 'user' } })).status, 403, 'nor demote another admin');
+  assert.equal((await as(adm)('PATCH', `/api/admin/users/${adm.id}`, { body: { role: 'user' } })).status, 403, 'nor change their own role');
+  assert.equal((await as(adm)('PATCH', `/api/admin/users/${owner.id}`, { body: { status: 'disabled' } })).status, 403, 'nor touch an owner');
+  assert.equal((await as(adm)('DELETE', `/api/admin/users/${peer.id}`)).status, 403, 'nor remove a peer');
+  assert.equal((await as(adm)('PATCH', `/api/admin/users/${other.id}`, { body: { role: 'nonsense' } })).status, 403, 'an unknown role is refused');
+
+  const listed = (await as(adm)('GET', '/api/admin/users')).json.users;
+  assert.equal(listed.find(u => u.id === other.id).manage, true);
+  assert.deepEqual(listed.find(u => u.id === peer.id).assignable, [], 'a peer offers nothing to assign');
 
   await browser('POST', '/api/admin/changes/publish', { body: {} });
-  await as(ed)('PATCH', '/api/admin/app-config', { body: { disclaimer: 'Editor draft' } });
-  await as(pub)('PATCH', '/api/admin/app-config', { body: { supportContact: 'help@example.com' } });
-  assert.equal((await as(ed)('POST', '/api/admin/changes/publish', { body: {} })).status, 403, 'an editor cannot publish');
-  assert.equal((await as(ed)('POST', '/api/admin/changes/discard', { body: { keys: ['setting:support_contact'] } })).status, 403, 'nor discard someone else’s change');
-  assert.equal((await as(ed)('POST', '/api/admin/changes/discard', { body: { keys: ['setting:disclaimer'] } })).status, 200, 'but can drop their own');
-  assert.equal((await as(pub)('POST', '/api/admin/changes/publish', { body: {} })).status, 200, 'a publisher ships');
-  const head = (await browser('GET', '/api/admin/releases')).json.version;
-  assert.equal((await as(ed)('POST', `/api/admin/releases/${head - 1}/restore`, { body: {} })).status, 403, 'an editor cannot roll back');
+  await as(adm)('PATCH', '/api/admin/app-config', { body: { supportContact: 'help@example.com' } });
+  assert.equal((await as(adm)('POST', '/api/admin/changes/publish', { body: {} })).status, 200, 'an admin publishes');
 
-  assert.equal((await as(pub)('PATCH', `/api/admin/users/${other.id}`, { body: { role: 'editor' } })).status, 200, 'a publisher can make editors');
-  assert.equal((await as(pub)('PATCH', `/api/admin/users/${other.id}`, { body: { role: 'publisher' } })).status, 403, 'but not publishers');
-  assert.equal((await as(ed)('PATCH', `/api/admin/users/${other.id}`, { body: { role: 'member' } })).status, 403, 'an editor cannot touch another editor');
-  assert.equal((await as(ed)('DELETE', `/api/admin/users/${pub.id}`)).status, 403, 'nor remove a publisher');
-  assert.equal((await as(pub)('PATCH', `/api/admin/users/${pub.id}/budget`, { body: { budget: 5 } })).status, 200, 'everyone can set their own cap');
+  assert.equal((await browser('PATCH', `/api/admin/users/${owner.id}`, { body: { role: 'admin' } })).status, 403, 'nobody changes their own role');
+  assert.equal((await browser('PATCH', `/api/admin/users/${adm.id}`, { body: { role: 'owner' } })).status, 200, 'an owner can make another owner');
+  assert.equal((await as(adm)('GET', '/api/me')).json.user.owner, true);
+  assert.equal((await browser('PATCH', `/api/admin/users/${adm.id}`, { body: { role: 'admin' } })).status, 200, 'and owners can demote each other');
+  const lastOwner = await browser('DELETE', '/api/me', { body: { password: PASSWORD } });
+  assert.equal(lastOwner.status, 403, 'the last owner cannot delete their own account');
 
-  for (const u of [ed, pub, other]) assert.equal((await browser('DELETE', `/api/admin/users/${u.id}`)).status, 200, 'the owner can remove anyone');
+  assert.equal((await as(adm)('PATCH', `/api/admin/users/${other.id}/budget`, { body: { budget: 5 } })).status, 200);
+  assert.equal((await as(adm)('PATCH', `/api/admin/users/${adm.id}/budget`, { body: { budget: 5 } })).status, 200, 'everyone with user management can set their own cap');
+
+  for (const u of [adm, peer, other]) assert.equal((await browser('DELETE', `/api/admin/users/${u.id}`)).status, 200, 'the owner can remove anyone');
+});
+
+test('a pending account waits behind the gate, and a disabled one is signed out at once', async () => {
+  assert.equal((await browser('PUT', '/api/admin/auth/signup', { body: { policy: 'approval' } })).status, 200);
+  const pend = await joinAs('pending-gate@example.com');
+  assert.equal(pend.user.role, 'pending');
+  assert.equal(pend.user.gate, 'pending');
+  assert.deepEqual(pend.user.permissions, []);
+
+  const me = await as(pend)('GET', '/api/me');
+  assert.equal(me.status, 200, 'a pending account can see itself');
+  assert.equal((await as(pend)('GET', '/api/me/sessions')).status, 200, 'and its sessions');
+  for (const [method, url] of [['GET', '/api/chats'], ['POST', '/api/chats'], ['GET', '/api/models'], ['GET', '/api/app-config'], ['GET', '/api/projects'], ['POST', '/api/upload']]) {
+    const r = await as(pend)(method, url, { body: {} });
+    assert.equal(r.status, 403, `${method} ${url} is gated`);
+    assert.equal(r.json.gate, 'pending');
+  }
+  const ws = await handshake({ Origin: ORIGIN, 'Sec-Fetch-Site': 'same-origin', Cookie: pend.cookie });
+  assert.equal(ws.open, false, 'no socket while pending');
+
+  assert.equal((await browser('PATCH', `/api/admin/users/${pend.id}`, { body: { role: 'user' } })).status, 200, 'approval');
+  assert.equal((await as(pend)('GET', '/api/chats')).status, 200, 'approval takes effect on the next request');
+  assert.equal((await handshake({ Origin: ORIGIN, 'Sec-Fetch-Site': 'same-origin', Cookie: pend.cookie })).open, true);
+
+  assert.equal((await browser('PATCH', `/api/admin/users/${pend.id}`, { body: { status: 'disabled' } })).status, 200);
+  assert.equal((await as(pend)('GET', '/api/me')).status, 401, 'disabling ends every session at once');
+  const login = await request('POST', '/api/auth/login', { origin: ORIGIN, secFetchSite: 'same-origin', body: { email: 'pending-gate@example.com', password: PASSWORD } });
+  assert.equal(login.status, 403);
+  assert.match(login.json.error, /disabled/);
+  assert.equal((await browser('PATCH', `/api/admin/users/${pend.id}`, { body: { status: 'active' } })).status, 200);
+  const back = await request('POST', '/api/auth/login', { origin: ORIGIN, secFetchSite: 'same-origin', body: { email: 'pending-gate@example.com', password: PASSWORD } });
+  assert.equal(back.status, 200, 'enabling restores sign-in');
+
+  assert.equal((await browser('PUT', '/api/admin/auth/signup', { body: { policy: 'closed' } })).status, 200);
+  const closed = await request('POST', '/api/auth/register', { origin: ORIGIN, secFetchSite: 'same-origin', body: { email: 'closed@example.com', password: PASSWORD } });
+  assert.equal(closed.status, 403);
+  assert.equal((await browser('PUT', '/api/admin/auth/signup', { body: { policy: 'open', domains: ['allowed.test', 'not a domain'] } })).json.domains.length, 1);
+  const outside = await request('POST', '/api/auth/register', { origin: ORIGIN, secFetchSite: 'same-origin', body: { email: 'x@elsewhere.test', password: PASSWORD } });
+  assert.equal(outside.status, 403, 'a domain outside the list is refused');
+  const inside = await joinAs('y@allowed.test');
+  assert.equal((await as(inside)('PUT', '/api/admin/auth/signup', { body: { policy: 'open' } })).status, 403, 'only an owner sets the policy');
+  assert.equal((await browser('PUT', '/api/admin/auth/signup', { body: { policy: 'nope' } })).status, 400);
+  assert.equal((await browser('PUT', '/api/admin/auth/signup', { body: { policy: 'open', domains: [] } })).status, 200);
+
+  for (const u of [pend, inside]) assert.equal((await browser('DELETE', `/api/admin/users/${u.id}`)).status, 200);
+});
+
+test('narrowing the User role takes a feature away on the next request and gives it back', async () => {
+  const u = await joinAs('baseline@example.com');
+  assert.equal((await as(u)('POST', '/api/chats', { body: { mode: 'code' } })).status, 200);
+  const roles = (await browser('GET', '/api/admin/roles')).json.roles;
+  const base = roles.find(r => r.id === 'user').permissions;
+  assert.ok(!base.includes('chats.advanced') && !base.includes('admin.panel'), 'the default baseline is today’s member set');
+
+  const narrowed = await browser('PUT', '/api/admin/roles/user-baseline', { body: { permissions: [...base.filter(p => p !== 'code.use' && p !== 'tasks.schedule'), 'admin.users'] } });
+  assert.equal(narrowed.status, 200);
+  assert.ok(!narrowed.json.roles.find(r => r.id === 'user').permissions.includes('admin.users'), 'admin permissions never enter the User role');
+  assert.equal((await as(u)('POST', '/api/chats', { body: { mode: 'code' } })).status, 403);
+  assert.equal((await as(u)('GET', '/api/tasks')).status, 403);
+  assert.equal((await as(u)('POST', '/api/chats', { body: {} })).status, 200, 'everything else still works');
+  assert.ok(!(await as(u)('GET', '/api/me')).json.user.permissions.includes('code.use'));
+  assert.equal((await browser('POST', '/api/chats', { body: { mode: 'code' } })).status, 200, 'the owner keeps it');
+  assert.equal((await as(u)('PUT', '/api/admin/roles/user-baseline', { body: { permissions: base } })).status, 403);
+
+  assert.equal((await browser('PUT', '/api/admin/roles/user-baseline', { body: { permissions: base } })).status, 200);
+  assert.equal((await as(u)('GET', '/api/tasks')).status, 200, 'restoring gives it back');
+  assert.equal((await browser('DELETE', `/api/admin/users/${u.id}`)).status, 200);
+});
+
+const groupNamed = async (name, permissions) => {
+  const made = await browser('POST', '/api/admin/groups', { body: { name } });
+  assert.equal(made.status, 200, made.text);
+  if (permissions) assert.equal((await browser('PATCH', `/api/admin/groups/${made.json.group.id}`, { body: { permissions } })).status, 200);
+  return made.json.group.id;
+};
+
+test('groups grant everyday permissions to members and nested members, and nothing administrative', async () => {
+  const u = await joinAs('grouped@example.com');
+  const base = (await browser('GET', '/api/admin/roles')).json.roles.find(r => r.id === 'user').permissions;
+  await browser('PUT', '/api/admin/roles/user-baseline', { body: { permissions: base.filter(p => p !== 'code.use') } });
+  assert.equal((await as(u)('POST', '/api/chats', { body: { mode: 'code' } })).status, 403);
+
+  assert.equal((await as(u)('POST', '/api/admin/groups', { body: { name: 'Mine' } })).status, 403, 'a user cannot make groups');
+  assert.equal((await as(u)('GET', '/api/admin/groups')).status, 403, 'or list them');
+  const coders = await groupNamed('Coders', ['code.use']);
+  const team = await groupNamed('Team');
+  assert.equal((await browser('POST', '/api/admin/groups', { body: { name: 'coders' } })).status, 409, 'names are unique regardless of case');
+  assert.equal((await browser('PATCH', `/api/admin/groups/${coders}`, { body: { permissions: ['code.use', 'admin.users'] } })).status, 400, 'groups never carry admin permissions');
+  assert.equal((await browser('PUT', `/api/admin/groups/${coders}/groups/${team}`)).status, 200, 'Team goes inside Coders');
+  assert.equal((await browser('PUT', `/api/admin/groups/${team}/groups/${coders}`)).status, 409, 'and never the other way round as well');
+  assert.equal((await browser('PUT', `/api/admin/groups/${team}/members`, { body: { add: [u.id] } })).status, 200);
+
+  assert.equal((await as(u)('POST', '/api/chats', { body: { mode: 'code' } })).status, 200, 'inherited from Coders through Team');
+  const access = (await browser('GET', `/api/admin/users/${u.id}/access`)).json;
+  assert.deepEqual(access.permissions.find(p => p.id === 'code.use').sources[0].path.map(x => x.name), ['Team', 'Coders']);
+  assert.deepEqual(access.direct, [team]);
+  assert.ok(!(await as(u)('GET', '/api/me')).json.user.permissions.includes('admin.users'));
+
+  assert.equal((await browser('PUT', `/api/admin/groups/${team}/members`, { body: { remove: [u.id] } })).status, 200);
+  assert.equal((await as(u)('POST', '/api/chats', { body: { mode: 'code' } })).status, 403, 'leaving takes it away on the next request');
+
+  for (const g of [team, coders]) assert.equal((await browser('DELETE', `/api/admin/groups/${g}`)).status, 200);
+  await browser('PUT', '/api/admin/roles/user-baseline', { body: { permissions: base } });
+  assert.equal((await browser('DELETE', `/api/admin/users/${u.id}`)).status, 200);
+});
+
+test('a model limited to a group is invisible and unusable to everyone else', async () => {
+  const u = await joinAs('model-gated@example.com');
+  const team = await groupNamed('Model team');
+  const id = (await browser('POST', '/api/admin/models', { body: { display_name: 'Restricted', internal_name: 'restricted' } })).json.id;
+  assert.equal((await browser('PATCH', `/api/admin/models/${id}`, { body: { enabled: true, access_groups: [team, 7, 'x'.repeat(200)] } })).status, 200);
+  assert.deepEqual((await browser('GET', '/api/admin/models')).json.find(m => m.id === id).access_groups, [team], 'only plausible group ids are kept');
+  assert.equal((await browser('POST', '/api/admin/changes/publish', { body: {} })).status, 200);
+
+  assert.ok(!(await as(u)('GET', '/api/models')).json.some(m => m.id === id), 'hidden from the list');
+  const chat = (await as(u)('POST', '/api/chats', { body: {} })).json.id;
+  const frames = await exchange({ Origin: ORIGIN, 'Sec-Fetch-Site': 'same-origin', Cookie: u.cookie }, { type: 'chat', chatId: chat, modelId: id, content: 'hello' });
+  assert.equal(frames[0].type, 'error', 'and refused on the socket');
+
+  await browser('PUT', `/api/admin/groups/${team}/members`, { body: { add: [u.id] } });
+  await browser('PATCH', `/api/admin/groups/${team}`, { body: { defaultModelId: id } });
+  const listed = (await as(u)('GET', '/api/models')).json;
+  assert.ok(listed.some(m => m.id === id), 'joining the group opens it');
+  assert.equal(listed.find(m => m.isDefault)?.id, id, 'and the group default becomes the default for new chats');
+
+  await browser('POST', '/api/admin/models/remove', { body: { ids: [id] } });
+  await browser('POST', '/api/admin/changes/publish', { body: {} });
+  await browser('DELETE', `/api/admin/groups/${team}`);
+  await browser('DELETE', `/api/admin/users/${u.id}`);
+});
+
+test('a workspace connector limited to a group is only listed for that group', async () => {
+  const u = await joinAs('mcp-gated@example.com');
+  const team = await groupNamed('Connector team');
+  const created = await browser('POST', '/api/admin/mcp', { body: { name: 'Gated', transport: 'http', url: 'http://127.0.0.1:9/mcp', enabled: true, access_groups: [team] } });
+  const id = created.json.server.id;
+  assert.ok(!(await as(u)('GET', '/api/mcp')).json.servers.some(s => s.id === id));
+  await browser('PUT', `/api/admin/groups/${team}/members`, { body: { add: [u.id] } });
+  assert.ok((await as(u)('GET', '/api/mcp')).json.servers.some(s => s.id === id));
+  await browser('DELETE', `/api/admin/mcp/${id}`);
+  await browser('DELETE', `/api/admin/groups/${team}`);
+  await browser('DELETE', `/api/admin/users/${u.id}`);
+});
+
+test('owners define custom roles, and a custom role manages only below its rank', async () => {
+  const adm = await joinAs('role-admin@example.com');
+  const lead = await joinAs('role-lead@example.com');
+  const plain = await joinAs('role-plain@example.com');
+  await browser('PATCH', `/api/admin/users/${adm.id}`, { body: { role: 'admin' } });
+
+  assert.equal((await as(adm)('POST', '/api/admin/roles', { body: { name: 'Support', rank: 50, permissions: ['admin.panel'] } })).status, 403, 'admins do not define roles');
+  assert.equal((await browser('POST', '/api/admin/roles', { body: { name: 'Admin', rank: 50 } })).status, 400, 'built-in names are taken');
+  assert.equal((await browser('POST', '/api/admin/roles', { body: { name: 'Support', rank: 100 } })).status, 400, 'custom ranks stay below admin');
+  const made = await browser('POST', '/api/admin/roles', { body: { name: 'Support', rank: 50, permissions: ['admin.panel', 'admin.users', 'nonsense'] } });
+  assert.equal(made.status, 200, made.text);
+  const support = made.json.role.id;
+  assert.deepEqual(made.json.role.extras, ['admin.panel', 'admin.users']);
+
+  assert.equal((await browser('PATCH', `/api/admin/users/${lead.id}`, { body: { role: support } })).status, 200);
+  assert.equal((await as(lead)('GET', '/api/admin/users')).status, 200, 'the role opens user management');
+  assert.equal((await as(lead)('PATCH', `/api/admin/users/${plain.id}`, { body: { role: 'pending' } })).status, 200, 'below its rank');
+  assert.equal((await as(lead)('PATCH', `/api/admin/users/${adm.id}`, { body: { status: 'disabled' } })).status, 403, 'not above it');
+  assert.equal((await as(lead)('PATCH', `/api/admin/users/${plain.id}`, { body: { role: support } })).status, 403, 'and never its own rank');
+  assert.equal((await as(lead)('POST', '/api/admin/changes/publish', { body: {} })).status, 403, 'nothing it was not given');
+
+  const removed = await browser('DELETE', `/api/admin/roles/${support}`);
+  assert.equal(removed.json.moved, 1);
+  assert.equal((await as(lead)('GET', '/api/me')).json.user.role, 'user', 'its holders fall back to user');
+  assert.equal((await as(lead)('GET', '/api/admin/users')).status, 403);
+  for (const x of [adm, lead, plain]) await browser('DELETE', `/api/admin/users/${x.id}`);
 });
 
 test('unknown routes answer in the right language', async () => {
@@ -1097,9 +1297,9 @@ test('consult settings are admin-only, sanitised and add their block', async () 
   await browser('POST', '/api/admin/changes/publish', { body: {} });
 });
 
-function chatTurn(send, { timeoutMs = 20000, onFrame = null } = {}) {
+function chatTurn(send, { timeoutMs = 20000, onFrame = null, session = cookie } = {}) {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`, { headers: { Cookie: cookie, Origin: ORIGIN } });
+    const ws = new WebSocket(`ws://127.0.0.1:${PORT}/ws`, { headers: { Cookie: session, Origin: ORIGIN } });
     const got = [];
     const finish = (fn, arg) => { clearTimeout(timer); try { ws.terminate(); } catch {} fn(arg); };
     const timer = setTimeout(() => finish(reject, new Error('no done frame: ' + JSON.stringify(got.slice(-5)))), timeoutMs);
@@ -1696,5 +1896,603 @@ test('a regression run grades both sides, and a sampled reply is checked and ope
     await browser('DELETE', `/api/admin/providers/${provider_id}`);
   } finally {
     await mock.close();
+  }
+});
+
+test('sharing hands out exactly the granted level, and nobody reaches what was not shared with them', async () => {
+  const { mockOpenAi } = await import('./mockapis.js');
+  const mock = await mockOpenAi({ key: 'k-share', models: ['share-model'], respond: () => ({ text: 'Seen it.' }) });
+  const ana = await joinAs('share-owner@example.com');
+  const ben = await joinAs('share-reader@example.com');
+  const cy = await joinAs('share-stranger@example.com');
+  const A = as(ana), B = as(ben), C = as(cy);
+  const share = (call, type, id, principalId, level, principalType = 'user') => call('PUT', `/api/shares/${type}/${id}`, { body: { principalType, principalId, level } });
+  const unshare = (call, type, id, principalId, principalType = 'user') => call('DELETE', `/api/shares/${type}/${id}`, { body: { principalType, principalId } });
+  let provider_id = null;
+  let modelId = null;
+  const groups = [];
+  try {
+    const project = (await A('POST', '/api/projects', { body: { name: 'Roadmap' } })).json;
+    assert.equal((await A('POST', `/api/projects/${project.id}/files/new`, { body: { path: 'plan.md' } })).status, 200);
+    assert.equal((await B('GET', `/api/projects/${project.id}`)).status, 404, 'an unshared project looks missing');
+    assert.equal((await B('GET', `/api/projects/${project.id}/files`)).status, 404);
+    assert.equal((await B('GET', `/api/shares/project/${project.id}`)).status, 404, 'and so does who has it');
+    assert.equal((await B('GET', '/api/directory?q=share-owner')).json.people[0].id, ana.id, 'people can be found to share with');
+
+    assert.equal((await share(A, 'project', project.id, ben.id, 'view')).status, 200);
+    const seen = (await B('GET', `/api/projects/${project.id}`)).json;
+    assert.equal(seen.access, 'view');
+    assert.equal(seen.canShare, false);
+    assert.ok((await B('GET', '/api/projects')).json.some(p => p.id === project.id && p.owner), 'it is listed with its owner');
+    assert.equal((await B('GET', `/api/projects/${project.id}/file?path=plan.md`)).status, 200, 'a viewer reads the knowledge');
+    assert.equal((await B('POST', `/api/projects/${project.id}/files/new`, { body: { path: 'mine.md' } })).status, 403, 'but cannot add to it');
+    assert.equal((await B('PATCH', `/api/projects/${project.id}`, { body: { instructions: 'Be terse.' } })).status, 403);
+    assert.equal((await share(B, 'project', project.id, cy.id, 'view')).status, 403, 'or share it on');
+    assert.equal((await B('DELETE', `/api/projects/${project.id}`)).status, 403);
+    assert.equal((await B('POST', '/api/chats', { body: { projectId: project.id } })).json.projectId, project.id, 'a viewer chats inside it');
+
+    assert.equal((await share(A, 'project', project.id, ben.id, 'edit')).status, 200);
+    assert.equal((await B('POST', `/api/projects/${project.id}/files/new`, { body: { path: 'mine.md' } })).status, 200, 'an editor adds files');
+    assert.equal((await B('DELETE', `/api/projects/${project.id}`)).status, 403, 'only the owner deletes');
+    const who = (await A('GET', `/api/shares/project/${project.id}`)).json;
+    assert.deepEqual(who.people.map(p => [p.id, p.level]), [[ben.id, 'edit']]);
+    assert.equal((await B('GET', `/api/shares/project/${project.id}`)).json.people.length, 0, 'only managers see everyone who has it');
+
+    assert.equal((await unshare(A, 'project', project.id, ben.id)).status, 200);
+    assert.equal((await B('GET', `/api/projects/${project.id}/files`)).status, 404, 'revoking applies on the next request');
+    assert.equal((await B('POST', '/api/chats', { body: { projectId: project.id } })).json.projectId, null, 'and the project can no longer be picked');
+
+    const outer = await groupNamed('Readers');
+    const inner = await groupNamed('New readers');
+    groups.push(outer, inner);
+    assert.equal((await browser('PUT', `/api/admin/groups/${outer}/groups/${inner}`)).status, 200);
+    assert.equal((await browser('PUT', `/api/admin/groups/${inner}/members`, { body: { add: [cy.id] } })).status, 200);
+    assert.equal((await share(A, 'project', project.id, outer, 'view', 'group')).status, 200);
+    assert.equal((await C('GET', `/api/projects/${project.id}`)).status, 200, 'shared through a nested group');
+    const why = (await A('GET', `/api/shares/project/${project.id}`)).json.people.find(p => p.id === cy.id);
+    assert.deepEqual(why.reasons[0].path.map(g => g.name), ['Readers', 'New readers']);
+    assert.equal((await browser('PUT', `/api/admin/groups/${inner}/members`, { body: { remove: [cy.id] } })).status, 200);
+    assert.equal((await C('GET', `/api/projects/${project.id}`)).status, 404, 'leaving the group ends it');
+
+    provider_id = await connection('openrouter', mock.url, 'k-share');
+    modelId = (await browser('POST', '/api/admin/models', { body: { display_name: 'Share', internal_name: 'share-model', provider_id } })).json.id;
+    assert.equal((await browser('POST', '/api/admin/changes/publish', { body: {} })).status, 200);
+
+    const notes = await uploadFile(A, 'notes.txt', 'text/plain', 'secret notes');
+    const chat = (await A('POST', '/api/chats', { body: {} })).json;
+    const sent = await chatTurn({ type: 'chat', chatId: chat.id, modelId, content: 'Read this', attachments: [{ url: notes, name: 'notes.txt', type: 'text/plain', size: 12 }] }, { session: ana.cookie });
+    assert.equal(sent.find(f => f.type === 'error'), undefined, JSON.stringify(sent.find(f => f.type === 'error')));
+    assert.ok(JSON.stringify(mock.requests.filter(r => r.body.stream).at(-1).body).includes('secret notes'), 'the owner attaches their own file');
+
+    const theirs = (await B('POST', '/api/chats', { body: {} })).json;
+    assert.equal((await B('POST', `/api/chats/${theirs.id}/pins`, { body: { url: notes, name: 'notes.txt' } })).status, 404, 'nobody pins a file they did not upload');
+    await chatTurn({ type: 'chat', chatId: theirs.id, modelId, content: 'What does it say?', attachments: [{ url: notes, name: 'notes.txt', type: 'text/plain', size: 12 }] }, { session: ben.cookie });
+    assert.ok(!JSON.stringify(mock.requests.filter(r => r.body.stream).at(-1).body).includes('secret notes'), 'a borrowed attachment never reaches the model');
+    assert.deepEqual((await B('GET', `/api/chats/${theirs.id}`)).json.messages.find(m => m.role === 'user').attachments, [], 'and is not stored');
+    assert.equal((await request('GET', notes, { cookie: ben.cookie })).status, 404, 'knowing the address is not access');
+    assert.equal((await B('GET', `/api/uploads/${notes.split('/').pop()}/text`)).status, 404);
+
+    assert.equal((await B('GET', `/api/chats/${chat.id}`)).status, 404);
+    assert.equal((await share(B, 'chat', chat.id, ben.id, 'view')).status, 404, 'a stranger cannot share it to themselves');
+    assert.equal((await share(A, 'chat', chat.id, ben.id, 'edit')).status, 400, 'chats are shared to read only');
+    assert.equal((await share(A, 'chat', chat.id, ben.id, 'view')).status, 200);
+    const read = (await B('GET', `/api/chats/${chat.id}`)).json;
+    assert.equal(read.chat.access, 'view');
+    assert.equal(read.messages.length, 2);
+    assert.ok((await B('GET', '/api/shared/chats')).json.chats.some(c => c.id === chat.id));
+    assert.equal((await request('GET', notes, { cookie: ben.cookie })).status, 200, 'a reader sees what the chat shows');
+    assert.equal((await request('GET', notes, { cookie: cy.cookie })).status, 404, 'and nobody else does');
+
+    await B('PATCH', `/api/chats/${chat.id}`, { body: { title: 'Taken over' } });
+    await B('DELETE', `/api/chats/${chat.id}`);
+    assert.equal((await B('POST', `/api/chats/${chat.id}/fork`, { body: {} })).status, 404);
+    const hijack = await exchange({ Cookie: ben.cookie, Origin: ORIGIN }, { type: 'chat', chatId: chat.id, modelId, content: 'Mine now' });
+    assert.equal(hijack[0]?.type, 'error', 'a reader cannot write to it');
+    const intact = (await A('GET', `/api/chats/${chat.id}`)).json;
+    assert.notEqual(intact.chat.title, 'Taken over');
+    assert.equal(intact.messages.length, 2, 'the owner’s chat is untouched');
+
+    const copy = await B('POST', `/api/chats/${chat.id}/copy`);
+    assert.equal(copy.status, 200, copy.text);
+    const mine = (await B('GET', `/api/chats/${copy.json.id}`)).json;
+    assert.equal(mine.chat.access, 'owner');
+    const copied = mine.messages.find(m => m.role === 'user').attachments[0].url;
+    assert.notEqual(copied, notes, 'the copy owns its own file');
+    assert.equal((await unshare(A, 'chat', chat.id, ben.id)).status, 200);
+    assert.equal((await B('GET', `/api/chats/${chat.id}`)).status, 404, 'revoked at once');
+    assert.equal((await request('GET', notes, { cookie: ben.cookie })).status, 404, 'with its attachment');
+    assert.equal((await request('GET', copied, { cookie: ben.cookie })).status, 200, 'while the copy stays theirs');
+
+    const skill = (await A('POST', '/api/skills', { body: { name: 'house-style', description: 'How we write', body: '# House style' } })).json;
+    assert.equal((await share(A, 'skill', skill.id, ben.id, 'view')).status, 200);
+    const listed = (await B('GET', '/api/skills')).json.skills.find(s => s.id === skill.id);
+    assert.equal(listed.scope, 'shared');
+    assert.equal(listed.editable, false);
+    assert.equal(listed.enabled, true);
+    assert.equal((await B('PATCH', `/api/skills/${skill.id}`, { body: { body: '# Mine now' } })).status, 403);
+    assert.equal((await B('PATCH', `/api/skills/${skill.id}`, { body: { enabled: false } })).json.enabled, false, 'a reader switches it off for themselves');
+    assert.equal((await A('GET', '/api/skills')).json.skills.find(s => s.id === skill.id).enabled, true, 'without touching the owner');
+    assert.equal((await B('DELETE', `/api/skills/${skill.id}`)).status, 404);
+    assert.equal((await share(A, 'skill', skill.id, ben.id, 'edit')).status, 200);
+    assert.equal((await B('PATCH', `/api/skills/${skill.id}`, { body: { body: '# Written together' } })).status, 200, 'an editor edits it');
+    assert.equal((await A('GET', '/api/skills')).json.skills.find(s => s.id === skill.id).body, '# Written together');
+
+    assert.equal((await share(A, 'project', project.id, ben.id, 'view')).status, 200);
+    assert.equal((await browser('DELETE', `/api/admin/users/${ana.id}`)).status, 200);
+    assert.equal((await B('GET', `/api/projects/${project.id}`)).status, 404, 'removing the owner removes what they shared');
+    assert.ok(!(await B('GET', '/api/skills')).json.skills.some(s => s.id === skill.id));
+    assert.deepEqual((await B('GET', '/api/shared/chats')).json.chats, []);
+  } finally {
+    for (const g of groups) await browser('DELETE', `/api/admin/groups/${g}`);
+    for (const who of [ana, ben, cy]) await browser('DELETE', `/api/admin/users/${who.id}`);
+    if (modelId) {
+      await browser('POST', '/api/admin/models/remove', { body: { ids: [modelId] } });
+      await browser('POST', '/api/admin/changes/publish', { body: {} });
+    }
+    if (provider_id) await browser('DELETE', `/api/admin/providers/${provider_id}`);
+    await mock.close();
+  }
+});
+
+test('two-factor sign-in is a sealed challenge that cannot be skipped, replayed or reused', async () => {
+  const { totpCode } = await import('../lib/totp.js');
+  const cookieNamed = (res, name) => (res.headers['set-cookie'] || []).map(c => c.split(';')[0]).find(c => c.startsWith(name + '='));
+  const sam = await joinAs('mfa-user@example.com');
+  const S = as(sam);
+  const setup = (await S('POST', '/api/me/2fa/setup', { body: {} })).json;
+  assert.match(setup.qr, /^<svg/);
+  const enabled = await S('POST', '/api/me/2fa/enable', { body: { code: totpCode(setup.secret) } });
+  assert.equal(enabled.status, 200, enabled.text);
+  assert.equal(enabled.json.recoveryCodes.length, 10);
+  assert.equal(enabled.json.user.twoFactor, true);
+
+  const signIn = () => request('POST', '/api/auth/login', { origin: ORIGIN, secFetchSite: 'same-origin', body: { email: 'mfa-user@example.com', password: PASSWORD } });
+  const first = await signIn();
+  assert.equal(first.status, 200);
+  assert.deepEqual(first.json.mfa.methods, ['totp', 'recovery']);
+  assert.equal(first.json.user, undefined, 'no account before the second step');
+  assert.equal(cookieNamed(first, 'token'), undefined, 'and no session');
+  const challenge = cookieNamed(first, 'oq_mfa');
+  assert.ok(challenge);
+  const finish = (cookieValue, body) => request('POST', '/api/auth/mfa', { origin: ORIGIN, secFetchSite: 'same-origin', cookie: cookieValue, body });
+
+  assert.equal((await finish('', { code: totpCode(setup.secret, Date.now() + 30000) })).json.restart, true, 'no challenge, no second step');
+  assert.equal((await finish(challenge, { code: '000000' })).status, 401);
+  assert.equal((await finish(challenge, { code: totpCode(setup.secret) })).status, 401, 'the code used to enroll cannot be replayed');
+  const done = await finish(challenge, { code: totpCode(setup.secret, Date.now() + 30000) });
+  assert.equal(done.status, 200, done.text);
+  assert.equal(done.json.user.email, 'mfa-user@example.com');
+  const session = cookieNamed(done, 'token');
+  assert.ok(session);
+  assert.equal((await request('GET', '/api/me', { cookie: session })).status, 200);
+  assert.equal((await finish(challenge, { recovery: enabled.json.recoveryCodes[0] })).status, 401, 'a challenge opens one session');
+
+  const again = cookieNamed(await signIn(), 'oq_mfa');
+  assert.equal((await finish(again, { recovery: enabled.json.recoveryCodes[0] })).status, 200, 'a recovery code signs in');
+  const third = cookieNamed(await signIn(), 'oq_mfa');
+  assert.equal((await finish(third, { recovery: enabled.json.recoveryCodes[0] })).status, 401, 'once');
+
+  assert.equal((await browser('PUT', '/api/admin/auth/mfa', { body: { policy: 'everyone' } })).status, 400, 'an owner without two-factor cannot require it');
+  const mine = (await browser('POST', '/api/me/2fa/setup', { body: {} })).json;
+  assert.equal((await browser('POST', '/api/me/2fa/enable', { body: { code: totpCode(mine.secret) } })).status, 200);
+  try {
+    assert.equal((await as(sam)('PUT', '/api/admin/auth/mfa', { body: { policy: 'everyone' } })).status, 403, 'only the owner sets the policy');
+    const policy = await browser('PUT', '/api/admin/auth/mfa', { body: { policy: 'everyone' } });
+    assert.equal(policy.status, 200, policy.text);
+    const late = await joinAs('mfa-late@example.com');
+    const L = as(late);
+    const blocked = await L('GET', '/api/models');
+    assert.equal(blocked.status, 403);
+    assert.equal(blocked.json.gate, 'mfa');
+    assert.equal((await L('GET', '/api/me')).json.user.gate, 'mfa', 'the account can see why');
+    const lateSetup = (await L('POST', '/api/me/2fa/setup', { body: {} })).json;
+    assert.equal((await L('POST', '/api/me/2fa/enable', { body: { code: totpCode(lateSetup.secret) } })).status, 200, 'and enroll');
+    assert.equal((await L('GET', '/api/models')).status, 200, 'which lifts the gate on the same session');
+    assert.equal((await L('POST', '/api/me/2fa/disable', { body: { password: PASSWORD } })).status, 403, 'a required factor cannot be turned off');
+
+    assert.equal((await S('POST', `/api/admin/users/${late.id}/mfa-reset`)).status, 403, 'a user cannot reset anyone');
+    assert.equal((await browser('POST', `/api/admin/users/${late.id}/mfa-reset`)).status, 200);
+    assert.equal((await L('GET', '/api/me')).status, 401, 'a reset ends the account’s sessions');
+    assert.equal((await browser('DELETE', `/api/admin/users/${late.id}`)).status, 200);
+  } finally {
+    assert.equal((await browser('PUT', '/api/admin/auth/mfa', { body: { policy: 'optional' } })).status, 200);
+    assert.equal((await browser('POST', '/api/me/2fa/disable', { body: { password: PASSWORD } })).status, 200);
+    assert.equal((await browser('DELETE', `/api/admin/users/${sam.id}`)).status, 200);
+  }
+});
+
+test('single sign-on runs PKCE, state and nonce, provisions by policy and links only by the rules', async () => {
+  const { mockOidc } = await import('./mockapis.js');
+  const idp = await mockOidc();
+  const cookieNamed = (res, name) => (res.headers['set-cookie'] || []).map(c => c.split(';')[0]).find(c => c.startsWith(name + '='));
+  const made = [];
+  let providerId = null;
+  try {
+    providerId = (await browser('POST', '/api/admin/auth/providers', { body: { type: 'oidc' } })).json.created;
+    assert.ok(providerId);
+    const configure = await browser('PATCH', `/api/admin/auth/providers/${providerId}`, {
+      body: { label: 'Acme SSO', clientId: idp.clientId, clientSecret: idp.clientSecret, issuer: idp.url, provision: 'pending', syncGroups: true, enabled: true }
+    });
+    assert.equal(configure.status, 200, configure.text);
+    const listed = configure.json.providers.find(p => p.id === providerId);
+    assert.equal(listed.hasSecret, true);
+    assert.ok(!JSON.stringify(configure.json).includes(idp.clientSecret), 'the client secret never leaves the server');
+    assert.equal((await browser('PATCH', `/api/admin/auth/providers/${providerId}`, { body: { issuer: 'http://idp.example.com' } })).status, 400, 'a remote issuer must use https');
+
+    const start = (opts = {}) => request('POST', `/api/auth/sso/${providerId}/start`, { origin: ORIGIN, secFetchSite: 'same-origin', body: opts.body || {}, cookie: opts.cookie });
+    assert.equal((await start()).status, 503, 'no public address, no redirect URI');
+    assert.equal((await browser('PUT', '/api/admin/auth/public-url', { body: { url: 'javascript:alert(1)' } })).status, 400);
+    assert.equal((await browser('PUT', '/api/admin/auth/public-url', { body: { url: ORIGIN } })).status, 200);
+    assert.deepEqual((await request('GET', '/api/auth/context')).json.providers.map(p => p.label), ['Acme SSO']);
+
+    const signIn = async (claims, opts = {}) => {
+      const begun = await start(opts);
+      assert.equal(begun.status, 200, begun.text);
+      const flow = cookieNamed(begun, 'oq_sso');
+      const back = idp.authorize(begun.json.url, claims);
+      const cookieValue = [flow, opts.cookie].filter(Boolean).join('; ');
+      return { begun, back, done: await request('GET', back.pathname + back.search, { cookie: cookieValue }), flow };
+    };
+
+    const first = await signIn({ sub: 'acme-1', email: 'sso-user@example.com', email_verified: true, name: 'Sso User', groups: ['Engineering'] });
+    const auth = new URL(first.begun.json.url);
+    assert.equal(auth.searchParams.get('code_challenge_method'), 'S256');
+    assert.ok(auth.searchParams.get('state') && auth.searchParams.get('nonce'));
+    assert.equal(auth.searchParams.get('redirect_uri'), `${ORIGIN}/api/auth/sso/${providerId}/callback`);
+    assert.equal(first.done.status, 302);
+    assert.equal(first.done.headers.location, '/');
+    const ssoCookie = cookieNamed(first.done, 'token');
+    const me = (await request('GET', '/api/me', { cookie: ssoCookie })).json.user;
+    made.push(me.id);
+    assert.equal(me.role, 'pending', 'provisioned with the provider’s default role');
+    assert.equal(me.hasPassword, false);
+    const replay = await request('GET', first.back.pathname + first.back.search, { cookie: first.flow });
+    assert.match(replay.headers.location, /sso_error=failed/, 'an authorization code works once');
+
+    const forged = await start();
+    const tampered = idp.authorize(forged.json.url, { sub: 'acme-1', email: 'sso-user@example.com', email_verified: true });
+    tampered.searchParams.set('state', 'not-the-state');
+    assert.match((await request('GET', tampered.pathname + tampered.search, { cookie: cookieNamed(forged, 'oq_sso') })).headers.location, /sso_error=failed/, 'a state mismatch is refused');
+    const loose = idp.authorize((await start()).json.url, { sub: 'acme-1', email: 'sso-user@example.com', email_verified: true });
+    assert.match((await request('GET', loose.pathname + loose.search)).headers.location, /sso_error=expired/, 'no flow cookie, no sign-in');
+
+    assert.equal((await browser('PATCH', `/api/admin/users/${me.id}`, { body: { role: 'user' } })).status, 200);
+    const groups = (await browser('GET', '/api/admin/groups')).json.groups;
+    const synced = groups.find(g => g.source === 'sso:' + providerId && g.name === 'Engineering');
+    assert.ok(synced, 'group claims become directory groups');
+    assert.equal(synced.members, 1);
+    const again = await signIn({ sub: 'acme-1', email: 'sso-user@example.com', email_verified: true, groups: [] });
+    assert.equal(again.done.headers.location, '/', 'a linked identity signs straight in');
+    assert.equal((await browser('GET', '/api/admin/groups')).json.groups.find(g => g.id === synced.id).members, 0, 'leaving the group upstream leaves it here');
+
+    const local = await joinAs('sso-local@example.com');
+    made.push(local.id);
+    const taken = await signIn({ sub: 'acme-2', email: 'sso-local@example.com', email_verified: true });
+    assert.match(taken.done.headers.location, /sso_error=account_exists/, 'an account with a password is never linked by email');
+    const linked = await signIn({ sub: 'acme-2', email: 'anything@example.com', email_verified: true }, { body: { intent: 'link' }, cookie: local.cookie });
+    assert.equal(linked.done.headers.location, '/?sso=linked');
+    const mine = (await as(local)('GET', '/api/me/identities')).json;
+    assert.equal(mine.identities.length, 1);
+    assert.equal(mine.identities[0].label, 'Acme SSO');
+    const viaSso = await signIn({ sub: 'acme-2', email: 'anything@example.com', email_verified: true });
+    assert.equal((await request('GET', '/api/me', { cookie: cookieNamed(viaSso.done, 'token') })).json.user.id, local.id, 'the linked identity signs in to the local account');
+    const stolen = await signIn({ sub: 'acme-2', email: 'x@example.com', email_verified: true }, { body: { intent: 'link' }, cookie: ssoCookie });
+    assert.match(stolen.done.headers.location, /sso_error=linked_elsewhere/, 'an identity belongs to one account');
+    assert.equal((await as(local)('DELETE', `/api/me/identities/${mine.identities[0].id}`, { body: { password: 'wrong' } })).status, 401);
+    assert.equal((await as(local)('DELETE', `/api/me/identities/${mine.identities[0].id}`, { body: { password: PASSWORD } })).status, 200);
+
+    const unverified = await signIn({ sub: 'acme-3', email: 'fresh@example.com', email_verified: false });
+    assert.match(unverified.done.headers.location, /sso_error=unverified/, 'an unverified email never creates an account');
+    assert.equal((await request('GET', '/api/me', { cookie: ssoCookie })).status, 200);
+    assert.equal((await as({ cookie: ssoCookie })('DELETE', `/api/me/identities/${(await request('GET', '/api/me/identities', { cookie: ssoCookie })).json.identities[0].id}`, { body: {} })).status, 400, 'the only way in cannot be removed');
+  } finally {
+    for (const id of made) await browser('DELETE', `/api/admin/users/${id}`);
+    for (const g of (await browser('GET', '/api/admin/groups')).json.groups.filter(g => g.source === 'sso:' + providerId)) await browser('DELETE', `/api/admin/groups/${g.id}`);
+    if (providerId) await browser('DELETE', `/api/admin/auth/providers/${providerId}`);
+    await browser('PUT', '/api/admin/auth/public-url', { body: { url: '' } });
+    await idp.close();
+  }
+});
+
+test('directory sign-in binds as exactly one entry, provisions, syncs groups and fails closed', async () => {
+  const { mockLdap } = await import('./mockapis.js');
+  const dir = await mockLdap();
+  const made = [];
+  dir.add('ana', { password: 'ana-directory-pass', mail: 'Ana@Corp.test', cn: 'Ana Lima', uuid: '0f8fad5b-d9cb-469f-a165-70867728950e', memberOf: ['cn=Engineering,ou=groups,dc=example,dc=com', 'cn=R\\2cD,ou=groups,dc=example,dc=com'] });
+  dir.add('bo', { password: 'bo-directory-pass', mail: 'bo@corp.test', cn: 'Bo', uuid: '7c9e6679-7425-40de-944b-e07fc1f90ae7' });
+  const signIn = (email, password) => request('POST', '/api/auth/login', { origin: ORIGIN, secFetchSite: 'same-origin', body: { email, password } });
+  const settings = {
+    url: dir.url, security: 'none', bindDn: dir.serviceDn, bindPassword: dir.servicePassword,
+    userBase: 'ou=people,' + dir.base, userFilter: '(&(objectClass=inetOrgPerson)(uid={{username}}))',
+    groupMode: 'memberOf', provision: 'user', enabled: true
+  };
+  try {
+    assert.equal((await browser('PUT', '/api/admin/auth/ldap', { body: { ...settings, url: 'ldap://ldap.example.com' } })).status, 400, 'no plain text to a remote directory');
+    assert.equal((await browser('PUT', '/api/admin/auth/ldap', { body: { ...settings, userFilter: '(uid=*)' } })).status, 400, 'the filter must take the username');
+    const saved = await browser('PUT', '/api/admin/auth/ldap', { body: settings });
+    assert.equal(saved.status, 200, saved.text);
+    assert.equal(saved.json.hasPassword, true);
+    assert.ok(!JSON.stringify(saved.json).includes(dir.servicePassword), 'the service password never comes back');
+    assert.equal((await browser('POST', '/api/admin/auth/ldap/test', { body: {} })).json.ok, true);
+    const lookup = (await browser('POST', '/api/admin/auth/ldap/lookup', { body: { username: 'ana' } })).json;
+    assert.equal(lookup.email, 'ana@corp.test');
+    assert.deepEqual(lookup.groups, ['Engineering', 'R,D']);
+    assert.equal((await request('GET', '/api/auth/context')).json.ldap, true);
+
+    assert.equal((await signIn('ana', 'wrong')).status, 401);
+    assert.equal((await signIn('*', 'ana-directory-pass')).status, 401, 'a wildcard username matches nobody');
+    assert.equal((await signIn('ana)(uid=*', 'ana-directory-pass')).status, 401, 'filter syntax in a username is escaped');
+    const ok = await signIn('ana', 'ana-directory-pass');
+    assert.equal(ok.status, 200, ok.text);
+    assert.equal(ok.json.user.email, 'ana@corp.test');
+    assert.equal(ok.json.user.source, 'ldap');
+    assert.equal(ok.json.user.hasPassword, false, 'the directory password is never stored');
+    made.push(ok.json.user.id);
+    const groups = (await browser('GET', '/api/admin/groups')).json.groups.filter(g => g.source === 'ldap').map(g => g.name).sort();
+    assert.deepEqual(groups, ['Engineering', 'R,D']);
+    assert.equal((await signIn('ana', 'ana-directory-pass')).json.user.id, ok.json.user.id, 'the same entry signs in to the same account');
+
+    const local = await joinAs('ldap-local@example.com');
+    made.push(local.id);
+    dir.add('dup', { password: 'dup-pass', mail: 'ldap-local@example.com', cn: 'Dup', uuid: '16fd2706-8baf-433b-82eb-8c7fada847da' });
+    assert.equal((await signIn('dup', 'dup-pass')).status, 403, 'a directory entry never takes over a password account');
+    assert.equal((await signIn('ldap-local@example.com', PASSWORD)).status, 200, 'local accounts keep signing in with their password');
+
+    const bo = await signIn('bo', 'bo-directory-pass');
+    made.push(bo.json.user.id);
+    dir.remove('bo');
+    await browser('PUT', '/api/admin/auth/ldap', { body: { syncDisable: true, syncMaxDisablePct: 10 } });
+    const guarded = (await browser('POST', '/api/admin/auth/ldap/sync', { body: {} })).json;
+    assert.equal(guarded.ok, false, 'a sync that would disable too many accounts changes nothing');
+    assert.equal((await browser('GET', '/api/admin/users?q=bo%40corp.test')).json.users[0].status, 'active');
+    await browser('PUT', '/api/admin/auth/ldap', { body: { syncMaxDisablePct: 50 } });
+    const report = (await browser('POST', '/api/admin/auth/ldap/sync', { body: {} })).json;
+    assert.equal(report.ok, true);
+    assert.equal(report.disabled, 1);
+    assert.equal((await browser('GET', '/api/admin/users?q=bo%40corp.test')).json.users[0].status, 'disabled', 'gone from the directory, disabled here');
+
+    await browser('PUT', '/api/admin/auth/ldap', { body: { url: 'ldap://127.0.0.1:1' } });
+    assert.equal((await signIn('ana', 'ana-directory-pass')).status, 503, 'an unreachable directory fails closed');
+    assert.equal((await signIn(EMAIL, PASSWORD)).status, 200, 'and the owner can still sign in');
+  } finally {
+    await browser('PUT', '/api/admin/auth/ldap', { body: { enabled: false } });
+    for (const id of made) await browser('DELETE', `/api/admin/users/${id}`);
+    for (const g of (await browser('GET', '/api/admin/groups')).json.groups.filter(g => g.source === 'ldap')) await browser('DELETE', `/api/admin/groups/${g.id}`);
+    await dir.close();
+  }
+});
+
+test('SCIM provisions users and groups the way Okta and Entra ID drive it, and never takes over an account by surprise', async () => {
+  const PATCH_OP = 'urn:ietf:params:scim:api:messages:2.0:PatchOp';
+  const call = (method, path, token, body, type = 'application/scim+json') => {
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    if (body === undefined) return request(method, '/scim/v2' + path, { headers });
+    headers['Content-Type'] = type;
+    return request(method, '/scim/v2' + path, { headers, raw: Buffer.from(typeof body === 'string' ? body : JSON.stringify(body)) });
+  };
+  const made = [];
+  try {
+    assert.equal((await call('GET', '/Users', 'oqscim_x')).status, 403, 'provisioning is off until an owner turns it on');
+    const on = await browser('PUT', '/api/admin/auth/scim', { body: { enabled: true, provision: 'user', deprovision: 'disable', adopt: 'off' } });
+    assert.equal(on.status, 200, on.text);
+    assert.ok(on.json.baseUrl.endsWith('/scim/v2'));
+    assert.equal((await browser('POST', '/api/admin/auth/scim/tokens', { body: { name: '' } })).status, 400);
+    const minted = await browser('POST', '/api/admin/auth/scim/tokens', { body: { name: 'Okta', days: 90 } });
+    const token = minted.json.token;
+    assert.match(token, /^oqscim_[\w-]{43}$/);
+    assert.ok(!JSON.stringify(minted.json.tokens).includes(token), 'the token is shown once and never listed');
+    const member = await joinAs('scim-member@example.com');
+    made.push(member.id);
+    assert.equal((await as(member)('GET', '/api/admin/auth/scim')).status, 403);
+
+    const anon = await call('GET', '/Users');
+    assert.equal(anon.status, 401);
+    assert.match(anon.headers['www-authenticate'], /Bearer/);
+    assert.deepEqual(anon.json.schemas, ['urn:ietf:params:scim:api:messages:2.0:Error']);
+    assert.equal((await call('GET', '/Users', 'oqscim_' + 'A'.repeat(43))).status, 401);
+    const config = await call('GET', '/ServiceProviderConfig', token);
+    assert.equal(config.status, 200);
+    assert.match(config.headers['content-type'], /application\/scim\+json/);
+    assert.equal(config.json.patch.supported, true);
+    assert.equal((await call('GET', '/Schemas', token)).json.totalResults, 3);
+    assert.equal((await call('GET', '/ResourceTypes/User', token)).json.endpoint, '/Users');
+    assert.equal((await call('GET', '/Nope', token)).status, 404);
+    assert.equal((await call('GET', '/Users?filter=userName%20eq%20%229c7f4b0e%22', token)).json.totalResults, 0, 'the Entra connection test finds nobody');
+
+    const entraUser = {
+      schemas: ['urn:ietf:params:scim:schemas:core:2.0:User', 'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User'],
+      externalId: '0a21f0f2-8d2a-4f8e-bf98-7363c4aed4ef', userName: 'Lena.Ortiz@scim.test', active: true,
+      emails: [{ primary: true, type: 'work', value: 'Lena.Ortiz@scim.test' }], meta: { resourceType: 'User' },
+      name: { formatted: 'Lena Ortiz', familyName: 'Ortiz', givenName: 'Lena' }, roles: [],
+      'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User': { department: 'Research', manager: { value: 'boss' } }
+    };
+    const created = await call('POST', '/Users', token, entraUser);
+    assert.equal(created.status, 201, created.text);
+    assert.equal(created.headers.location, created.json.meta.location);
+    const lena = created.json;
+    made.push(lena.id);
+    assert.equal(lena.userName, 'Lena.Ortiz@scim.test');
+    assert.equal(lena.active, true);
+    assert.equal(lena['urn:ietf:params:scim:schemas:extension:enterprise:2.0:User'].department, 'Research');
+    const account = (await browser('GET', '/api/admin/users?q=lena.ortiz%40scim.test')).json.users[0];
+    assert.equal(account.role, 'user');
+    assert.equal(account.source, 'scim');
+    assert.equal((await request('POST', '/api/auth/login', { origin: ORIGIN, secFetchSite: 'same-origin', body: { email: 'lena.ortiz@scim.test', password: 'anything-at-all' } })).status, 401, 'a provisioned account has no password');
+
+    const dup = await call('POST', '/Users', token, entraUser);
+    assert.equal(dup.status, 409);
+    assert.equal(dup.json.scimType, 'uniqueness');
+    assert.equal((await call('GET', '/Users?filter=userName%20eq%20%22lena.ortiz%40scim.test%22', token)).json.Resources[0].id, lena.id, 'userName matches without case');
+    assert.equal((await call('GET', `/Users?filter=externalId%20eq%20%22${entraUser.externalId}%22`, token)).json.totalResults, 1);
+    assert.equal((await call('GET', '/Users?filter=emails%5Btype%20eq%20%22work%22%5D.value%20co%20%22scim.test%22', token)).json.totalResults, 1);
+    assert.equal((await call('GET', '/Users?filter=userName%20zz%20%22x%22', token)).json.scimType, 'invalidFilter');
+    const slim = (await call('GET', `/Users/${lena.id}?attributes=userName`, token)).json;
+    assert.deepEqual(Object.keys(slim).sort(), ['id', 'schemas', 'userName']);
+
+    const entraPatch = await call('PATCH', `/Users/${lena.id}`, token, { schemas: [PATCH_OP], Operations: [
+      { op: 'Replace', path: 'emails[type eq "work"].value', value: 'lena.souza@scim.test' },
+      { op: 'Replace', path: 'name.familyName', value: 'Souza' },
+      { op: 'Replace', path: 'displayName', value: 'Lena Souza' }
+    ] });
+    assert.equal(entraPatch.status, 200, entraPatch.text);
+    assert.equal(entraPatch.json.emails[0].value, 'lena.souza@scim.test');
+    assert.equal((await browser('GET', '/api/admin/users?q=lena.souza%40scim.test')).json.users[0].displayName, 'Lena Souza', 'the sign-in email follows the work email');
+    const off = await call('PATCH', `/Users/${lena.id}`, token, { schemas: [PATCH_OP], Operations: [{ op: 'Replace', path: 'active', value: 'False' }] });
+    assert.equal(off.json.active, false);
+    assert.equal((await browser('GET', '/api/admin/users?q=lena.souza%40scim.test')).json.users[0].status, 'disabled');
+    const back = await call('PATCH', `/Users/${lena.id}`, token, { schemas: [PATCH_OP], Operations: [{ op: 'replace', value: { active: true } }] });
+    assert.equal(back.json.active, true, 'Okta reactivates with a value object');
+    assert.equal((await call('PATCH', `/Users/${lena.id}`, token, { Operations: [{ op: 'replace', path: 'active', value: false }] })).json.scimType, 'invalidSyntax');
+    assert.equal((await call('PATCH', `/Users/${lena.id}`, token, '{"schemas": [')).json.scimType, 'invalidSyntax');
+
+    const oktaUser = {
+      schemas: ['urn:ietf:params:scim:schemas:core:2.0:User'], userName: 'kai.tanaka@scim.test', name: { givenName: 'Kai', familyName: 'Tanaka' },
+      emails: [{ primary: true, value: 'kai.tanaka@scim.test', type: 'work' }], displayName: 'Kai Tanaka', locale: 'en-US', externalId: '00ujl29u0le5T6Aj10h7',
+      groups: [], password: 'never-stored-1', active: true
+    };
+    const kai = (await call('POST', '/Users', token, oktaUser, 'application/json')).json;
+    made.push(kai.id);
+    const put = await call('PUT', `/Users/${kai.id}`, token, { ...oktaUser, displayName: 'Kai T.', title: 'Engineer' });
+    assert.equal(put.json.displayName, 'Kai T.');
+    assert.equal(put.json.title, 'Engineer');
+    assert.ok(!put.text.includes('never-stored-1'), 'a pushed password is ignored');
+
+    const group = await call('POST', '/Groups', token, { schemas: ['urn:ietf:params:scim:schemas:core:2.0:Group'], externalId: 'grp-1', displayName: 'Data Science', members: [{ value: lena.id }] });
+    assert.equal(group.status, 201, group.text);
+    const gid = group.json.id;
+    assert.equal((await call('POST', '/Groups', token, { schemas: ['urn:ietf:params:scim:schemas:core:2.0:Group'], displayName: 'data science' })).json.scimType, 'uniqueness');
+    assert.equal((await call('PATCH', `/Groups/${gid}`, token, { schemas: [PATCH_OP], Operations: [{ op: 'Add', path: 'members', value: [{ value: kai.id }] }] })).status, 204);
+    assert.deepEqual((await call('GET', `/Groups/${gid}`, token)).json.members.map(m => m.value).sort(), [lena.id, kai.id].sort());
+    assert.equal((await call('PATCH', `/Groups/${gid}`, token, { schemas: [PATCH_OP], Operations: [{ op: 'Add', path: 'members', value: [{ value: member.id }] }] })).json.scimType, 'invalidValue', 'only provisioned people can join a provisioned group');
+    await call('PATCH', `/Groups/${gid}`, token, { schemas: [PATCH_OP], Operations: [{ op: 'remove', path: `members[value eq "${lena.id}"]` }] });
+    await call('PATCH', `/Groups/${gid}`, token, { schemas: [PATCH_OP], Operations: [{ op: 'replace', value: { id: gid, displayName: 'Data Platform' } }] });
+    const listed = (await call('GET', '/Groups?excludedAttributes=members&filter=displayName%20eq%20%22Data%20Platform%22', token)).json;
+    assert.equal(listed.totalResults, 1);
+    assert.equal(listed.Resources[0].members, undefined, 'members can be left out');
+    assert.deepEqual((await call('GET', `/Groups/${gid}`, token)).json.members.map(m => m.value), [kai.id]);
+    const local = (await browser('GET', '/api/admin/groups')).json.groups.find(g => g.id === gid);
+    assert.equal(local.source, 'scim');
+    assert.equal(local.name, 'Data Platform');
+    assert.equal((await call('GET', `/Users/${kai.id}`, token)).json.groups[0].display, 'Data Platform');
+
+    const taken = await call('POST', '/Users', token, { userName: 'scim-member@example.com' });
+    assert.equal(taken.status, 409, 'an existing account is not adopted while adoption is off');
+    await browser('PUT', '/api/admin/auth/scim', { body: { adopt: 'members' } });
+    const admin = await joinAs('scim-admin@example.com');
+    made.push(admin.id);
+    await browser('PATCH', `/api/admin/users/${admin.id}`, { body: { role: 'admin' } });
+    assert.equal((await call('POST', '/Users', token, { userName: 'scim-admin@example.com' })).status, 409, 'an admin is never adopted');
+    const adopted = await call('POST', '/Users', token, { userName: 'scim-member@example.com', displayName: 'Adopted' });
+    assert.equal(adopted.status, 201, adopted.text);
+    assert.equal(adopted.json.id, member.id, 'adoption keeps the account and its data');
+    assert.equal((await as(member)('GET', '/api/me')).status, 401, 'adoption ends the account’s sessions');
+    assert.equal((await request('POST', '/api/auth/login', { origin: ORIGIN, secFetchSite: 'same-origin', body: { email: 'scim-member@example.com', password: PASSWORD } })).status, 401, 'and removes its password');
+
+    assert.equal((await call('DELETE', `/Users/${kai.id}`, token)).status, 204);
+    assert.equal((await call('GET', `/Users/${kai.id}`, token)).status, 404, 'a removed user is gone from provisioning');
+    assert.equal((await browser('GET', '/api/admin/users?q=kai.tanaka%40scim.test')).json.users[0].status, 'disabled', 'but kept here, disabled');
+    const restored = await call('POST', '/Users', token, oktaUser);
+    assert.equal(restored.json.id, kai.id, 'provisioning the same person again restores the account');
+    assert.equal(restored.json.active, true);
+    await browser('PUT', '/api/admin/auth/scim', { body: { deprovision: 'delete' } });
+    assert.equal((await call('DELETE', `/Users/${kai.id}`, token)).status, 204);
+    assert.equal((await browser('GET', '/api/admin/users?q=kai.tanaka%40scim.test')).json.users.length, 0, 'delete mode removes the account and its data');
+    assert.equal((await call('DELETE', `/Groups/${gid}`, token)).status, 204);
+
+    const events = (await browser('GET', '/api/admin/audit?action=scim.')).json.entries;
+    assert.ok(events.some(e => e.action === 'scim.user_create' && e.actorEmail === 'SCIM: Okta'));
+    assert.ok(events.some(e => e.action === 'scim.user_adopt'));
+    const view = (await browser('GET', '/api/admin/auth/scim')).json;
+    assert.ok(view.tokens[0].lastUsedAt > 0);
+    assert.ok(view.recent.length > 0);
+    await browser('DELETE', `/api/admin/auth/scim/tokens/${view.tokens[0].id}`);
+    assert.equal((await call('GET', '/Users', token)).status, 401, 'a revoked token stops working at once');
+  } finally {
+    await browser('PUT', '/api/admin/auth/scim', { body: { enabled: false, adopt: 'off', deprovision: 'disable' } });
+    for (const t of (await browser('GET', '/api/admin/auth/scim')).json.tokens) await browser('DELETE', `/api/admin/auth/scim/tokens/${t.id}`);
+    for (const id of made) await browser('DELETE', `/api/admin/users/${id}`);
+    for (const g of (await browser('GET', '/api/admin/groups')).json.groups.filter(g => g.source === 'scim')) await browser('DELETE', `/api/admin/groups/${g.id}`);
+  }
+});
+
+test('the event log records failed sign-ins, filters by category and exports JSON Lines', async () => {
+  const signIn = (password) => request('POST', '/api/auth/login', { origin: ORIGIN, secFetchSite: 'same-origin', body: { email: 'nobody-here@example.com', password } });
+  assert.equal((await signIn('wrong-password')).status, 401);
+  assert.equal((await browser('PUT', '/api/admin/auth/mfa', { body: { policy: 'optional' } })).status, 200);
+  const signins =(await browser('GET', '/api/admin/audit?category=signin&limit=200')).json;
+  assert.ok(signins.entries.every(e => e.category === 'signin'));
+  const failed = signins.entries.find(e => e.action === 'auth.login_fail');
+  assert.ok(failed, 'a failed sign-in is recorded');
+  assert.equal(failed.meta.email, 'nobody-here@example.com');
+  assert.equal(failed.meta.method, 'password');
+  const admin = (await browser('GET', '/api/admin/audit?category=administration&limit=200')).json;
+  assert.ok(admin.entries.length > 0 && admin.entries.every(e => e.category === 'administration'));
+  assert.equal((await browser('GET', '/api/admin/audit?category=bogus')).json.total, (await browser('GET', '/api/admin/audit')).json.total, 'an unknown category filters nothing');
+  const csv = await browser('GET', '/api/admin/audit/export');
+  assert.match(csv.text.split('\n')[0], /^timestamp,actor,action,category,/);
+  const lines = await browser('GET', '/api/admin/audit/export?format=jsonl');
+  assert.match(lines.headers['content-type'], /application\/x-ndjson/);
+  const rows = lines.text.trim().split('\n').map(l => JSON.parse(l));
+  assert.ok(rows.some(r => r.action === 'auth.login_fail' && r.category === 'signin'));
+  assert.ok(rows.every(r => r.timestamp && r.action && r.category));
+});
+
+test('the recommended enterprise setup: SCIM provisions, single sign-on links by email, deprovisioning locks out at once', async () => {
+  const { mockOidc } = await import('./mockapis.js');
+  const idp = await mockOidc();
+  const cookieNamed = (res, name) => (res.headers['set-cookie'] || []).map(c => c.split(';')[0]).find(c => c.startsWith(name + '='));
+  const scim = (method, path, token, body) => request(method, '/scim/v2' + path, body === undefined
+    ? { headers: { Authorization: `Bearer ${token}` } }
+    : { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/scim+json' }, raw: Buffer.from(JSON.stringify(body)) });
+  const PATCH_OP = 'urn:ietf:params:scim:api:messages:2.0:PatchOp';
+  let providerId = null;
+  let userId = null;
+  try {
+    providerId = (await browser('POST', '/api/admin/auth/providers', { body: { type: 'oidc' } })).json.created;
+    await browser('PUT', '/api/admin/auth/public-url', { body: { url: ORIGIN } });
+    const configured = await browser('PATCH', `/api/admin/auth/providers/${providerId}`, {
+      body: { label: 'Corp SSO', clientId: idp.clientId, clientSecret: idp.clientSecret, issuer: idp.url, provision: 'off', linkByEmail: true, enabled: true }
+    });
+    assert.equal(configured.status, 200, configured.text);
+    await browser('PUT', '/api/admin/auth/scim', { body: { enabled: true, provision: 'user' } });
+    const token = (await browser('POST', '/api/admin/auth/scim/tokens', { body: { name: 'Entra' } })).json.token;
+
+    const signIn = async (claims) => {
+      const begun = await request('POST', `/api/auth/sso/${providerId}/start`, { origin: ORIGIN, secFetchSite: 'same-origin', body: {} });
+      const back = idp.authorize(begun.json.url, claims);
+      return request('GET', back.pathname + back.search, { cookie: cookieNamed(begun, 'oq_sso') });
+    };
+    const claims = { sub: 'entra-pat', email: 'pat.morgan@corp.test', email_verified: true, name: 'Pat Morgan' };
+
+    assert.match((await signIn(claims)).headers.location, /sso_error=/, 'nobody gets in before they are provisioned');
+    const created = await scim('POST', '/Users', token, {
+      schemas: ['urn:ietf:params:scim:schemas:core:2.0:User'], userName: 'pat.morgan@corp.test', externalId: 'entra-pat',
+      emails: [{ value: 'pat.morgan@corp.test', type: 'work', primary: true }], name: { givenName: 'Pat', familyName: 'Morgan' }, active: true
+    });
+    assert.equal(created.status, 201, created.text);
+    userId = created.json.id;
+
+    const first = await signIn(claims);
+    assert.equal(first.headers.location, '/', 'the provisioned account links itself at its first sign-in');
+    const session = cookieNamed(first, 'token');
+    const me = (await request('GET', '/api/me', { cookie: session })).json.user;
+    assert.equal(me.id, userId);
+    assert.equal(me.source, 'scim');
+    assert.equal(me.managed, true);
+    assert.equal((await request('DELETE', '/api/me', { origin: ORIGIN, secFetchSite: 'same-origin', cookie: session, body: {} })).status, 403, 'a managed account cannot delete itself');
+
+    const off = await scim('PATCH', `/Users/${userId}`, token, { schemas: [PATCH_OP], Operations: [{ op: 'Replace', path: 'active', value: 'False' }] });
+    assert.equal(off.json.active, false);
+    assert.equal((await request('GET', '/api/me', { cookie: session })).status, 401, 'deprovisioning ends the open session at once');
+    assert.match((await signIn(claims)).headers.location, /sso_error=disabled/, 'and single sign-on refuses the disabled account');
+
+    await scim('PATCH', `/Users/${userId}`, token, { schemas: [PATCH_OP], Operations: [{ op: 'replace', value: { active: true } }] });
+    assert.equal((await signIn(claims)).headers.location, '/', 'reactivation lets the same identity back in');
+  } finally {
+    if (userId) await browser('DELETE', `/api/admin/users/${userId}`);
+    if (providerId) await browser('DELETE', `/api/admin/auth/providers/${providerId}`);
+    await browser('PUT', '/api/admin/auth/scim', { body: { enabled: false } });
+    for (const t of (await browser('GET', '/api/admin/auth/scim')).json.tokens) await browser('DELETE', `/api/admin/auth/scim/tokens/${t.id}`);
+    await idp.close();
   }
 });

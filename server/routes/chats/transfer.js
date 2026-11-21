@@ -1,12 +1,13 @@
 import { db, uid, now, tx } from '../../db.js';
 import { authMiddleware } from '../../auth.js';
+import { requirePermission } from '../../lib/authz/middleware.js';
 import { activePath } from '../../lib/tree.js';
 import { pipeChatPdf } from '../../lib/chatpdf.js';
 import { memoriesOf, sanitizeMemories, legacyMemories, newMemoryId, MEMORY_MAX_ITEMS } from '../../lib/memory.js';
 import { cleanStyles, prefsFit } from '../../lib/profile.js';
 
 export default function registerTransferRoutes(app) {
-  app.get('/api/chats/export-all', authMiddleware, (req, res) => {
+  app.get('/api/chats/export-all', authMiddleware, requirePermission('chats.export'), (req, res) => {
     const myChats = db.chats.oldestByUser(req.user.id);
     const out = {
       type: 'open-quill-chats-export', version: 2, exportedAt: new Date().toISOString(),
@@ -30,7 +31,7 @@ export default function registerTransferRoutes(app) {
     res.send(JSON.stringify(out, null, 2));
   });
 
-  app.post('/api/chats/import', authMiddleware, (req, res) => {
+  app.post('/api/chats/import', authMiddleware, requirePermission('chats.create'), (req, res) => {
     const body = req.body || {};
     const bundle = Array.isArray(body.chats) ? body.chats
       : (Array.isArray(body.messages) ? [{ title: body.title, starred: false, summary: body.summary || '', messages: body.messages }] : null);
@@ -89,7 +90,7 @@ export default function registerTransferRoutes(app) {
     res.json({ ok: true, imported });
   });
 
-  app.get('/api/chats/:id/export', authMiddleware, (req, res) => {
+  app.get('/api/chats/:id/export', authMiddleware, requirePermission('chats.export'), (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     const path = activePath(c.id);

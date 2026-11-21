@@ -1,5 +1,6 @@
 import { db } from '../db.js';
-import { authMiddleware, adminOnly } from '../auth.js';
+import { authMiddleware } from '../auth.js';
+import { requirePermission } from '../lib/authz/middleware.js';
 import { logAudit } from '../lib/audit.js';
 import * as evals from '../lib/evals.js';
 import { startRegression, settleInterrupted } from '../lib/regression.js';
@@ -21,7 +22,7 @@ function detail(id) {
 }
 
 export default function registerEvalRoutes(app) {
-  const admin = [authMiddleware, adminOnly];
+  const admin = [authMiddleware, requirePermission('admin.quality')];
 
   app.get('/api/admin/evals', ...admin, (req, res) => {
     settleInterrupted();

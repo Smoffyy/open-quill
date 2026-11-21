@@ -5,6 +5,8 @@ import { publicKwargDefs } from './kwargs.js';
 import { catalogCtx, listingFor } from './cloudmodels.js';
 import { llamaContext } from './llamacpp.js';
 import { anthropicModelInfo } from '../llm/index.js';
+import { can } from './authz/effective.js';
+import { modelAllowed, defaultModelFor } from './authz/access.js';
 
 let sunsetCheckedAt = 0;
 let sunsetCheckedVersion = -1;
@@ -159,21 +161,34 @@ function publishedById(snap, modelId) {
   return snapIndex.byId.get(modelId) || null;
 }
 
-export function resolveModel(modelId, isAdmin) {
+const draftView = (viewer) => (typeof viewer === 'boolean' ? viewer : can(viewer, 'admin.panel'));
+
+export function resolveModel(modelId, viewer) {
   applySunsets();
-  if (isAdmin) return db.models.byId(modelId);
   const snap = getSetting('published_models', null);
-  if (!Array.isArray(snap)) return db.models.byId(modelId);
-  return publishedById(snap, modelId);
+  const m = draftView(viewer) || !Array.isArray(snap) ? db.models.byId(modelId) : publishedById(snap, modelId);
+  if (!m || !m.enabled) return null;
+  return typeof viewer === 'object' && viewer && !modelAllowed(viewer, m) ? null : m;
 }
 
-export function resolveModelOrDefault(modelId, isAdmin) {
-  const m = resolveModel(modelId, isAdmin);
-  if (m && m.enabled) return m;
+export function resolveModelOrDefault(modelId, viewer) {
+  const m = resolveModel(modelId, viewer);
+  if (m) return m;
   const snap = getSetting('published_models', null);
-  const pool = (!isAdmin && Array.isArray(snap)) ? snap : db.models.all();
+  const pool = (!draftView(viewer) && Array.isArray(snap)) ? snap : db.models.all();
   const live = pool.filter(x => x.enabled).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+  if (typeof viewer === 'object' && viewer) return defaultModelFor(viewer, live.filter(x => modelAllowed(viewer, x)));
   return live.find(x => x.is_default) || live[0] || null;
+}
+
+export function modelsFor(user) {
+  const draft = can(user, 'admin.panel');
+  const snap = getSetting('published_models', null);
+  const rows = draft || !Array.isArray(snap) ? db.models.all() : snap;
+  const byId = new Map(rows.map(m => [m.id, m]));
+  const list = (draft ? draftModels() : publicModels()).filter(m => modelAllowed(user, byId.get(m.id)));
+  const pick = defaultModelFor(user, list.map(m => byId.get(m.id)));
+  return list.map(m => (m.isDefault === (m.id === pick?.id) ? m : { ...m, isDefault: m.id === pick?.id }));
 }
 
 export function roleLimit(key, isAdmin, fallback) {

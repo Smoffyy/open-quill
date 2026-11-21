@@ -107,17 +107,19 @@ function FileTree({ node, prefix, depth, closed, renaming, onToggle, onOpen, onR
           <span className="pj-row-name">{f.base}</span>
           <span className="pj-row-meta">{fmtSize(f.size)}</span>
         </button>
-        <span className="pj-row-actions">
-          <button type="button" className="ft-act" data-tip={t('Rename')} aria-label={t('Rename {name}', { name: f.base })} onClick={() => onRename(f.name)}><Pencil /></button>
-          <button type="button" className="ft-act ft-del" data-tip={t('Delete')} aria-label={t('Delete {name}', { name: f.base })} onClick={() => onRemove(f.name)}><X /></button>
-        </span>
+        {onRemove && (
+          <span className="pj-row-actions">
+            <button type="button" className="ft-act" data-tip={t('Rename')} aria-label={t('Rename {name}', { name: f.base })} onClick={() => onRename(f.name)}><Pencil /></button>
+            <button type="button" className="ft-act ft-del" data-tip={t('Delete')} aria-label={t('Delete {name}', { name: f.base })} onClick={() => onRemove(f.name)}><X /></button>
+          </span>
+        )}
       </div>
     );
   }
   return <>{rows}</>;
 }
 
-function FileDialog({ base, path, onClose, onSaved }) {
+function FileDialog({ base, path, editable, onClose, onSaved }) {
   const dirty = useRef(false);
   const close = async () => {
     if (dirty.current && !await askConfirm({ title: t('Discard unsaved changes?'), message: t('Your edits to {name} have not been saved.', { name: baseName(path) }), confirm: t('Discard'), danger: true })) return;
@@ -125,14 +127,14 @@ function FileDialog({ base, path, onClose, onSaved }) {
   };
   return (
     <Dialog className="pj-file-dialog" overlayClassName="pj-file-overlay" label={baseName(path)} onClose={close}>
-      <Viewer apiBase={base} path={path} editable onSaved={onSaved}
+      <Viewer apiBase={base} path={path} editable={editable} onSaved={onSaved}
         onDirtyChange={(d) => { dirty.current = d; }}
         headerExtra={<CloseButton plain className="art-btn icon" onClick={close} />} />
     </Dialog>
   );
 }
 
-export default function ProjectFiles({ projectId }) {
+export default function ProjectFiles({ projectId, readOnly = false }) {
   const base = '/api/projects/' + projectId;
   const [files, setFiles] = useState([]);
   const [cap, setCap] = useState(0);
@@ -210,7 +212,7 @@ export default function ProjectFiles({ projectId }) {
   return (
     <>
       <div className={'pj-card pj-files' + (dropping ? ' dropping' : '')} data-own-drop
-        onDragOver={(e) => { if (!Array.from(e.dataTransfer?.types || []).includes('Files')) return; e.preventDefault(); if (!dropping) setDropping(true); }}
+        onDragOver={(e) => { if (readOnly || !Array.from(e.dataTransfer?.types || []).includes('Files')) return; e.preventDefault(); if (!dropping) setDropping(true); }}
         onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDropping(false); }}
         onDrop={onDrop}>
         <div className="pj-card-head">
@@ -219,7 +221,7 @@ export default function ProjectFiles({ projectId }) {
             {files.length > 0 && (
               <a className="pj-card-add" href={base + '/zip'} data-tip={t('Download all')} aria-label={t('Download all')}><Download style={{ width: 15 }} /></a>
             )}
-            <span className="pj-menu-wrap" ref={menuRef}>
+            {!readOnly && <span className="pj-menu-wrap" ref={menuRef}>
               <button type="button" className="pj-card-add" disabled={busy} data-tip={t('Add files')} aria-label={t('Add files')}
                 aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(m => !m)}><Plus style={{ width: 16 }} /></button>
               {menu && (
@@ -229,7 +231,7 @@ export default function ProjectFiles({ projectId }) {
                   <button type="button" role="menuitem" onClick={() => pick(() => { setRenaming(null); setCreating(true); })}><FileText style={{ width: 15 }} /> {t('New file')}</button>
                 </div>
               )}
-            </span>
+            </span>}
           </span>
           <input ref={fileInput} type="file" multiple hidden
             onChange={(e) => { upload(pickedFiles(e.target.files)); e.target.value = ''; }} />
@@ -237,10 +239,12 @@ export default function ProjectFiles({ projectId }) {
             onChange={(e) => { upload(pickedFiles(e.target.files)); e.target.value = ''; }} />
         </div>
         <div className="pj-cap">{t('{pct}% of project capacity used', { pct: capPct })}</div>
-        {files.length === 0 && !creating ? (
+        {files.length === 0 && !creating && readOnly ? (
+          <div className="pj-card-sub">{t('No files in this project yet.')}</div>
+        ) : files.length === 0 && !creating ? (
           <button type="button" className="pj-files-empty" onClick={() => fileInput.current?.click()}>
             <FileText style={{ width: 30 }} />
-            <span>{busy ? t('Uploading…') : t('Add documents, notes, PDFs or spreadsheets. Every chat in this project can search and read them, and only you can change them.')}</span>
+            <span>{busy ? t('Uploading…') : t('Add documents, notes, PDFs or spreadsheets. Every chat in this project can search and read them.')}</span>
             {!busy && <span className="pj-files-drop">{t('Or drop files and folders here.')}</span>}
           </button>
         ) : (
@@ -251,12 +255,12 @@ export default function ProjectFiles({ projectId }) {
             )}
             <FileTree node={buildFileTree(files)} prefix="" depth={0} closed={closed} renaming={renaming}
               onToggle={toggleDir} onOpen={setOpen} onRename={(p) => { setCreating(false); setRenaming(p); }}
-              onRenamed={rename} onCancelRename={() => setRenaming(null)} onRemove={remove} />
+              onRenamed={rename} onCancelRename={() => setRenaming(null)} onRemove={readOnly ? null : remove} />
             {busy && <div className="pj-row"><span className="pj-row-name">{t('Uploading…')}</span></div>}
           </div>
         )}
       </div>
-      {open && <FileDialog base={base} path={open} onClose={() => setOpen(null)} onSaved={apply} />}
+      {open && <FileDialog base={base} path={open} editable={!readOnly} onClose={() => setOpen(null)} onSaved={apply} />}
     </>
   );
 }

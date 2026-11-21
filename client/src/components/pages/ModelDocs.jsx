@@ -895,7 +895,7 @@ function EditBar({ editing, dirty, saving, error, onStart, onCancel, onSave }) {
   );
 }
 
-export default function ModelDocs({ target, appName, isAdmin, onTry, onNavigate, onExit, edit }) {
+export default function ModelDocs({ target, appName, canEdit, onTry, onNavigate, onExit, edit }) {
   const scroller = useRef(null);
   const { editing, modelEdits, baseModels, liveModels: list, liveCfg, setModelField, setCfgField, dirty, saving, error, start, cancel, save } = edit;
 
@@ -920,7 +920,7 @@ export default function ModelDocs({ target, appName, isAdmin, onTry, onNavigate,
     <div className="mdoc-page" ref={scroller}>
       <div className={'mdoc-col' + (editing ? ' mdoc-editing' : '')}>
         <Edit.Provider value={{ on: editing }}>
-          {isAdmin && (
+          {canEdit && (
             <EditBar editing={editing} dirty={dirty} saving={saving} error={error}
               onStart={start} onCancel={cancel} onSave={save} />
           )}

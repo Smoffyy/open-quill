@@ -22,6 +22,7 @@ import { openFence, seamFor, steerInstruction } from '../steer.js';
 import { createLoopGuard, STUCK_NOTES, REPEAT_NOTE } from '../loopguard.js';
 import { changeMemory, memoryToolResult } from '../memory.js';
 import { toolState, systemPrompt, toolsFor } from '../systemprompt.js';
+import { can } from '../authz/effective.js';
 import { runCalculator, formatCalculatorResult } from '../calculator.js';
 import { runTodo } from '../todo.js';
 import { runAskUser, formatAskUser } from '../askuser.js';
@@ -36,6 +37,11 @@ import { ARTIFACT_TOOLS, runArtifactTool, artifactPayload, formatArtifactResult,
 import { PROJECT_TOOLS, runProjectTool, projectPayload, formatProjectResult } from '../projecttools.js';
 
 const MAX_STEERS = 6;
+const TOOL_PERMISSIONS = {
+  __proto__: null,
+  web_search: 'tools.web_search', chat_search: 'tools.chat_search', chat_view: 'tools.chat_search', memory: 'tools.memory',
+  consult_model: 'tools.consult', mb_view: 'tools.reference_files', mb_search: 'tools.reference_files'
+};
 const SAVE_EVERY_MS = 2000;
 const TELEMETRY_MS = 220;
 const SILENT_MS = 2500;
@@ -196,6 +202,13 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     return refuse(`The user declined this call, so it did not run.${said}`);
   };
   const runToolCall = async (call) => {
+    const owner = db.users.byId(chat.user_id);
+    const needed = TOOL_PERMISSIONS[call.tool] || (sandboxOn && resolveToolName(call.tool, true) ? 'code.use' : null);
+    if (needed && !can(owner, needed)) {
+      const error = 'This tool is no longer allowed for this account.';
+      return { payload: { ok: false, error }, formatted: `${call.tool} → ERROR: ${error}`, hide: false };
+    }
+    const liveScope = mcp.scopeFor(owner, mcpScope.off);
     if (call.tool === 'end_conversation') {
       if (!endChatOn) return null;
       const reason = String(call.reason || '').trim().slice(0, 500);
@@ -262,10 +275,10 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
       const r = workspaceSkills.execTool(call, userSkills);
       return { payload: workspaceSkills.resultPayload(call, r), formatted: workspaceSkills.formatResult(call, r), hide: false };
     }
-    if (mcpOn && mcp.isMcpTool(call.tool, mcpUser, mcpScope)) {
+    if (mcpOn && mcp.isMcpTool(call.tool, mcpUser, liveScope)) {
       const refused = await approveMcp(call);
       if (refused) return refused;
-      const r = await mcp.execTool(call, mcpUser, mcpScope);
+      const r = await mcp.execTool(call, mcpUser, liveScope);
       return { payload: mcp.resultPayload(call, r), formatted: mcp.formatResult(call, r), hide: false, images: r.images || [] };
     }
     if (call.tool === 'web_search') {

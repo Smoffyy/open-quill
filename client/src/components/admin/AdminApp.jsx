@@ -21,7 +21,11 @@ import SkillsSection from './sections/SkillsSection.jsx';
 import McpSection from './sections/McpSection.jsx';
 import InterfaceSection from './sections/InterfaceSection.jsx';
 import LauncherSection from './sections/LauncherSection.jsx';
-import MembersSection from './sections/MembersSection.jsx';
+import UsersSection from './sections/UsersSection.jsx';
+import GroupsSection from './sections/GroupsSection.jsx';
+import SignInSection from './sections/SignInSection.jsx';
+import ProvisioningSection from './sections/ProvisioningSection.jsx';
+import RolesSection from './sections/RolesSection.jsx';
 import GuardrailsSection from './sections/GuardrailsSection.jsx';
 import NetworkSection from './sections/NetworkSection.jsx';
 import QuotasSection from './sections/QuotasSection.jsx';
@@ -33,6 +37,7 @@ import EventsSection from './sections/EventsSection.jsx';
 import StorageSection from './sections/StorageSection.jsx';
 import { useDismiss } from '../../lib/dismiss.js';
 import { useFocusTrap } from '../../lib/focus.js';
+import { canSeeSection } from '../../lib/permissions.js';
 
 const VIEWS = {
   __proto__: null,
@@ -48,7 +53,11 @@ const VIEWS = {
   mcp: McpSection,
   interface: InterfaceSection,
   launcher: LauncherSection,
-  members: MembersSection,
+  users: UsersSection,
+  groups: GroupsSection,
+  signin: SignInSection,
+  provisioning: ProvisioningSection,
+  roles: RolesSection,
   guardrails: GuardrailsSection,
   network: NetworkSection,
   quotas: QuotasSection,
@@ -68,7 +77,7 @@ function isMac() {
 }
 
 function Finder() {
-  const { catalog, setSection, openModel } = useAdmin();
+  const { catalog, setSection, openModel, user } = useAdmin();
   const { models } = catalog;
   const [q, setQ] = useState('');
   const [cursor, setCursor] = useState(0);
@@ -94,6 +103,7 @@ function Finder() {
     if (!needle) return [];
     const rows = [];
     for (const sec of SECTIONS) {
+      if (!canSeeSection(user, sec.id)) continue;
       if ([t(sec.title), t(sec.group), t(sec.find)].join(' ').toLowerCase().includes(needle)) {
         rows.push({ key: 's:' + sec.id, Icon: sec.Icon, label: t(sec.title), hint: t(sec.group), go: () => setSection(sec.id) });
       }
@@ -104,7 +114,7 @@ function Finder() {
         rows.push({ key: 's:' + sec.id + ':' + entry, Icon: sec.Icon, label, hint: t(sec.title), go: () => setSection(sec.id) });
       }
     }
-    const ms = models
+    const ms = (canSeeSection(user, 'models') ? models : [])
       .filter(m => (m.display_name || '').toLowerCase().includes(needle) || (m.internal_name || '').toLowerCase().includes(needle))
       .slice(0, 5)
       .map(m => ({
@@ -115,7 +125,7 @@ function Finder() {
         go: () => openModel(m.id)
       }));
     return [...rows.slice(0, MAX_HITS), ...ms];
-  }, [needle, models, openModel, setSection]);
+  }, [needle, models, openModel, setSection, user]);
 
   useEffect(() => { setCursor(0); }, [needle]);
 
@@ -157,7 +167,7 @@ function Finder() {
 }
 
 function Shell() {
-  const { section, setSection, catalog, members, onClose, ask, setAsk, keepScroll, workspace, present } = useAdmin();
+  const { section, setSection, catalog, users, onClose, ask, setAsk, keepScroll, workspace, present, user } = useAdmin();
   const scrollRef = useRef(null);
   const meta = sectionMeta(section);
   const View = VIEWS[section] || OverviewSection;
@@ -169,7 +179,8 @@ function Shell() {
 
   useUndoKeys(scrimRef);
 
-  const counts = { models: catalog.models.length, members: members.members.length, providers: catalog.providers.length };
+  const counts = { models: catalog.models.length, users: users.counts.pending || users.counts.all, providers: catalog.providers.length };
+  const nav = NAV.map(g => ({ ...g, items: g.items.filter(it => canSeeSection(user, it.id)) })).filter(g => g.items.length);
   const showSkeleton = useSkeleton(!workspace.ready);
 
   return (
@@ -195,7 +206,7 @@ function Shell() {
 
         <div className="cp-body">
           <nav className="cp-rail" aria-label={t('Sections')}>
-            {NAV.map(g => (
+            {nav.map(g => (
               <div key={g.group} style={{ display: 'contents' }}>
                 <div className="cp-rail-group">{t(g.group)}</div>
                 {g.items.map(({ id, label, Icon }) => (

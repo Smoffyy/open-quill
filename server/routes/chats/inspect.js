@@ -1,10 +1,12 @@
 import { db } from '../../db.js';
 import { contextBudget, budgetOf, knownContext, canCount, countExact, countText } from '../../lib/ctxwindow.js';
 import { authMiddleware } from '../../auth.js';
+import { requirePermission } from '../../lib/authz/middleware.js';
 import { buildMessages } from '../../llm/index.js';
 import { toolState, systemPrompt, toolsFor } from '../../lib/systemprompt.js';
 import { chatHistory, historyRows } from '../../lib/convo.js';
 import { activePath } from '../../lib/tree.js';
+import { resolveModelOrDefault } from '../../lib/models.js';
 
 const PART_LABEL = { base: () => 'Model system prompt', tool: (p) => `Tool: ${p.name}`, section: (p) => `Context: ${p.name}` };
 
@@ -13,12 +15,7 @@ function promptOf(c, model) {
   return { flags, ...systemPrompt(c, model, flags) };
 }
 
-function pickModel(modelId) {
-  const chosen = modelId ? db.models.byId(modelId) : null;
-  if (chosen) return chosen;
-  const all = db.models.all();
-  return all.find(m => m.enabled) || all[0] || null;
-}
+const pickModel = (req) => resolveModelOrDefault(String(req.query.modelId || ''), req.user);
 
 function textOf(m) {
   return typeof m.content === 'string' ? m.content : (m.content || []).map(p => p.type === 'text' ? p.text : '[image]').join('\n');
@@ -28,7 +25,7 @@ export default function registerInspectRoutes(app) {
   app.get('/api/chats/:id/context', authMiddleware, async (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
-    const model = pickModel(req.query.modelId);
+    const model = pickModel(req);
     const path = activePath(c.id);
     const upto = c.summary && c.summary_upto ? c.summary_upto : 0;
     const summarized = upto ? path.filter(m => m.created_at <= upto && !m.pinned).length : 0;
@@ -46,10 +43,10 @@ export default function registerInspectRoutes(app) {
     res.json({ used, limit: ctx, budget, reserve, summarized, pending: !used && path.length > 0 });
   });
 
-  app.get('/api/chats/:id/prompt', authMiddleware, async (req, res) => {
+  app.get('/api/chats/:id/prompt', authMiddleware, requirePermission('chats.inspect'), async (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
-    const model = pickModel(req.query.modelId);
+    const model = pickModel(req);
     if (!model) return res.json({ sections: [], messages: [], total: null });
     const exact = canCount(model);
     const count = async (text) => (exact ? (await countText(model, text)) || null : null);
@@ -78,7 +75,7 @@ export default function registerInspectRoutes(app) {
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     res.json({ summary: c.summary || '', summaryUpto: c.summary_upto || 0 });
   });
-  app.patch('/api/chats/:id/summary', authMiddleware, (req, res) => {
+  app.patch('/api/chats/:id/summary', authMiddleware, requirePermission('chats.edit'), (req, res) => {
     const c = db.chats.byId(req.params.id);
     if (!c || c.user_id !== req.user.id) return res.status(404).json({ error: 'not found' });
     const patch = {};

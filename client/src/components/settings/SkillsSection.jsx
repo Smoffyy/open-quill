@@ -3,13 +3,14 @@ import { createPortal } from 'react-dom';
 import { api } from '../../lib/api.js';
 import { notify } from '../../lib/notify.js';
 import Markdown from '../chat/Markdown.jsx';
-import { Search, X, ChevDown, Chevron, Plus, Trash, Info, Wand, FileText, Upload, Eye, CodeTag, DotsV, Chat } from '../ui/icons.jsx';
+import { Search, X, ChevDown, Chevron, Plus, Trash, Info, Wand, FileText, Upload, Eye, CodeTag, DotsV, Chat, Pencil, Users } from '../ui/icons.jsx';
 import { Switch } from '../ui/controls.jsx';
 import { t, tk, fmtDate } from '../../i18n.jsx';
 import { useAnchoredMenu, menuStyleOf } from '../../lib/anchor.js';
 import { Skel, SkelTable } from '../ui/Skeleton.jsx';
 import Dialog from '../ui/Dialog.jsx';
 import CloseButton from '../ui/CloseButton.jsx';
+import ShareDialog from '../dialogs/ShareDialog.jsx';
 
 const STARTERS = [
   { name: 'brand-voice', description: tk('Keep every draft in your own voice: tone, vocabulary and the phrases you never use.'), body: '# Brand voice\n\nUse this skill whenever you write anything the user will send or publish.\n\n## Tone\n\n- Plain, direct sentences. No filler openings.\n- Prefer the active voice.\n\n## Never\n\n- Never open with "Great question".\n- Never use em dashes.\n' },
@@ -46,24 +47,28 @@ function AddMenu({ btnRef, onClose, onPick }) {
     </div>, document.body);
 }
 
-function RowMenu({ btnRef, onClose, onTry, onRemove, editable }) {
+function RowMenu({ btnRef, onClose, onTry, onEdit, onShare, shareLabel, onRemove }) {
   const menuRef = useRef(null);
   const pos = useAnchoredMenu(true, () => onClose(), btnRef, menuRef, { align: 'right', gap: 6, minWidth: 168 });
   return createPortal(
     <div className="popover sk-menu" ref={menuRef} role="menu" style={menuStyleOf(pos, { width: 168 })}>
       <button role="menuitem" onClick={onTry}><Chat /> {t('Try in chat')}</button>
-      {editable && <button role="menuitem" className="danger" onClick={onRemove}><Trash /> {t('Remove')}</button>}
+      {onEdit && <button role="menuitem" onClick={onEdit}><Pencil /> {t('Edit')}</button>}
+      {onShare && <button role="menuitem" onClick={onShare}><Users /> {shareLabel}</button>}
+      {onRemove && <button role="menuitem" className="danger" onClick={onRemove}><Trash /> {t('Remove')}</button>}
     </div>, document.body);
 }
 
-function SkillDetail({ skill, onBack, onChanged, onRemoved, onTry }) {
+function SkillDetail({ skill, onBack, onChanged, onRemoved, onTry, onEdit }) {
   const [view, setView] = useState('preview');
   const [menu, setMenu] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const menuBtn = useRef(null);
+  const workspace = skill.scope === 'workspace';
 
   async function toggle(on) {
-    if (!skill.editable) { notify(t('Workspace skills are managed in the admin panel.')); return; }
+    if (workspace) { notify(t('Workspace skills are managed in the admin panel.')); return; }
     setBusy(true);
     try { const s = await api.patch('/api/skills/' + skill.id, { enabled: on }); onChanged(s); }
     catch { notify(t('Could not update the skill.')); }
@@ -88,15 +93,22 @@ function SkillDetail({ skill, onBack, onChanged, onRemoved, onTry }) {
               <span className="sk-detail-title">{skill.name}</span>
               <span className="sk-detail-info" data-tip={t('Details')} aria-label={t('Details')}><Info /></span>
             </div>
-            <div className="sk-detail-by">{t('by {author}', { author: skill.author || t('You') })}</div>
+            <div className="sk-detail-by">
+              {t('by {author}', { author: skill.author || t('You') })}
+              {skill.scope === 'shared' && <span className="shared-tag"><Users aria-hidden="true" /> {t('Shared with you')}</span>}
+            </div>
           </div>
           <div className="sk-detail-acts">
-            <Switch on={skill.enabled} onToggle={() => toggle(!skill.enabled)} disabled={busy || !skill.editable}
+            <Switch on={skill.enabled} onToggle={() => toggle(!skill.enabled)} disabled={busy || workspace}
               label={skill.enabled ? t('Disable skill') : t('Enable skill')} />
             <button className="sk-icon-btn" ref={menuBtn} onClick={() => setMenu(m => !m)}
               aria-haspopup="menu" aria-expanded={menu} aria-label={t('Skill options')}><DotsV /></button>
-            {menu && <RowMenu btnRef={menuBtn} editable={skill.editable} onClose={() => setMenu(false)}
-              onTry={() => { setMenu(false); onTry(skill); }} onRemove={remove} />}
+            {menu && <RowMenu btnRef={menuBtn} onClose={() => setMenu(false)}
+              onTry={() => { setMenu(false); onTry(skill); }}
+              onEdit={skill.editable ? () => { setMenu(false); onEdit(skill); } : null}
+              onShare={workspace ? null : () => { setMenu(false); setSharing(true); }}
+              shareLabel={skill.canShare ? t('Share') : t('Who has access')}
+              onRemove={skill.scope === 'user' ? remove : null} />}
           </div>
         </div>
         {skill.description && <p className="sk-detail-desc">{skill.description}</p>}
@@ -116,6 +128,7 @@ function SkillDetail({ skill, onBack, onChanged, onRemoved, onTry }) {
           </div>
         </div>
       </div>
+      {sharing && <ShareDialog type="skill" id={skill.id} title={skill.name} onClose={() => setSharing(false)} onLeft={() => onRemoved(skill)} />}
     </>
   );
 }
@@ -274,6 +287,7 @@ export default function SkillsSection({ onTrySkill, browse = false }) {
 
   if (open) {
     return <SkillDetail skill={open} onTry={onTrySkill}
+      onEdit={(s) => { setDraft({ name: s.name, description: s.description, body: s.body }); setEditing(s.id); }}
       onBack={() => setOpenId(null)}
       onChanged={() => load()}
       onRemoved={() => { setOpenId(null); load(); }} />;

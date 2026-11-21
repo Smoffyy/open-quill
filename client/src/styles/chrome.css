@@ -36,6 +36,12 @@
 .login .primary:disabled { opacity: .6; pointer-events: none; }
 .login .back { display: block; width: 100%; margin-top: 12px; font-size: 13px; color: var(--text-muted); font-family: var(--font-sans); background: transparent; }
 .login .back:hover { color: var(--text); }
+.login-sso { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.login-or { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-faint); font-family: var(--font-sans); }
+.login-or::before, .login-or::after { content: ''; flex: 1; height: 1px; background: var(--login-line, var(--border)); }
+.login .sso-btn { width: 100%; padding: 11px; border: 1px solid var(--login-line, var(--border)); border-radius: 9px; font-size: 14.5px; font-family: var(--font-sans); font-weight: 500; color: var(--text); background: transparent; transition: background var(--fx-t, .15s); }
+.login .sso-btn:hover { background: var(--hover); }
+.login .sso-btn:disabled { opacity: .6; pointer-events: none; }
 .login .err { color: var(--danger); font-size: 13px; margin-bottom: 10px; font-family: var(--font-sans); text-align: center; }
 .login .err:empty { margin-bottom: 0; }
 .login input.bad { border-color: var(--danger); }

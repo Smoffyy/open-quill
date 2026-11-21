@@ -9,7 +9,7 @@ import { PRESETS, DEFAULT_PRESET, presetById } from '../src/lib/presets.js';
 import { PALETTES, paletteChain, paletteFor, palettesFor, themeValue, paletteById, nextTheme } from '../src/lib/palettes.js';
 import { browserName, systemName } from '../src/lib/useragent.js';
 import { relativeParts } from '../src/lib/relativetime.js';
-import { canManage, canAssign } from '../src/lib/roles.js';
+import { can, canAny, canSeeSection } from '../src/lib/permissions.js';
 import {
   comboFromEvent, isValidCombo, isChord, chordParts, sanitizeKeybinds, resolveKeybinds, keybindIndex, keybindConflicts,
   leaderCombo, chordMenu, presetBinds, activePresetId, exportKeybinds, importKeybinds, KEYBIND_ACTIONS, KEYBIND_BY_ID, DEFAULT_LEADER
@@ -67,20 +67,18 @@ test('relative times pick the largest whole unit, rounding up into the next', ()
   assert.equal(relativeParts('soon'), null);
 });
 
-test('only the owner manages publishers, and nobody manages or grants their own rank', () => {
-  assert.equal(canManage('owner', 'publisher'), true);
-  assert.equal(canManage('publisher', 'publisher'), false);
-  assert.equal(canManage('publisher', 'editor'), true);
-  assert.equal(canManage('editor', 'editor'), false);
-  assert.equal(canManage('editor', 'member'), true);
-  assert.equal(canManage('publisher', 'owner'), false);
-  assert.equal(canAssign('owner', 'publisher'), true);
-  assert.equal(canAssign('owner', 'owner'), false, 'ownership is never handed out here');
-  assert.equal(canAssign('publisher', 'publisher'), false);
-  assert.equal(canAssign('publisher', 'editor'), true);
-  assert.equal(canAssign('editor', 'editor'), false);
-  assert.equal(canAssign('editor', 'member'), true);
-  assert.equal(canAssign('owner', 'nonsense'), false);
+test('permissions come from the user payload and admin sections need the panel plus their own', () => {
+  const admin = { permissions: ['admin.panel', 'admin.users', 'chats.create'] };
+  assert.equal(can(admin, 'admin.users'), true);
+  assert.equal(can(admin, 'admin.models'), false);
+  assert.equal(can(null, 'chats.create'), false);
+  assert.equal(can({}, 'chats.create'), false);
+  assert.equal(canAny(admin, 'admin.models', 'chats.create'), true);
+  assert.equal(canSeeSection(admin, 'users'), true);
+  assert.equal(canSeeSection(admin, 'models'), false);
+  assert.equal(canSeeSection(admin, 'overview'), true);
+  assert.equal(canSeeSection({ permissions: ['admin.users'] }, 'users'), false, 'nothing without the panel itself');
+  assert.equal(canSeeSection(admin, 'made-up'), true, 'an unknown section falls back to the panel permission');
 });
 
 const ev = (o) => ({ key: '', code: '', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...o });

@@ -33,7 +33,7 @@ export function promptFeaturesOf(settings) {
 export const CONFIG_DEFAULTS = {
   appName: '', disclaimer: '', greetings: [''], appIcon: '', quickPrompts: [],
   appFont: 'literata', modelDocs: true, modelDocsConfig: null,
-  allowSignups: true, localOnly: true, egressLocalOnly: true, egressAllowWebSearch: true, egressAllowlist: []
+  localOnly: true, egressLocalOnly: true, egressAllowWebSearch: true, egressAllowlist: []
 };
 
 const SAVE_DELAY = 450;
@@ -51,7 +51,6 @@ function configFrom(c) {
     appFont: appFontId(c.appFont),
     modelDocs: c.modelDocs !== false,
     modelDocsConfig: c.modelDocsConfig || null,
-    allowSignups: c.allowSignups !== false,
     localOnly: c.localOnly !== false,
     egressLocalOnly: c.egressLocalOnly !== false,
     egressAllowWebSearch: c.egressAllowWebSearch !== false,
