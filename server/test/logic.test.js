@@ -49,7 +49,7 @@ import { runQueued } from '../lib/queue.js';
 import { isText } from '../sandbox/ignore.js';
 import { openFence, seamFor, steerInstruction } from '../lib/steer.js';
 import { createLoopGuard } from '../lib/loopguard.js';
-import { stops, beginTurn, endTurn } from '../lib/ws/live.js';
+import { stops, beginTurn, endTurn, onTurnFlush, flushTurns } from '../lib/ws/live.js';
 import { historyText } from '../lib/history.js';
 import { bash } from '../sandbox/shell.js';
 import { wireToolCalls, normalizeMessages } from '../llm/wire.js';
@@ -1908,6 +1908,18 @@ test('a stop flag survives independently of the per-step abort controller', () =
   // Whatever happens to the controllers, the request to stop still stands.
   assert.equal(stops.has(chatId), true, 'the flag is not tied to a controller');
   stops.delete(chatId);
+});
+
+test('flushing turns saves every running turn once and skips finished ones', () => {
+  const saved = [];
+  beginTurn('user-1', 'chat-flush-1', 'model-1');
+  beginTurn('user-1', 'chat-flush-2', 'model-1');
+  onTurnFlush('chat-flush-1', () => saved.push('one'));
+  onTurnFlush('chat-flush-2', () => saved.push('two'));
+  endTurn('chat-flush-2');
+  flushTurns();
+  endTurn('chat-flush-1');
+  assert.deepEqual(saved, ['one']);
 });
 
 test('ending a turn clears its stop flag so the next reply is not killed', () => {

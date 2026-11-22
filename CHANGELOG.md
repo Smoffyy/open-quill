@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [28.3.0] - TBD
+### Fixed
+- **Replies survive a restart** - a reply that was mid-sentence when the server stopped or restarted is kept as far as it got, with the Continue button, instead of vanishing. Progress is saved twice a second, including while the model is still thinking, and once more as the server shuts down. A dropped connection on the member's side never affected the reply, which keeps running on the server and is picked up again on reconnect.
+- **Development server restarts** - `npm run dev` no longer restarts, and cancels the reply being written, when a file in `node_modules` is touched. It watches only the server's own source.
+
 ## [28.2.0] - 2026-11-20
 ### Added
 - **Evaluations** - a new admin section for regression testing. Test collections are versioned sets of conversations, each ending on a member message with an optional expert correction. Every edit is a version, so a run can be repeated on the exact same tests, and any version can be restored. A run sends every case to a baseline and a candidate (published or draft configuration, any model, and optionally a different system prompt), then a judge model scores each reply against the correction and explains its score. Results show which cases got better or worse, the average score, the median response time and the cost on each side, with both replies side by side.

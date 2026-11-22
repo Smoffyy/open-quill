@@ -434,9 +434,17 @@ export function closeDb() {
   sdb.close();
 }
 
-process.on('exit', checkpoint);
-process.on('SIGINT', () => { checkpoint(); process.exit(0); });
-process.on('SIGTERM', () => { checkpoint(); process.exit(0); });
+const shutdownHooks = [];
+
+export function onShutdown(fn) { shutdownHooks.push(fn); }
+
+process.on('exit', () => {
+  for (const fn of shutdownHooks) { try { fn(); } catch {} }
+  checkpoint();
+});
+for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGBREAK']) {
+  process.on(signal, () => { checkpoint(); process.exit(0); });
+}
 
 if (!getSetting('seeded')) {
   setSetting('api_base_url', 'http://localhost:9931');

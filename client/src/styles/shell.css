@@ -114,6 +114,7 @@ body:has(.app.has-bg) > .model-submenu.pinned {
 .chat-name-wrap { position: relative; display: flex; align-items: center; gap: 0; min-width: 0; }
 .topbar .chat-name { cursor: pointer; height: 28px; border-radius: 7px; transition: background var(--fx-t, .14s), color var(--fx-t, .14s); }
 .topbar .chat-name:hover { background: var(--surface-hover); color: var(--text); }
+.topbar .ct-name { cursor: text; }
 .topbar .chat-name:disabled { cursor: default; background: none; }
 .topbar .ct-name { min-width: 0; padding: 0 6px 0 10px; }
 .topbar .ct-name .ct-title { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

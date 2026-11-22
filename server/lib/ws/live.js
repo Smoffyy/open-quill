@@ -61,6 +61,17 @@ export function beginTurn(userId, chatId, modelId) {
   return rec;
 }
 
+export function onTurnFlush(chatId, fn) {
+  const rec = turns.get(chatId);
+  if (rec) rec.flush = fn;
+}
+
+export function flushTurns() {
+  for (const rec of turns.values()) {
+    try { rec.flush?.(); } catch {}
+  }
+}
+
 export function endTurn(chatId) {
   if (!chatId) return;
   asks.get(chatId)?.finish({ stopped: true });

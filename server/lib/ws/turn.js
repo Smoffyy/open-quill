@@ -1,4 +1,4 @@
-import { db, uid, now, getSetting } from '../../db.js';
+import { db, uid, now, getSetting, onShutdown } from '../../db.js';
 import { buildMessages, streamCompletion, generateTitle, resolveTitleModel, stripThink, canPrefill, refusePrefill, modelProvider, replayField } from '../../llm/index.js';
 import { toCall, cutOffOf, livePreview, resolveToolName, SANDBOX_READONLY } from '../../tools/index.js';
 import { MAX_SILENT_RETRIES, SILENT_INSTRUCTION } from '../continuation.js';
@@ -27,7 +27,7 @@ import { can } from '../authz/effective.js';
 import { runCalculator, formatCalculatorResult } from '../calculator.js';
 import { runTodo } from '../todo.js';
 import { runAskUser, formatAskUser } from '../askuser.js';
-import { waitForAnswer } from './live.js';
+import { waitForAnswer, onTurnFlush, flushTurns } from './live.js';
 import * as quality from '../quality.js';
 import { runConsult, formatConsult } from '../consult.js';
 import { recordUsage } from '../budget.js';
@@ -43,7 +43,7 @@ const TOOL_PERMISSIONS = {
   web_search: 'tools.web_search', chat_search: 'tools.chat_search', chat_view: 'tools.chat_search', memory: 'tools.memory',
   consult_model: 'tools.consult', mb_view: 'tools.reference_files', mb_search: 'tools.reference_files'
 };
-const SAVE_EVERY_MS = 2000;
+const SAVE_EVERY_MS = 500;
 const TELEMETRY_MS = 220;
 const SILENT_MS = 2500;
 const LOCAL_NO_RESPONSE_MS = 5 * 60 * 1000;
@@ -51,6 +51,8 @@ const HOSTED_NO_RESPONSE_MS = 15 * 60 * 1000;
 const PREVIEW_FREE_CHARS = 4096;
 const PREVIEW_MS = 100;
 const USAGE_KEYS = ['prompt', 'completion', 'total', 'cache_read', 'cache_write', 'cost'];
+
+onShutdown(flushTurns);
 
 function addUsage(a, b) {
   if (!a || !b) return b || a || null;
@@ -168,6 +170,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
     }
   }
   safeSend(JSON.stringify({ type: 'start', chatId: chat.id, messageId: assistantId, ...(resume ? { content, reasoning, reasonSegs: reasonSegs.length ? reasonSegs : null } : {}) }));
+  onTurnFlush(chat.id, checkpoint);
 
   const tools = toolsFor(flags);
   const toolNameSet = new Set(tools.map(t => t && t.function && t.function.name).filter(Boolean));
@@ -637,6 +640,7 @@ export async function runCompletion(ws, state, safeSend, chat, model, extended, 
               }
               if (reasonSegs.length) reasonSegs[reasonSegs.length - 1] += e.text;
               else reasoning += e.text;
+              saveSoon();
               safeSend(JSON.stringify({ type: 'reasoning', chatId: chat.id, text: e.text, seg: reasonSegs.length ? reasonSegs.length - 1 : null }));
               return;
             }
