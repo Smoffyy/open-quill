@@ -3934,5 +3934,18 @@
   "Category": "범주",
   "Sign-ins, access changes, provisioning and admin actions, retained for 120 days.": "로그인, 접근 변경, 프로비저닝, 관리 작업. 120일 동안 보관됩니다.",
   "single sign-on": "통합 로그인",
-  "Single sign-on": "통합 로그인"
+  "Single sign-on": "통합 로그인",
+  "Could not create the folder.": "폴더를 만들 수 없습니다.",
+  "Delete this folder?": "이 폴더를 삭제할까요?",
+  "The chats inside are kept and go back to your chat list.": "안에 있는 채팅은 삭제되지 않고 채팅 목록으로 돌아갑니다.",
+  "Could not delete that folder.": "해당 폴더를 삭제할 수 없습니다.",
+  "In folder: {name}": "폴더: {name}",
+  "Remove from folder": "폴더에서 제거",
+  "Add to folder": "폴더에 추가",
+  "No folders yet": "아직 폴더가 없습니다",
+  "Folder options": "폴더 옵션",
+  "New chat here": "여기에 새 채팅",
+  "Drop chats here": "여기에 채팅을 놓으세요",
+  "Folders": "폴더",
+  "Folder not found.": "폴더를 찾을 수 없습니다."
 }

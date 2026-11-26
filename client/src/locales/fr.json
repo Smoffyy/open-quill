@@ -3935,5 +3935,18 @@
   "Category": "Catégorie",
   "Sign-ins, access changes, provisioning and admin actions, retained for 120 days.": "Connexions, changements d’accès, provisionnement et actions d’administration, conservés 120 jours.",
   "single sign-on": "authentification unique",
-  "Single sign-on": "Authentification unique"
+  "Single sign-on": "Authentification unique",
+  "Could not create the folder.": "Impossible de créer le dossier.",
+  "Delete this folder?": "Supprimer ce dossier ?",
+  "The chats inside are kept and go back to your chat list.": "Les conversations qu'il contient sont conservées et retournent dans votre liste de conversations.",
+  "Could not delete that folder.": "Impossible de supprimer ce dossier.",
+  "In folder: {name}": "Dans le dossier : {name}",
+  "Remove from folder": "Retirer du dossier",
+  "Add to folder": "Ajouter à un dossier",
+  "No folders yet": "Aucun dossier pour le moment",
+  "Folder options": "Options du dossier",
+  "New chat here": "Nouvelle conversation ici",
+  "Drop chats here": "Déposez des conversations ici",
+  "Folders": "Dossiers",
+  "Folder not found.": "Dossier introuvable."
 }

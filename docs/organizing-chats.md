@@ -29,6 +29,17 @@ Inside a project you get:
 
 Move a chat in or out with **Add to project** in its menu or in the composer's **+** menu. Deleting a project deletes its knowledge and notes but keeps its chats.
 
+## Folders
+
+Folders are the light way to tidy the sidebar. Unlike a project, a folder shares no instructions or knowledge: it only groups chats. A chat can be in a folder and in a project at the same time. Code sessions are not filed in folders.
+
+- Click the **+** on the **Folders** heading to create one, then type its name. Rename or delete it from its **...** menu. The number beside the name is how many chats it holds.
+- Drag a chat onto a folder to file it, or choose **Add to folder** in the chat's menu. Drag it back onto **Recents** to take it out. Filed chats are listed inside their folder instead of under Recents.
+- Drag a folder to change the order, or use **Move up** and **Move down** in its menu.
+- Pressing **New** while a chat from a folder is open starts the next chat in that folder. The folder's name appears above the composer, and its **x** starts the chat outside the folder instead. The **+** on a folder row starts a chat there directly.
+
+Deleting a folder keeps its chats and returns them to Recents.
+
 ## Artifacts
 
 **Artifacts** in the sidebar lists the documents your chats have written. Filter by file type, and click one to open it in its chat. A project's knowledge stays on the project page and a Code session's files stay in the session. See [Artifacts and Code sessions](artifacts-sandbox.md).

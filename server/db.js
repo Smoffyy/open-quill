@@ -117,13 +117,15 @@ const listByUserStmt = sdb.prepare(`
     json_extract(data,'$.archived') AS archived, json_extract(data,'$.project_id') AS project_id,
     json_extract(data,'$.ended') AS ended, json_extract(data,'$.mode') AS mode,
     json_extract(data,'$.origin_project_id') AS origin_project_id,
-    json_extract(data,'$.tags') AS tags
+    json_extract(data,'$.tags') AS tags, folder_id
   FROM chats WHERE user_id=? ORDER BY updated_at DESC`);
 chatsCol.listByUser = userId => listByUserStmt.all(userId);
 const projectCountsStmt = sdb.prepare(`
   SELECT json_extract(data,'$.project_id') AS project_id, count(*) AS n
   FROM chats WHERE user_id=? AND json_extract(data,'$.project_id') IS NOT NULL GROUP BY 1`);
 chatsCol.projectCounts = userId => new Map(projectCountsStmt.all(userId).map(r => [r.project_id, r.n]));
+const folderCountsStmt = sdb.prepare('SELECT folder_id, count(*) AS n FROM chats WHERE user_id=? AND folder_id IS NOT NULL GROUP BY 1');
+chatsCol.folderCounts = userId => new Map(folderCountsStmt.all(userId).map(r => [r.folder_id, r.n]));
 const byUserOldestStmt = sdb.prepare('SELECT data FROM chats WHERE user_id=? ORDER BY updated_at ASC');
 chatsCol.oldestByUser = userId => byUserOldestStmt.all(userId).map(r => JSON.parse(r.data));
 
@@ -357,12 +359,16 @@ chatsCol.withPins = () => sdb.prepare("SELECT data FROM chats WHERE json_array_l
 const repliesBetweenStmt = sdb.prepare("SELECT data FROM messages WHERE created_at >= ? AND created_at <= ? AND json_extract(data,'$.role') = 'assistant' ORDER BY created_at DESC LIMIT ?");
 messagesCol.repliesBetween = (from, to, limit) => repliesBetweenStmt.all(from, to, limit).map(r => JSON.parse(r.data));
 
+const foldersCol = collection('folders');
+const reorderFolders = sdb.transaction((ids) => { ids.forEach((id, i) => foldersCol.update(id, { sort_order: i })); });
+foldersCol.reorder = ids => reorderFolders(ids);
+
 export const db = {
   users: usersCol,
   chats: chatsCol,
   messages: messagesCol,
   models: collection('models'),
-  folders: collection('folders'),
+  folders: foldersCol,
   usage: usageCol,
   sessions: sessionsCol,
   audit: auditCol,

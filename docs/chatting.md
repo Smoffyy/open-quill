@@ -66,4 +66,4 @@ When a chat fills about two thirds of the context window, the model folds its ol
 
 ## Managing a chat
 
-Click the chat title in the top bar to rename it, star it, add or remove it from a project, export it, or delete it. The same menu is on each chat in the sidebar. See [Organizing your chats](organizing-chats.md) for projects, archiving and search.
+Click the chat title in the top bar to rename it, star it, add or remove it from a project or a folder, export it, or delete it. The same menu is on each chat in the sidebar. See [Organizing your chats](organizing-chats.md) for projects, archiving and search.

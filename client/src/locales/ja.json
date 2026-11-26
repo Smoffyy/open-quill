@@ -3934,5 +3934,18 @@
   "Category": "カテゴリ",
   "Sign-ins, access changes, provisioning and admin actions, retained for 120 days.": "サインイン、アクセスの変更、プロビジョニング、管理操作。120 日間保持されます。",
   "single sign-on": "シングルサインオン",
-  "Single sign-on": "シングルサインオン"
+  "Single sign-on": "シングルサインオン",
+  "Could not create the folder.": "フォルダを作成できませんでした。",
+  "Delete this folder?": "このフォルダを削除しますか？",
+  "The chats inside are kept and go back to your chat list.": "中のチャットは削除されず、チャット一覧に戻ります。",
+  "Could not delete that folder.": "そのフォルダを削除できませんでした。",
+  "In folder: {name}": "フォルダ: {name}",
+  "Remove from folder": "フォルダから外す",
+  "Add to folder": "フォルダに追加",
+  "No folders yet": "フォルダはまだありません",
+  "Folder options": "フォルダのオプション",
+  "New chat here": "ここに新しいチャット",
+  "Drop chats here": "ここにチャットをドロップ",
+  "Folders": "フォルダ",
+  "Folder not found.": "フォルダが見つかりません。"
 }

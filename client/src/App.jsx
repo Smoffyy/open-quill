@@ -171,6 +171,12 @@ export default function App() {
   const sbToggleStar = useCallback((...a) => sidebarFns.current.toggleStar(...a), []);
   const sbLogout = useCallback((...a) => sidebarFns.current.logout(...a), []);
   const sbMoveToProject = useCallback((...a) => sidebarFns.current.moveChatToProject(...a), []);
+  const sbCreateFolder = useCallback(() => sidebarFns.current.createFolder(), []);
+  const sbRenameFolder = useCallback((...a) => sidebarFns.current.renameFolder(...a), []);
+  const sbDeleteFolder = useCallback((...a) => sidebarFns.current.deleteFolder(...a), []);
+  const sbReorderFolders = useCallback((...a) => sidebarFns.current.reorderFolders(...a), []);
+  const sbMoveToFolder = useCallback((...a) => sidebarFns.current.moveChatToFolder(...a), []);
+  const sbNewChatInFolder = useCallback((id) => { setLibPage(null); setDocsTarget(null); sidebarFns.current.newChat(false, id); }, []);
   const sbToggleArchive = useCallback((...a) => sidebarFns.current.toggleArchive(...a), []);
   const sbSetTags = useCallback((...a) => sidebarFns.current.setChatTags(...a), []);
   const sbShareChat = useCallback((...a) => sidebarFns.current.shareChat(...a), []);
@@ -402,6 +408,10 @@ export default function App() {
   }, [user?.prefs]);
   const [projects, setProjects] = useState([]);
   const [projectsReady, setProjectsReady] = useState(false);
+  const [folders, setFolders] = useState([]);
+  const [newChatFolder, setNewChatFolder] = useState(null);
+  const newChatFolderRef = useRef(null);
+  const pickChatFolder = (id) => { newChatFolderRef.current = id; setNewChatFolder(id); };
   const [showProjects, setShowProjects] = useState(false);
   const [projectOpenId, setProjectOpenId] = useState(null);
   const [projectCreate, setProjectCreate] = useState(false);
@@ -644,12 +654,13 @@ export default function App() {
   }, [user, cfg?.uiPreset, authCtx?.uiPreset]);
   useEffect(() => {
     if (!ready) return;
-    loadModels(); loadChats(); loadAppConfig(); loadBudget(); connect(); openFromUrl(); loadProjects();
+    loadModels(); loadChats(); loadAppConfig(); loadBudget(); connect(); openFromUrl(); loadProjects(); loadFolders();
     const tab = takeSettingsToReopen();
     if (tab) openSettings(tab);
   }, [ready]);
   async function loadBudget() { try { setBudget(await api.get('/api/me/budget')); } catch {} }
   async function loadProjects() { try { setProjects(await api.get('/api/projects')); } catch {} finally { setProjectsReady(true); } }
+  async function loadFolders() { try { setFolders(await api.get('/api/folders')); } catch {} }
 
   useEffect(() => {
     const onPop = () => openFromUrl();
@@ -1207,6 +1218,7 @@ export default function App() {
     return (msgs || []).some(m => hasMath(m.content)) ? ensureKatex() : null;
   }
   async function openChat(id, push = true) {
+    pickChatFolder(null);
     setMobileDrawer(false);
     if (incognito) setIncognito(false);
     setShowProjects(false);
@@ -1258,7 +1270,11 @@ export default function App() {
       catch { if (seq === openSeq.current && activeIdRef.current === id && !cached) setFiles([]); }
     } catch { if (seq === openSeq.current) { armSkeleton(false); releaseThread(); if (!cached) { setActiveId(null); setMessages([]); history.replaceState({}, '', codeModeRef.current ? '/code' : '/'); } } }
   }
-  function newChat(fromPop) {
+  function newChat(fromPop, folderId) {
+    const open = chats.find(c => c.id === activeIdRef.current);
+    if (folderId !== undefined) pickChatFolder(folderId);
+    else if (fromPop === true) pickChatFolder(null);
+    else if (open) pickChatFolder(open.folderId || null);
     setMobileDrawer(false);
     if (incognito) setIncognito(false);
     setShowProjects(false);
@@ -1332,7 +1348,7 @@ export default function App() {
     catch { warn(t('Could not delete that chat.')); return; }
     chatCache.current.delete(id);
     setChats(cs => cs.filter(c => c.id !== id));
-    if (id === activeId) newChat();
+    if (id === activeId) newChat(false, null);
   }
   async function confirmDeleteChat(id) {
     const ok = await askConfirm({ title: t('Delete this session?'), message: t('Its conversation and every file in its workspace are deleted. This cannot be undone.'), confirm: t('Delete'), danger: true });
@@ -1377,6 +1393,47 @@ export default function App() {
     api.patch('/api/chats/' + chatId, { projectId: target || '' })
       .then(() => loadProjects())
       .catch(() => { setChats(cs => cs.map(c => c.id === chatId ? { ...c, projectId: prev } : c)); warn(); });
+  }
+
+  async function createFolder() {
+    try {
+      const f = await api.post('/api/folders', { name: t('New folder') });
+      setFolders(fs => [...fs, f]);
+      return f;
+    } catch { warn(t('Could not create the folder.')); return null; }
+  }
+  function renameFolder(id, name) {
+    const prev = folders.find(f => f.id === id)?.name;
+    const next = name.trim();
+    if (!next || next === prev) return;
+    setFolders(fs => fs.map(f => f.id === id ? { ...f, name: next } : f));
+    api.patch('/api/folders/' + id, { name: next })
+      .catch(() => { setFolders(fs => fs.map(f => f.id === id ? { ...f, name: prev } : f)); warn(); });
+  }
+  async function deleteFolder(id) {
+    const ok = await askConfirm({ title: t('Delete this folder?'), message: t('The chats inside are kept and go back to your chat list.'), confirm: t('Delete'), danger: true });
+    if (!ok) return;
+    try { await api.del('/api/folders/' + id); }
+    catch { warn(t('Could not delete that folder.')); return; }
+    setFolders(fs => fs.filter(f => f.id !== id));
+    setChats(cs => cs.map(c => c.folderId === id ? { ...c, folderId: null } : c));
+    if (newChatFolderRef.current === id) pickChatFolder(null);
+  }
+  function reorderFolders(ids) {
+    setFolders(fs => ids.map(id => fs.find(f => f.id === id)).filter(Boolean));
+    api.put('/api/folders/order', { ids }).catch(() => { loadFolders(); warn(); });
+  }
+  function moveChatToFolder(chatId, folderId) {
+    const prev = chats.find(c => c.id === chatId)?.folderId ?? null;
+    const target = folderId || null;
+    if (prev === target) return;
+    setChats(cs => cs.map(c => c.id === chatId ? { ...c, folderId: target } : c));
+    api.patch('/api/chats/' + chatId, { folderId: target || '' })
+      .catch(() => { setChats(cs => cs.map(c => c.id === chatId ? { ...c, folderId: prev } : c)); warn(); });
+  }
+  function clearChatFolder() {
+    if (activeId) moveChatToFolder(activeId, null);
+    else pickChatFolder(null);
   }
 
   function answerQuestion(answer) {
@@ -1434,10 +1491,12 @@ export default function App() {
     let chatId = activeIdRef.current;
     if (!chatId) {
       let c;
-      try { c = await api.post('/api/chats', code ? { mode: 'code' } : undefined); }
+      const intoFolder = !code && newChatFolderRef.current;
+      try { c = await api.post('/api/chats', code ? { mode: 'code' } : (intoFolder ? { folderId: intoFolder } : undefined)); }
       catch { warn(code ? t('Could not start a new session.') : t('Could not start a new chat.')); return; }
       chatId = c.id; setActiveId(chatId); activeIdRef.current = chatId;
-      setChats(cs => [{ id: c.id, title: 'New chat', updated_at: c.updated_at, starred: false, mode: c.mode || 'chat' }, ...cs]);
+      pickChatFolder(null);
+      setChats(cs => [{ id: c.id, title: 'New chat', updated_at: c.updated_at, starred: false, mode: c.mode || 'chat', folderId: c.folderId || null }, ...cs]);
       history.pushState({}, '', code ? pathForCode(chatId) : pathForChat(chatId));
       if (code) { clearDraft('code'); setFiles([]); }
       if ((chatGenParams && Object.keys(chatGenParams).length) || (chatSysOverride && chatSysOverride.trim())) {
@@ -1621,6 +1680,7 @@ export default function App() {
   const model = modelById.get(currentId);
   const activeChat = activeId ? chats.find(c => c.id === activeId) : null;
   const activeProject = activeChat?.projectId ? projects.find(p => p.id === activeChat.projectId) : null;
+  const composerFolder = !codeMode && !incognito ? folders.find(f => f.id === (activeChat ? activeChat.folderId : newChatFolder)) || null : null;
   const webSearchAvailable = !incognito && !!cfg.webSearchAvailable && (model ? model.webSearchAllowed !== false : true);
   const webSearchOn = webSearchAvailable && webSearch;
   const booting = bootView.current !== 'home';
@@ -1654,6 +1714,7 @@ export default function App() {
     modelHasBg, bgInChat, onToggleBgInChat: () => updatePref('modelBgInChat', !bgInChat),
     webSearch: webSearchOn, webSearchAvailable, onToggleWebSearch: () => { if (webSearchAvailable) setWebSearch(s => !s); },
     project: currentProject, onClearProject: clearChatProject, onOpenProject: openProjects,
+    folder: composerFolder, onClearFolder: clearChatFolder,
     onNewChat: () => newChat(), onShortcuts: () => setShowShortcuts(true),
     incognito, onToggleIncognito: streaming || queued ? null : () => toggleIncognito(),
     onShowSummary: hasSummary && activeId ? () => setSummaryOpen(true) : null,
@@ -1784,7 +1845,7 @@ export default function App() {
   );
   const originProject = activeChat?.originProjectId ? projects.find(p => p.id === activeChat.originProjectId) : null;
 
-  sidebarFns.current = { newChat, openChat, deleteChat, toggleStar, toggleArchive, setChatTags, logout, openProjects, moveChatToProject, switchMode, alignMode, shareChat, newProject: () => { openProjects(null); setProjectCreate(true); } };
+  sidebarFns.current = { newChat, openChat, deleteChat, toggleStar, toggleArchive, setChatTags, logout, openProjects, moveChatToProject, createFolder, renameFolder, deleteFolder, reorderFolders, moveChatToFolder, switchMode, alignMode, shareChat, newProject: () => { openProjects(null); setProjectCreate(true); } };
 
   const streamKey = assistantIdRef.current || '_stream';
   const codeLive = !codeMode ? null
@@ -1838,6 +1899,7 @@ export default function App() {
         onCredits={onCreditsCb} onChangelog={onChangelogCb} onLicense={onLicenseCb} onPrivacy={onPrivacyCb} onLogout={sbLogout} version={cfg.version}
         onChatsOverview={onChatsOverviewCb}
         projects={projects} onProjects={sbProjects} onOpenProject={sbOpenProject} onNewProject={sbNewProject} onMoveToProject={sbMoveToProject} onShare={can(user, 'chats.share') ? sbShareChat : null}
+        folders={folders} activeFolderId={activeChat ? activeChat.folderId || null : newChatFolder} onCreateFolder={sbCreateFolder} onRenameFolder={sbRenameFolder} onDeleteFolder={sbDeleteFolder} onReorderFolders={sbReorderFolders} onMoveToFolder={sbMoveToFolder} onNewChatInFolder={sbNewChatInFolder}
         busyChats={busyChats} unreadChats={unreadChats} onStopChat={stopChat} />
 
       {collapsed && !docsTarget && (
@@ -1956,7 +2018,7 @@ export default function App() {
               chat={activeChat} chatId={activeId} project={activeProject} booting={booting} shared={chatShared}
               projects={projects} busy={busyChats.includes(activeId)}
               onOpenMenu={() => setMobileDrawer(true)} onOpenProject={openProjects} onRename={renameChat}
-              onStopChat={stopChat} onToggleStar={toggleStar} onToggleArchive={toggleArchive} onSetTags={setChatTags} allTags={allTags} onMoveToProject={moveChatToProject} onDelete={deleteChat} onShare={can(user, 'chats.share') ? shareChat : null}
+              onStopChat={stopChat} onToggleStar={toggleStar} onToggleArchive={toggleArchive} onSetTags={setChatTags} allTags={allTags} onMoveToProject={moveChatToProject} folders={folders} onMoveToFolder={moveChatToFolder} onDelete={deleteChat} onShare={can(user, 'chats.share') ? shareChat : null}
               actions={
               <TopbarActions
                 items={[

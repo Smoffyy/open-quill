@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Trash, Star, Chevron, Box, Stop, Download, ArchiveIcon, Tag, Check, Users } from '../ui/icons.jsx';
+import { Trash, Star, Chevron, Box, Folder, Stop, Download, ArchiveIcon, Tag, Check, Users } from '../ui/icons.jsx';
 import { t } from '../../i18n.jsx';
 import { Skel, SkelMenu } from '../ui/Skeleton.jsx';
 import { SubItem } from '../ui/Submenu.jsx';
@@ -8,7 +8,7 @@ import { useDismiss } from '../../lib/dismiss.js';
 import { useSubmenus } from '../../lib/submenu.js';
 import { MAX_TAGS, MAX_TAG_LENGTH, hasTag, toggleTag } from '../../lib/chattags.js';
 
-export function ChatMenu({ chat, at, projects = [], projectsReady = true, busy = false, anchorRef, allTags = [], onStopChat, onToggleStar, onToggleArchive, onSetTags, onMoveToProject, onShare, onDelete, onClose }) {
+export function ChatMenu({ chat, at, projects = [], projectsReady = true, folders = [], busy = false, anchorRef, allTags = [], onStopChat, onToggleStar, onToggleArchive, onSetTags, onMoveToProject, onMoveToFolder, onShare, onDelete, onClose }) {
   const [pos, setPos] = useState({ ...at, ready: false });
   const sub = useSubmenus();
   const menuRef = useRef(null);
@@ -77,6 +77,23 @@ export function ChatMenu({ chat, at, projects = [], projectsReady = true, busy =
           {projects.map(p => (
             <button key={p.id} className={p.id === chat.projectId ? 'on' : ''} onClick={stop(() => onMoveToProject(chat.id, p.id))}>
               <Box style={{ width: 15 }} /> {p.name}
+            </button>
+          ))}
+        </SubItem>
+      )}
+      {onMoveToFolder && chat.mode !== 'code' && (
+        <SubItem id="folder" sub={sub} wrapClass="cm-sub" flyoutClass="chat-menu cm-flyout"
+          trigger={({ onClick }) => (
+            <button onClick={onClick}>
+              <Folder style={{ width: 20 }} /> {t('Add to folder')}
+              <Chevron style={{ width: 13, marginLeft: 'auto' }} />
+            </button>
+          )}>
+          {chat.folderId && <button onClick={stop(() => onMoveToFolder(chat.id, null))}>{t('Remove from folder')}</button>}
+          {folders.length === 0 && <div className="cm-empty">{t('No folders yet')}</div>}
+          {folders.map(f => (
+            <button key={f.id} className={f.id === chat.folderId ? 'on' : ''} onClick={stop(() => onMoveToFolder(chat.id, f.id))}>
+              <Folder style={{ width: 15 }} /> {f.name}
             </button>
           ))}
         </SubItem>

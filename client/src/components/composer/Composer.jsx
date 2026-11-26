@@ -54,7 +54,7 @@ function ActiveChip({ icon, label, onRemove }) {
 
 export default function Composer({
   value, onChange, onSend, onStop, streaming, stopping = false, models, modelsReady = true,
-  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, advanced, budget, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, onOpenProject, projects = [], onSetProject, onNewChat, onShortcuts,
+  currentId, onSelect, extended, onToggleExtended, autoFocus, placeholder, modelUp, focusKey, visionSupported, canUseUnavailable, advanced, budget, webSearch, webSearchAvailable, onToggleWebSearch, modelHasBg, bgInChat, onToggleBgInChat, project, onClearProject, onOpenProject, folder, onClearFolder, projects = [], onSetProject, onNewChat, onShortcuts,
   voiceMic = false, voiceCall = false, sttEngine = 'browser', onStartCall, callActive = false,
   safetyFlagged = false, safetyChecking = false, safetyVerbose = false, safetyReason = '',
   styles = [], styleId = 'normal', onSelectStyle, onSaveStyles,
@@ -661,6 +661,15 @@ export default function Composer({
                 </span>
               )}
               {onClearProject && <button className="cp-x" onClick={onClearProject} data-tip={t("Remove from project")} aria-label={t("Remove from project")}><X style={{ width: 12 }} /></button>}
+            </div>
+          )}
+          {folder && (
+            <div className="composer-project composer-folder">
+              <span className="cp-open" data-tip={t('In folder: {name}', { name: folder.name })}>
+                <Folder style={{ width: 14 }} />
+                <span className="cp-name">{folder.name}</span>
+              </span>
+              {onClearFolder && <button className="cp-x" onClick={onClearFolder} data-tip={t('Remove from folder')} aria-label={t('Remove from folder')}><X style={{ width: 12 }} /></button>}
             </div>
           )}
         </div>

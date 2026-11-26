@@ -3935,5 +3935,18 @@
   "Category": "Categoría",
   "Sign-ins, access changes, provisioning and admin actions, retained for 120 days.": "Inicios de sesión, cambios de acceso, aprovisionamiento y acciones de administración, conservados 120 días.",
   "single sign-on": "inicio de sesión único",
-  "Single sign-on": "Inicio de sesión único"
+  "Single sign-on": "Inicio de sesión único",
+  "Could not create the folder.": "No se pudo crear la carpeta.",
+  "Delete this folder?": "¿Eliminar esta carpeta?",
+  "The chats inside are kept and go back to your chat list.": "Los chats que contiene se conservan y vuelven a tu lista de chats.",
+  "Could not delete that folder.": "No se pudo eliminar esa carpeta.",
+  "In folder: {name}": "En la carpeta: {name}",
+  "Remove from folder": "Quitar de la carpeta",
+  "Add to folder": "Añadir a una carpeta",
+  "No folders yet": "Aún no hay carpetas",
+  "Folder options": "Opciones de la carpeta",
+  "New chat here": "Nuevo chat aquí",
+  "Drop chats here": "Suelta los chats aquí",
+  "Folders": "Carpetas",
+  "Folder not found.": "Carpeta no encontrada."
 }

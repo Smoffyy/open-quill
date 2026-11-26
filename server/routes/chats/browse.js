@@ -14,7 +14,7 @@ function snippetAround(text, at, len) {
 export default function registerBrowseRoutes(app) {
   app.get('/api/chats', authMiddleware, (req, res) => {
     const list = db.chats.listByUser(req.user.id)
-      .map(c => ({ id: c.id, title: c.title, updated_at: c.updated_at, starred: !!c.starred, archived: !!c.archived, projectId: c.project_id || null, originProjectId: c.origin_project_id || null, ended: !!c.ended, mode: c.mode === 'code' ? 'code' : 'chat', tags: parseTags(c.tags) }));
+      .map(c => ({ id: c.id, title: c.title, updated_at: c.updated_at, starred: !!c.starred, archived: !!c.archived, projectId: c.project_id || null, folderId: c.folder_id || null, originProjectId: c.origin_project_id || null, ended: !!c.ended, mode: c.mode === 'code' ? 'code' : 'chat', tags: parseTags(c.tags) }));
     res.json(list);
   });
 

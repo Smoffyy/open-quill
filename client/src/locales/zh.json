@@ -3934,5 +3934,18 @@
   "Category": "类别",
   "Sign-ins, access changes, provisioning and admin actions, retained for 120 days.": "登录、访问变更、预配和管理操作，保留 120 天。",
   "single sign-on": "单点登录",
-  "Single sign-on": "单点登录"
+  "Single sign-on": "单点登录",
+  "Could not create the folder.": "无法创建文件夹。",
+  "Delete this folder?": "删除此文件夹？",
+  "The chats inside are kept and go back to your chat list.": "其中的对话会保留，并回到你的对话列表。",
+  "Could not delete that folder.": "无法删除该文件夹。",
+  "In folder: {name}": "所在文件夹：{name}",
+  "Remove from folder": "从文件夹中移除",
+  "Add to folder": "添加到文件夹",
+  "No folders yet": "还没有文件夹",
+  "Folder options": "文件夹选项",
+  "New chat here": "在此新建对话",
+  "Drop chats here": "将对话拖到这里",
+  "Folders": "文件夹",
+  "Folder not found.": "未找到文件夹。"
 }

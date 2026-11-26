@@ -694,6 +694,60 @@ test('model folders persist on their own, empty or not', async () => {
   await browser('PUT', '/api/admin/models/folders', { body: { folders: [] } });
 });
 
+test('chat folders are private, ordered, and never take a chat with them', async () => {
+  const me = await joinAs('folder-owner@example.com');
+  const them = await joinAs('folder-other@example.com');
+  const mine = as(me);
+  const theirs = as(them);
+
+  const a = (await mine('POST', '/api/folders', { body: { name: '  Work  ' } })).json;
+  const b = (await mine('POST', '/api/folders', { body: {} })).json;
+  const c = (await mine('POST', '/api/folders', { body: { name: 'x'.repeat(200) } })).json;
+  assert.equal(a.name, 'Work', 'names are trimmed');
+  assert.equal(b.name, 'New folder', 'and default when empty');
+  assert.equal(c.name.length, 80, 'and capped');
+  assert.deepEqual((await mine('GET', '/api/folders')).json.map(f => f.id), [a.id, b.id, c.id]);
+
+  assert.equal((await mine('PUT', '/api/folders/order', { body: { ids: [c.id, a.id, 'nope'] } })).status, 200);
+  assert.deepEqual((await mine('GET', '/api/folders')).json.map(f => f.id), [c.id, a.id, b.id], 'listed ids first, the rest keep their place');
+
+  assert.deepEqual((await theirs('GET', '/api/folders')).json, [], 'another member sees none');
+  assert.equal((await theirs('PATCH', `/api/folders/${a.id}`, { body: { name: 'Mine now' } })).status, 404);
+  await theirs('PUT', '/api/folders/order', { body: { ids: [a.id] } });
+  await theirs('DELETE', `/api/folders/${a.id}`);
+  assert.equal((await mine('GET', '/api/folders')).json.length, 3, 'nothing they did touched mine');
+
+  assert.equal((await mine('PATCH', `/api/folders/${b.id}`, { body: { name: 'Play' } })).status, 200);
+
+  const chat = (await mine('POST', '/api/chats', { body: { folderId: a.id } })).json;
+  assert.equal(chat.folderId, a.id, 'a chat can start inside a folder');
+  const stray = (await theirs('POST', '/api/chats', { body: { folderId: a.id } })).json;
+  assert.equal(stray.folderId, null, 'but not inside a folder that is not theirs');
+  const code = (await mine('POST', '/api/chats', { body: { mode: 'code', folderId: a.id } })).json;
+  assert.equal(code.folderId, null, 'and a code session never joins one');
+
+  const listed = async (who) => (await who('GET', '/api/chats')).json;
+  assert.equal((await listed(mine)).find(x => x.id === chat.id).folderId, a.id);
+  assert.equal((await mine('GET', '/api/folders')).json.find(f => f.id === a.id).chatCount, 1);
+
+  await mine('PATCH', `/api/chats/${chat.id}`, { body: { folderId: b.id } });
+  assert.equal((await listed(mine)).find(x => x.id === chat.id).folderId, b.id, 'a chat moves between folders');
+  await theirs('PATCH', `/api/chats/${stray.id}`, { body: { folderId: b.id } });
+  assert.equal((await listed(theirs)).find(x => x.id === stray.id).folderId, null, 'and cannot be moved into someone else\'s');
+  await mine('PATCH', `/api/chats/${chat.id}`, { body: { folderId: '' } });
+  assert.equal((await listed(mine)).find(x => x.id === chat.id).folderId, null, 'an empty id takes it out');
+
+  await mine('PATCH', `/api/chats/${chat.id}`, { body: { folderId: b.id } });
+  await mine('DELETE', `/api/folders/${b.id}`);
+  const after = await listed(mine);
+  assert.ok(after.some(x => x.id === chat.id), 'deleting a folder keeps its chats');
+  assert.equal(after.find(x => x.id === chat.id).folderId, null);
+
+  for (let i = 0; i < 60; i++) if ((await mine('POST', '/api/folders', { body: { name: 'n' + i } })).status !== 200) break;
+  assert.equal((await mine('POST', '/api/folders', { body: {} })).status, 400, 'a member can have at most 50 folders');
+  assert.equal((await mine('GET', '/api/folders')).json.length, 50);
+});
+
 test('a staged app-config edit can be taken back before it is published', async () => {
   const cfg = (await browser('GET', '/api/app-config')).json;
   const live = { appFont: cfg.appFont, appName: cfg.appName };

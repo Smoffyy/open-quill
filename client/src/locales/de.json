@@ -3935,5 +3935,18 @@
   "Category": "Kategorie",
   "Sign-ins, access changes, provisioning and admin actions, retained for 120 days.": "Anmeldungen, Zugriffsänderungen, Bereitstellung und Admin-Aktionen, 120 Tage aufbewahrt.",
   "single sign-on": "Single Sign-on",
-  "Single sign-on": "Single Sign-on"
+  "Single sign-on": "Single Sign-on",
+  "Could not create the folder.": "Der Ordner konnte nicht erstellt werden.",
+  "Delete this folder?": "Diesen Ordner löschen?",
+  "The chats inside are kept and go back to your chat list.": "Die enthaltenen Chats bleiben erhalten und kehren in deine Chatliste zurück.",
+  "Could not delete that folder.": "Dieser Ordner konnte nicht gelöscht werden.",
+  "In folder: {name}": "Im Ordner: {name}",
+  "Remove from folder": "Aus Ordner entfernen",
+  "Add to folder": "Zu Ordner hinzufügen",
+  "No folders yet": "Noch keine Ordner",
+  "Folder options": "Ordneroptionen",
+  "New chat here": "Neuer Chat hier",
+  "Drop chats here": "Chats hierher ziehen",
+  "Folders": "Ordner",
+  "Folder not found.": "Ordner nicht gefunden."
 }

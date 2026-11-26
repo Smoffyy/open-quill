@@ -3935,5 +3935,18 @@
   "Category": "Categoria",
   "Sign-ins, access changes, provisioning and admin actions, retained for 120 days.": "Logins, mudanças de acesso, provisionamento e ações de administração, mantidos por 120 dias.",
   "single sign-on": "login único",
-  "Single sign-on": "Login único"
+  "Single sign-on": "Login único",
+  "Could not create the folder.": "Não foi possível criar a pasta.",
+  "Delete this folder?": "Excluir esta pasta?",
+  "The chats inside are kept and go back to your chat list.": "As conversas que ela contém são mantidas e voltam para a sua lista de conversas.",
+  "Could not delete that folder.": "Não foi possível excluir essa pasta.",
+  "In folder: {name}": "Na pasta: {name}",
+  "Remove from folder": "Remover da pasta",
+  "Add to folder": "Adicionar a uma pasta",
+  "No folders yet": "Ainda não há pastas",
+  "Folder options": "Opções da pasta",
+  "New chat here": "Nova conversa aqui",
+  "Drop chats here": "Solte conversas aqui",
+  "Folders": "Pastas",
+  "Folder not found.": "Pasta não encontrada."
 }

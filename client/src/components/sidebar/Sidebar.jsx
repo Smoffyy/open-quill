@@ -5,6 +5,8 @@ import ResizeHandle, { storedWidth } from '../ui/ResizeHandle.jsx';
 import { SegSlide } from '../ui/controls.jsx';
 import { ChatMenu, menuAtButton, menuAtPointer } from './ChatMenu.jsx';
 import DocsNav from './DocsNav.jsx';
+import SectionHead from './SectionHead.jsx';
+import FolderSection from './FolderSection.jsx';
 import { Plus, Search, Panel, Gear, Shield, Flask, Logout, DotsV, Trash, Heart, ChevDown, Box, Compact, Sliders, Check, Artifact, Briefcase, ModelDocs, Info, Clock, ArrowOut, Sparkles, Paper, Ghost, X, Chat, CodeTag, Laptop, Tag } from '../ui/icons.jsx';
 import { t } from '../../i18n.jsx';
 import { useThemeText } from '../../lib/theme/store.jsx';
@@ -15,6 +17,7 @@ import { nextFitSize, FIT_PASSES } from '../../lib/fittext.js';
 import { useDismiss } from '../../lib/dismiss.js';
 import { pathForChat, pathForCode, pathForProject } from '../../lib/route.js';
 import { collectTags, hasTag } from '../../lib/chattags.js';
+import { CHAT_DRAG, chatsByFolder, dragKind } from '../../lib/folders.js';
 import { can } from '../../lib/permissions.js';
 import { roleLabel } from '../ui/roleLabel.jsx';
 
@@ -72,18 +75,6 @@ function readFolded() {
   try { return new Set(JSON.parse(localStorage.getItem(FOLD_KEY) || '[]')); } catch { return new Set(); }
 }
 
-function SectionHead({ id, label, folded, onToggle, children }) {
-  return (
-    <div className="section-label recents-label has-head">
-      <button className="sec-head" aria-expanded={!folded} onClick={() => onToggle(id)}>
-        <span className="sec-head-label">{label}</span>
-        <ChevDown className="sec-head-chev" aria-hidden="true" />
-      </button>
-      <span className="sec-head-actions">{children}</span>
-    </div>
-  );
-}
-
 function ProfileMenu({ user, anchorRef, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onPrivacy, onLogout, onClose }) {
   const ref = useRef(null);
   const [pos, setPos] = useState(null);
@@ -125,7 +116,7 @@ function ModeSwitch({ mode, onMode }) {
   );
 }
 
-function ChatRow({ c, active, showTrash, projects = [], projectsReady = true, allTags, unreadIds, onMoveToProject, onShare, onOpen, onDelete, onToggleStar, onToggleArchive, onSetTags, busyIds, onStopChat }) {
+function ChatRow({ c, active, showTrash, projects = [], projectsReady = true, folders = [], allTags, unreadIds, onMoveToProject, onMoveToFolder, onShare, onOpen, onDelete, onToggleStar, onToggleArchive, onSetTags, busyIds, onStopChat }) {
   const busy = !!(busyIds && busyIds.has(c.id));
   const unread = !busy && !active && !!(unreadIds && unreadIds.has(c.id));
   const [menu, setMenu] = useState(null);
@@ -133,9 +124,11 @@ function ChatRow({ c, active, showTrash, projects = [], projectsReady = true, al
   const code = c.mode === 'code';
   return (
     <div className={'chat-row' + (active ? ' active' : '') + (busy ? ' busy' : '') + (code ? ' code-row' : '')}
+      draggable={!code && !!onMoveToFolder}
+      onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData(CHAT_DRAG, c.id); e.dataTransfer.setData('text/plain', c.title); }}
       onClick={(e) => { if (e.target === e.currentTarget && plainClick(e)) onOpen(c.id); }}
       onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setMenu(menuAtPointer(e)); }}>
-      <a className="row-link" href={code ? pathForCode(c.id) : pathForChat(c.id)} aria-current={active ? 'page' : undefined}
+      <a className="row-link" draggable={false} href={code ? pathForCode(c.id) : pathForChat(c.id)} aria-current={active ? 'page' : undefined}
         onClick={(e) => { if (!plainClick(e)) return; e.preventDefault(); onOpen(c.id); }}>
         <span className="row-ic">
           {busy ? <span className="row-busy" role="img" aria-label={t('Still generating')} data-tip={t('Still generating')} />
@@ -152,8 +145,8 @@ function ChatRow({ c, active, showTrash, projects = [], projectsReady = true, al
         <button className="row-ctrl" ref={btnRef} data-tip={t("Options")} aria-label={t("Options")} aria-expanded={!!menu} aria-haspopup="menu"
           onClick={(e) => { e.stopPropagation(); const at = menuAtButton(e.currentTarget); setMenu(m => m ? null : at); }}><DotsV /></button>
       )}
-      {menu && <ChatMenu chat={c} at={menu} projects={projects} projectsReady={projectsReady} busy={busy} anchorRef={btnRef} allTags={allTags}
-        onStopChat={onStopChat} onToggleStar={onToggleStar} onToggleArchive={onToggleArchive} onSetTags={onSetTags} onMoveToProject={onMoveToProject} onShare={onShare}
+      {menu && <ChatMenu chat={c} at={menu} projects={projects} projectsReady={projectsReady} folders={folders} busy={busy} anchorRef={btnRef} allTags={allTags}
+        onStopChat={onStopChat} onToggleStar={onToggleStar} onToggleArchive={onToggleArchive} onSetTags={onSetTags} onMoveToProject={onMoveToProject} onMoveToFolder={onMoveToFolder} onShare={onShare}
         onDelete={onDelete} onClose={() => setMenu(null)} />}
     </div>
   );
@@ -164,7 +157,8 @@ function Sidebar({
   collapsed, onToggle, onSettings, onAdmin, onPlayground, onCredits, onChangelog, onLicense, onPrivacy, onLogout, version, onChatsOverview,
   projects = [], projectsReady = true, onProjects, onOpenProject, onNewProject, onMoveToProject, onShare = null, mobileOpen = false, onMobileClose,
   onArtifacts, onScheduled, onCustomize, onModelDocs, showModelDocs = true, onVersion, dest = null,
-  docs = null, busyChats = [], onStopChat, mode = 'chat', onMode, onToggleArchive, onSetTags, unreadChats = []
+  docs = null, busyChats = [], onStopChat, mode = 'chat', onMode, onToggleArchive, onSetTags, unreadChats = [],
+  folders = [], activeFolderId = null, onCreateFolder, onRenameFolder, onDeleteFolder, onReorderFolders, onMoveToFolder, onNewChatInFolder
 }) {
   const brandRef = useRef(null);
   const verRef = useRef(null);
@@ -213,6 +207,27 @@ function Sidebar({
     return next;
   });
   const groupRef = useRef(null);
+  const [recentsOver, setRecentsOver] = useState(false);
+  useEffect(() => {
+    const clear = () => setRecentsOver(false);
+    window.addEventListener('dragend', clear);
+    window.addEventListener('drop', clear);
+    return () => { window.removeEventListener('dragend', clear); window.removeEventListener('drop', clear); };
+  }, []);
+  const hoverRecents = (e) => {
+    if (!folders.length || dragKind(e.dataTransfer.types) !== 'chat') return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setRecentsOver(true);
+  };
+  const leaveRecents = (e) => { if (!e.currentTarget.contains(e.relatedTarget)) setRecentsOver(false); };
+  const dropRecents = (e) => {
+    if (!folders.length || dragKind(e.dataTransfer.types) !== 'chat') return;
+    e.preventDefault();
+    setRecentsOver(false);
+    const id = e.dataTransfer.getData(CHAT_DRAG);
+    if (id) onMoveToFolder(id, null);
+  };
   const pickGroup = (v) => { setGroupBy(v); setGroupMenu(false); try { localStorage.setItem('oq-group-by', v); } catch {} };
   const [tagFilter, setTagFilter] = useState(() => { try { return localStorage.getItem('oq-tag-filter') || ''; } catch { return ''; } });
   const pickTagFilter = (v) => { setTagFilter(v); setGroupMenu(false); try { localStorage.setItem('oq-tag-filter', v); } catch {} };
@@ -232,6 +247,9 @@ function Sidebar({
   const allTags = collectTags(chats);
   const activeTag = allTags.find(x => hasTag([x], tagFilter)) || '';
   if (activeTag) chats = chats.filter(c => hasTag(c.tags, activeTag));
+  const filed = code ? { byId: new Map(), loose: chats } : chatsByFolder(chats, folders);
+  const filedCount = [...filed.byId.values()].reduce((n, list) => n + list.length, 0);
+  chats = filed.loose;
   const starred = chats.filter(c => c.starred);
   const starredProjects = (projects || []).filter(p => p.starred);
   const others = chats.filter(c => !c.starred);
@@ -270,7 +288,7 @@ function Sidebar({
     }
     return g;
   })();
-  const rowProps = { onOpen, onDelete, onToggleStar, onToggleArchive, onSetTags, allTags, unreadIds, busyIds, onStopChat, projects, projectsReady, onMoveToProject, onShare };
+  const rowProps = { onOpen, onDelete, onToggleStar, onToggleArchive, onSetTags, allTags, unreadIds, busyIds, onStopChat, projects, projectsReady, folders, onMoveToProject, onMoveToFolder, onShare };
   const row = (c) => <ChatRow key={c.id} c={c} active={c.id === activeId} showTrash={showTrash} {...rowProps} />;
 
   return (
@@ -346,6 +364,12 @@ function Sidebar({
               ))}
             </>}
 
+            {!code && onCreateFolder && (
+              <FolderSection folders={folders} byId={filed.byId} activeFolderId={activeFolderId} folded={folded} onToggleFold={toggleFold}
+                renderRow={row} onCreate={onCreateFolder} onRename={onRenameFolder} onDelete={onDeleteFolder} onReorder={onReorderFolders}
+                onMoveChat={onMoveToFolder} onNewChat={onNewChatInFolder} />
+            )}
+
             {(starred.length > 0 || (!code && starredProjects.length > 0)) && <>
               <SectionHead id="starred" label={t("Starred")} folded={folded.has('starred')} onToggle={toggleFold} />
               {!folded.has('starred') && !code && starredProjects.map(p => (
@@ -358,6 +382,7 @@ function Sidebar({
               {!folded.has('starred') && starred.map(row)}
             </>}
 
+            <div className={'recents-zone' + (recentsOver ? ' drop-chat' : '')} onDragOver={hoverRecents} onDragLeave={leaveRecents} onDrop={dropRecents}>
             <div className="section-label recents-label has-head" ref={groupRef}>
               <button className="sec-head" aria-expanded={!folded.has('recents')} onClick={() => toggleFold('recents')}>
                 <span className="sec-head-label">{recentsLabel}</span>
@@ -395,7 +420,7 @@ function Sidebar({
               )}
               </span>
             </div>
-            {others.length === 0 && <div className="chats-empty">{activeTag ? t('No chats with this tag') : code ? t('No sessions yet') : emptyChats}</div>}
+            {others.length === 0 && filedCount === 0 && <div className="chats-empty">{activeTag ? t('No chats with this tag') : code ? t('No sessions yet') : emptyChats}</div>}
             {!folded.has('recents') && recentGroups[0].items.map(row)}
             {!folded.has('recents') && recentGroups.slice(1).map(g => g.items.length > 0 && (
               <React.Fragment key={g.key}>
@@ -403,6 +428,7 @@ function Sidebar({
                 {g.items.map(row)}
               </React.Fragment>
             ))}
+            </div>
             {overflow && (
               <button className="all-chats-btn" onClick={onChatsOverview}><Compact style={{ width: 15, flexShrink: 0 }} /> <span>{browseAll}</span></button>
             )}

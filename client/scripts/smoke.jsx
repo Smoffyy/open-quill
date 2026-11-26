@@ -216,6 +216,14 @@ cases.push(['Sidebar:code', () => React.createElement(Sidebar, {
   user: { email: 'a@b.c', displayName: 'Ada', prefs: {} }, chats: [{ id: 'c1', title: 'Build', mode: 'code' }], mode: 'code', onMode: noop,
   onNew: noop, onOpen: noop, onDelete: noop, onToggleStar: noop, onToggle: noop, onSearch: noop, onSettings: noop, version: '28.0.0'
 })]);
+const folderList = [{ id: 'f1', name: 'Work' }, { id: 'f2', name: 'Ideas' }];
+cases.push(['Sidebar:folders', () => React.createElement(Sidebar, {
+  user: { email: 'a@b.c', displayName: 'Ada', prefs: {} }, mode: 'chat', onMode: noop, activeId: 'c1',
+  chats: [{ id: 'c1', title: 'Filed chat', folderId: 'f1' }, { id: 'c2', title: 'Loose chat' }, { id: 'c3', title: 'Orphan', folderId: 'gone' }],
+  folders: folderList, activeFolderId: 'f1', onCreateFolder: noop, onRenameFolder: noop, onDeleteFolder: noop, onReorderFolders: noop, onMoveToFolder: noop, onNewChatInFolder: noop,
+  onNew: noop, onOpen: noop, onDelete: noop, onToggleStar: noop, onToggle: noop, onSearch: noop, onSettings: noop, version: '28.0.0'
+})]);
+cases.push(['Composer:folder', () => React.createElement(Composer, { ...composerProps, folder: folderList[0], onClearFolder: noop })]);
 cases.push(['ArtifactsViewer:live', () => React.createElement(Viewer, {
   chatId: 'c1', path: 'src/main.js', onBack: noop, canBack: true,
   liveText: 'const x = 1;\nconst y = 2;\n', liveInfo: { path: 'src/main.js', tool: 'create_file' },

@@ -5,7 +5,7 @@ import { ChevDown, Menu, Users } from '../ui/icons.jsx';
 
 export default function ChatTopbar({
   lead, actions, chat, chatId, project, booting = false, projects, busy = false, shared = null,
-  allTags, onOpenMenu, onOpenProject, onRename, onStopChat, onToggleStar, onToggleArchive, onSetTags, onMoveToProject, onShare, onDelete
+  allTags, onOpenMenu, onOpenProject, onRename, onStopChat, onToggleStar, onToggleArchive, onSetTags, onMoveToProject, folders, onMoveToFolder, onShare, onDelete
 }) {
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState('');
@@ -67,7 +67,7 @@ export default function ChatTopbar({
             <ChatMenu
               chat={{ id: chatId, title: chat?.title || t('New chat'), starred: !!chat?.starred, archived: !!chat?.archived, tags: chat?.tags || [], projectId: chat?.projectId || null }}
               at={menu} projects={projects} busy={busy} anchorRef={caretRef} allTags={allTags}
-              onStopChat={onStopChat} onToggleStar={onToggleStar} onToggleArchive={onToggleArchive} onSetTags={onSetTags} onMoveToProject={onMoveToProject} onShare={onShare} onDelete={onDelete}
+              onStopChat={onStopChat} onToggleStar={onToggleStar} onToggleArchive={onToggleArchive} onSetTags={onSetTags} onMoveToProject={onMoveToProject} folders={folders} onMoveToFolder={onMoveToFolder} onShare={onShare} onDelete={onDelete}
               onClose={() => setMenu(null)} />
           )}
         </div>

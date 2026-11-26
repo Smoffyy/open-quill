@@ -3967,5 +3967,18 @@
   "Category": "Категория",
   "Sign-ins, access changes, provisioning and admin actions, retained for 120 days.": "Входы, изменения доступа, подготовка учётных записей и действия администраторов, хранятся 120 дней.",
   "single sign-on": "единый вход",
-  "Single sign-on": "Единый вход"
+  "Single sign-on": "Единый вход",
+  "Could not create the folder.": "Не удалось создать папку.",
+  "Delete this folder?": "Удалить эту папку?",
+  "The chats inside are kept and go back to your chat list.": "Чаты внутри сохранятся и вернутся в ваш список чатов.",
+  "Could not delete that folder.": "Не удалось удалить эту папку.",
+  "In folder: {name}": "В папке: {name}",
+  "Remove from folder": "Убрать из папки",
+  "Add to folder": "Добавить в папку",
+  "No folders yet": "Папок пока нет",
+  "Folder options": "Параметры папки",
+  "New chat here": "Новый чат здесь",
+  "Drop chats here": "Перетащите чаты сюда",
+  "Folders": "Папки",
+  "Folder not found.": "Папка не найдена."
 }

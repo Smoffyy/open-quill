@@ -59,7 +59,8 @@ export const Fork = (p) => <I {...p}><circle cx="6.5" cy="5.5" r="2" /><circle c
 export const Pin = (p) => <I {...p}><path d="M9 3.5h6M10 3.5v5.2l-3 3.3v1.5h10V12l-3-3.3V3.5M12 13.5v7" /></I>;
 export const Wrench = (p) => <I {...p}><path transform="rotate(45 12 12)" d="M10.25 19.25v-8A4.5 4.5 0 0 1 10.5 2.85V6h3V2.85a4.5 4.5 0 0 1 .25 8.4v8a1.75 1.75 0 0 1-3.5 0z" /></I>;
 export const Folder = (p) => <I {...p}><path d="M3.5 7A2.5 2.5 0 0 1 6 4.5h3.2a2 2 0 0 1 1.4.6L12 6.5h6A2.5 2.5 0 0 1 20.5 9v8a2.5 2.5 0 0 1-2.5 2.5H6A2.5 2.5 0 0 1 3.5 17z" /></I>;
-export const Pencil = (p) => <I {...p}><path d="M4 20v-3.5L15.6 4.9a2 2 0 0 1 2.8 0l.7.7a2 2 0 0 1 0 2.8L7.5 20zM13.5 7l3.5 3.5" /></I>;
+export const FolderOpen = (p) => <I {...p}><path d="M3.5 17V7A2.5 2.5 0 0 1 6 4.5h3.2a2 2 0 0 1 1.4.6L12 6.5h6A2.5 2.5 0 0 1 20.5 9v1.5M3.5 17l1.6-5.6a2 2 0 0 1 1.9-1.4h13.2a1.2 1.2 0 0 1 1.2 1.5l-1.4 5.5a2.5 2.5 0 0 1-2.4 1.8H6A2.5 2.5 0 0 1 3.5 17z" /></I>;
+export const Pencil =(p) => <I {...p}><path d="M4 20v-3.5L15.6 4.9a2 2 0 0 1 2.8 0l.7.7a2 2 0 0 1 0 2.8L7.5 20zM13.5 7l3.5 3.5" /></I>;
 export const Compact = (p) => <I {...p}><path d="M4 6.5h16M7 12h10M10 17.5h4" /></I>;
 export const Ghost = (p) => <I {...p}><path d="M5 20V10.5a7 7 0 0 1 14 0V20l-2.3-1.6-2.4 1.6-2.3-1.6-2.3 1.6-2.4-1.6z" /><circle cx="9.5" cy="10.5" r="1" fill="currentColor" stroke="none" /><circle cx="14.5" cy="10.5" r="1" fill="currentColor" stroke="none" /></I>;
 export const ImageIcon = (p) => <I {...p}><rect {...Frame} /><circle cx="8.5" cy="9.5" r="1.5" /><path d="m21 15.5-4.2-4.2a1.5 1.5 0 0 0-2.1 0L5.5 19.5" /></I>;

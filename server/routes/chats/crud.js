@@ -12,15 +12,21 @@ import { levelOf, ownsUpload, forgetResource } from '../../lib/authz/acl.js';
 
 const MAX_PINS = 40;
 
+function ownedFolderId(user, id) {
+  const f = typeof id === 'string' ? db.folders.byId(id) : null;
+  return f && f.user_id === user.id ? f.id : null;
+}
+
 export default function registerCrudRoutes(app) {
   app.post('/api/chats', authMiddleware, requirePermission('chats.create'), (req, res) => {
     const t = now();
     let projectId = null;
     if (req.body?.projectId) { const p = db.projects.byId(req.body.projectId); if (levelOf(req.user, 'project', p)) projectId = p.id; }
     const mode = req.body?.mode === 'code' ? 'code' : 'chat';
+    const folderId = mode === 'chat' ? ownedFolderId(req.user, req.body?.folderId) : null;
     if (mode === 'code' && !can(req.user, 'code.use')) return res.status(403).json({ error: DENIED });
-    const c = db.chats.insert({ id: uid(), user_id: req.user.id, project_id: mode === 'code' ? null : projectId, title: 'New chat', starred: 0, sandbox: 0, mode, created_at: t, updated_at: t });
-    res.json({ id: c.id, title: c.title, updated_at: c.updated_at, starred: false, projectId: c.project_id, mode });
+    const c = db.chats.insert({ id: uid(), user_id: req.user.id, project_id: mode === 'code' ? null : projectId, folder_id: folderId, title: 'New chat', starred: 0, sandbox: 0, mode, created_at: t, updated_at: t });
+    res.json({ id: c.id, title: c.title, updated_at: c.updated_at, starred: false, projectId: c.project_id, folderId, mode });
   });
 
   app.delete('/api/chats/:id', authMiddleware, requirePermission('chats.delete'), (req, res) => {
@@ -64,6 +70,7 @@ export default function registerCrudRoutes(app) {
         if (pid === null || pid === '') patch.project_id = null;
         else { const p = db.projects.byId(pid); if (levelOf(req.user, 'project', p)) patch.project_id = p.id; }
       }
+      if ('folderId' in req.body && c.mode !== 'code') patch.folder_id = ownedFolderId(req.user, req.body.folderId);
       db.chats.update(c.id, patch);
     }
     res.json({ ok: true });
