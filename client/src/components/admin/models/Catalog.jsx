@@ -13,7 +13,7 @@ import { caretsAtEnd, insert, erase, move as moveCarets, selectAll, place, parts
 
 const FOLD_KEY = 'oq-models-folded';
 const LEGACY_FOLDER_KEYS = ['oq-model-folders', 'oq-models-empty-folders'];
-const MENU_W = 248;
+const MENU_W = 200;
 const MENU_H = 360;
 
 const FILTERS = [

@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [28.3.0] - TBD
 ### Added
 - **Folders** - file chats into folders from the sidebar, separate from projects. Create a folder with the plus on the Folders heading, rename it, and drag chats onto it, or use Add to folder in a chat's menu. Drag folders to reorder them, or use Move up and Move down in the folder's menu. A chat in a folder is listed there instead of under Recents, and dropping it back on Recents takes it out. Pressing New while you are in a folder starts the next chat in the same folder, shown by a chip above the composer that you can clear. Deleting a folder keeps its chats.
+### Changed
+- **Compact admin menus** - the right-click menu on a model, and the other admin popup menus, use shorter rows, tighter padding and a narrower width, so they take less room.
 ### Fixed
 - **Replies survive a restart** - a reply that was mid-sentence when the server stopped or restarted is kept as far as it got, with the Continue button, instead of vanishing. Progress is saved twice a second, including while the model is still thinking, and once more as the server shuts down. A dropped connection on the member's side never affected the reply, which keeps running on the server and is picked up again on reconnect.
 - **Development server restarts** - `npm run dev` no longer restarts, and cancels the reply being written, when a file in `node_modules` is touched. It watches only the server's own source.
