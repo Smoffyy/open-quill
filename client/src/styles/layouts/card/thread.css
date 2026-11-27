@@ -1,0 +1,17 @@
+:root[data-layout="card"] .thread { padding-top: 9px; }
+:root[data-layout="card"] .msg.user { margin-bottom: 0; }
+:root[data-layout="card"] .msg.assistant { margin-top: 8px; }
+:root[data-layout="card"] .bubble-user { line-height: 21px; }
+:root[data-layout="card"] .assistant-body { font-size: 15px; line-height: 21px; overflow-wrap: break-word; }
+:root[data-layout="card"] .assistant-body p,
+:root[data-layout="card"] .assistant-body :is(h1, h2, h3, h4) { padding: 0 32px 0 4px; }
+:root[data-layout="card"] .assistant-body blockquote { margin: 0 32px 12px 4px; }
+:root[data-layout="card"] .assistant-body > .code-wrap,
+:root[data-layout="card"] .assistant-body > .diagram-block { margin-left: 4px; }
+:root[data-layout="card"] .assistant-body > table { margin-left: 4px; max-width: calc(100% - 4px); }
+:root[data-layout="card"] .actions { margin-left: -2px; }
+:root[data-layout="card"] .reasoning { padding-left: 4px; }
+:root[data-layout="card"] .reasoning.carded { margin-left: 4px; }
+:root[data-layout="card"] .msg.assistant > .msg-icon { margin-left: 4px; }
+:root[data-layout="card"] .msg.assistant.icon-left .assistant-name { padding-left: 4px; }
+:root[data-layout="card"] .steer-chips { margin-left: 4px; }
