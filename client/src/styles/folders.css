@@ -3,6 +3,8 @@
   background: none; border: 0; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer;
 }
 .folder-row .folder-ic { width: 20px; height: 20px; flex-shrink: 0; opacity: .85; transition: opacity var(--fx-t, .12s), color var(--fx-t, .12s); }
+.folder-ic .ic-fo-front { transition: d .36s cubic-bezier(.22, 1, .36, 1); }
+@media (prefers-reduced-motion: reduce) { .folder-ic .ic-fo-front { transition: none; } }
 .folder-row:hover .folder-ic, .folder-row.active .folder-ic, .folder-block.open .folder-ic { opacity: 1; }
 .folder-block.open > .folder-row .folder-ic { color: var(--link, var(--text)); }
 .folder-row .folder-link .title { flex: 1; }

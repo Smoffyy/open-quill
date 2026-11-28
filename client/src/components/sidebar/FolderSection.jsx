@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import SectionHead from './SectionHead.jsx';
 import { menuAtButton, menuAtPointer } from './ChatMenu.jsx';
-import { Folder, FolderOpen, Plus, DotsV, Pencil, Trash, Chevron } from '../ui/icons.jsx';
+import { Folder, Plus, DotsV, Pencil, Trash, Chevron } from '../ui/icons.jsx';
 import { t } from '../../i18n.jsx';
 import { useDismiss } from '../../lib/dismiss.js';
 import { CHAT_DRAG, FOLDER_DRAG, dragKind, dropPosition, moveId } from '../../lib/folders.js';
@@ -128,7 +128,7 @@ function FolderRow({
         ) : (
           <>
             <button className="row-link folder-link" aria-expanded={open} onClick={() => onToggle(folder.id)}>
-              <span className="row-ic">{open ? <FolderOpen className="folder-ic" aria-hidden="true" /> : <Folder className="folder-ic" aria-hidden="true" />}</span>
+              <span className="row-ic"><Folder className="folder-ic" open={open} aria-hidden="true" /></span>
               <span className="title">{folder.name}</span>
               {chats.length > 0 && <span className="folder-count">{chats.length}</span>}
             </button>
